@@ -18,10 +18,11 @@ below). This is evidence from a few small runs on one day, not a reliability gua
 | | `20261018-140600` (14:06): 1 nonexistent post × 4 strategies = 4 page loads ([failure path](#failure-path-a-post-that-does-not-exist)) |
 | | `20261018-142944` (14:29): Python 3.14.8, 3 posts × the 2 strategies the importer would use = 6 page loads, 10 s apart |
 | | `20261018-144745` (14:47): **the final code**, after the review fixes (overall deadlines, HTML read first), same 6 page loads |
-| Requests | 28 page loads in total, one at a time, no retries. Each browser load also fetched the page's scripts and images and made about 4 GraphQL calls. |
+| | `20261019-140137` (next day): `http-embed` only, 3 page loads, after the HTTP client moved from HTTPX to its maintained fork `httpx2` (User-Agent `python-httpx2/2.14.0`): 3 of 3 complete captions |
+| Requests | 31 page loads in total, one at a time, no retries. Each browser load also fetched the page's scripts and images and made about 4 GraphQL calls. |
 | Machine | Windows 11 (10.0.26200), this computer's normal internet connection, no VPN |
 | Browser | Playwright 1.64.0, bundled Chromium 156.0.8078.4 (headless shell), reporting itself as `HeadlessChrome` |
-| HTTP client | HTTPX 0.28.1 with its default User-Agent `python-httpx/0.28.1` |
+| HTTP client | HTTPX 0.28.1 with its default User-Agent `python-httpx/0.28.1`; httpx2 2.14.0 (`python-httpx2/2.14.0`) for the last run |
 | Identity | Fresh browser profile, no cookies, no login, no User-Agent disguise, no stealth plugins, no calls to private APIs. Both clients asked for English (en-US) pages, which the preview parser's date format depends on. |
 | Command | `uv run python -m scripts.probe_instagram` (from `backend/`) |
 | Artifacts | `data/instagram-probe/<run>/` (git-ignored): `run.json`, `summary.md`, `summary.json`; per strategy `page.html`, `capture.json` and `analysis.json`, plus `screenshot.png` for browser strategies |
@@ -101,7 +102,9 @@ built in milestone 7.
   - pressure-cooker **or** regular-pot cooking times;
   - reuse of the meat's cooking liquid (`2 וחצי כוסות מהמים בהם התבשל הבשר`).
 - **DANUmOOIcRM**
-  - `115 גר' חמאה רכה` in the dough and `115 גר' חמאה מומסת` in the filling;
+  - `115 גר’ חמאה רכה` in the dough and `115 גר’ חמאה מומסת` in the filling. The caption writes the
+    unit with ’ (U+2019) here but with ׳ (U+05F3, geresh) in `120 גר׳ שמנת מתוקה`; extraction must
+    keep each character as written;
   - `|`-marked groups;
   - an alternative (`תמצית / מחית וניל`);
   - a topping without a quantity (`לציפוי - מלח מאלדון`);

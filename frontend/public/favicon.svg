@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Recipe notebook</title>
+  <rect x="5" y="3" width="22" height="26" rx="3" fill="#b4532a"/>
+  <rect x="9" y="3" width="2" height="26" fill="#8a3d1d"/>
+  <path d="M15 11h8M15 16h8M15 21h5" stroke="#fff7ed" stroke-width="2" stroke-linecap="round"/>
+</svg>

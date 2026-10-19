@@ -100,7 +100,7 @@ async def run_capture(args: argparse.Namespace, refs: list[InstagramRef]) -> Pat
         "python": sys.version.split()[0],
         "platform": platform.platform(),
         "playwright": version("playwright"),
-        "httpx": version("httpx"),
+        "httpx2": version("httpx2"),
         "headless": not args.headed,
         "channel": args.channel or "bundled chromium",
         "timeout_s": args.timeout,

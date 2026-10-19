@@ -1,0 +1,256 @@
+/*
+  Global styles for the recipe notebook.
+
+  Right-to-left: the page is dir="rtl" (index.html). Spacing uses *logical*
+  properties (inline-start / inline-end, block-start / block-end) instead of
+  left/right, so every rule follows the reading direction: "inline-start" is
+  the right edge in Hebrew and the left edge in English.
+*/
+
+:root {
+  --color-page: #faf6f1;
+  --color-surface: #ffffff;
+  --color-text: #2b2118;
+  --color-muted: #6c5f55;
+  --color-border: #e6dbd0;
+  --color-accent: #a8481f;
+  --color-accent-soft: #f7e6da;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgb(43 33 24 / 8%), 0 4px 12px rgb(43 33 24 / 6%);
+
+  /* Segoe UI (Windows), San Francisco (macOS) and Arial all include Hebrew letters. */
+  font-family: system-ui, 'Segoe UI', Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-page);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin-block: 0;
+}
+
+/* A visible focus ring for keyboard users. */
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ---- Page layout ----------------------------------------------------------- */
+
+.app {
+  max-width: 72rem;
+  margin-inline: auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.app-header {
+  margin-block-end: 1.5rem;
+}
+
+.app-title {
+  font-size: 1.75rem;
+}
+
+.sample-banner {
+  margin-block-start: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+/* One column on narrow screens; list beside the recipe on wide ones. */
+.app-body {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 56rem) {
+  .app-body {
+    /* minmax(0, 1fr): the recipe column may shrink below its longest word, instead of overflowing. */
+    grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.list-heading {
+  font-size: 1.1rem;
+  margin-block-end: 0.75rem;
+}
+
+.empty-state {
+  padding: 1.5rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-muted);
+  text-align: center;
+}
+
+/* ---- Recipe list and cards ------------------------------------------------- */
+
+.recipe-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipe-card {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-inline-start: 4px solid transparent;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/* The border-color shorthand sets all four sides, so the hover rule must put the
+   selection bar (the inline-start side) back to transparent for cards not shown. */
+.recipe-card:hover:not([aria-current='true']) {
+  border-color: var(--color-accent);
+  border-inline-start-color: transparent;
+}
+
+.recipe-card[aria-current='true'] {
+  border-color: var(--color-accent);
+  border-inline-start-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+/* The selected card is tinted with the chip's colour, so give its chip a white pill. */
+.recipe-card[aria-current='true'] .chip {
+  background: var(--color-surface);
+}
+
+.recipe-card-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.recipe-card-meta {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.chip {
+  justify-self: start;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.chip-unclassified {
+  background: transparent;
+  border: 1px dashed var(--color-muted);
+  color: var(--color-muted);
+}
+
+/* ---- Recipe view ------------------------------------------------------------- */
+
+.recipe-view {
+  /* Long URLs and hashtags wrap instead of widening the page on a phone. */
+  overflow-wrap: anywhere;
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.recipe-title {
+  font-size: 1.6rem;
+  line-height: 1.3;
+}
+
+.recipe-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  align-items: center;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.recipe-facts a {
+  color: var(--color-accent);
+}
+
+.recipe-section {
+  margin-block-start: 1.75rem;
+}
+
+.section-title {
+  font-size: 1.2rem;
+  padding-block-end: 0.35rem;
+  border-block-end: 2px solid var(--color-accent-soft);
+  margin-block-end: 0.75rem;
+}
+
+.group-title {
+  font-size: 1rem;
+  color: var(--color-accent);
+  margin-block: 1rem 0.35rem;
+}
+
+.ingredient-list,
+.step-list,
+.note-list {
+  margin: 0;
+  padding-inline-start: 1.5rem;
+}
+
+.ingredient-list li,
+.note-list li {
+  margin-block: 0.2rem;
+}
+
+.step-list li {
+  margin-block: 0.5rem;
+  padding-inline-start: 0.25rem;
+}
+
+.step-list li::marker {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* "No quantity given": shown next to the ingredient, never replaced by an invented amount.
+   It takes the list's direction, so margin-inline-start always faces the ingredient text;
+   unicode-bidi: isolate keeps its Hebrew from mixing with English around it. */
+.no-quantity {
+  unicode-bidi: isolate;
+  margin-inline-start: 0.25rem; /* plus the real space before it in the markup */
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}

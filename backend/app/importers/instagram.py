@@ -31,7 +31,7 @@ from enum import StrEnum
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-import httpx
+import httpx2
 from bs4 import BeautifulSoup, Tag
 from bs4.element import PreformattedString
 from playwright.async_api import Error as PlaywrightError
@@ -587,17 +587,17 @@ _MAX_PAGE_BYTES = 10_000_000
 
 
 async def capture_with_http(
-    url: str, *, timeout_s: float = 20.0, transport: httpx.AsyncBaseTransport | None = None
+    url: str, *, timeout_s: float = 20.0, transport: httpx2.AsyncBaseTransport | None = None
 ) -> CapturedPage:
-    """Plain HTTP GET (no JavaScript). Uses HTTPX's own User-Agent, not a disguised one.
+    """Plain HTTP GET (no JavaScript). Uses HTTPX2's own User-Agent, not a disguised one.
 
     timeout_s bounds each network step; the whole request gets twice that.
-    `transport` lets tests replace the network (httpx.MockTransport).
+    `transport` lets tests replace the network (httpx2.MockTransport).
     """
     started = time.monotonic()
     try:
         async with asyncio.timeout(timeout_s * 2):
-            async with httpx.AsyncClient(
+            async with httpx2.AsyncClient(
                 follow_redirects=True,
                 max_redirects=5,
                 timeout=timeout_s,
@@ -611,12 +611,12 @@ async def capture_with_http(
                         if len(body) > _MAX_PAGE_BYTES:
                             raise _TooLarge()
                     html = body.decode(response.encoding or "utf-8", errors="replace")
-    except (httpx.TimeoutException, TimeoutError) as exc:
+    except (httpx2.TimeoutException, TimeoutError) as exc:
         return CapturedPage(
             method="http", requested_url=url, error_kind="timeout", error=str(exc) or "Timed out",
             elapsed_ms=_elapsed_ms(started),
         )
-    except httpx.HTTPError as exc:
+    except httpx2.HTTPError as exc:
         return CapturedPage(
             method="http", requested_url=url, error_kind="network", error=f"{type(exc).__name__}: {exc}",
             elapsed_ms=_elapsed_ms(started),
