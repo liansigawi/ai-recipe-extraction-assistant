@@ -15,6 +15,10 @@
   --color-border: #e6dbd0;
   --color-accent: #a8481f;
   --color-accent-soft: #f7e6da;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fdecea;
+  --color-success: #2e6b30;
+  --color-success-soft: #e7f3e6;
   --radius: 10px;
   --shadow: 0 1px 2px rgb(43 33 24 / 8%), 0 4px 12px rgb(43 33 24 / 6%);
 
@@ -65,13 +69,30 @@ p {
   font-size: 1.75rem;
 }
 
-.sample-banner {
+/* "Saved" / "Deleted". The element stays in the page even when empty (screen readers watch it),
+   so only its padding is removed then. */
+.notice {
+  display: block;
   margin-block-start: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.75rem;
   border-radius: var(--radius);
-  background: var(--color-accent-soft);
-  color: var(--color-text);
-  font-size: 0.9rem;
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.notice:empty {
+  padding: 0;
+}
+
+.load-error {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  padding: 1.25rem;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+  background: var(--color-danger-soft);
 }
 
 /* One column on narrow screens; list beside the recipe on wide ones. */
@@ -253,4 +274,350 @@ p {
   color: var(--color-muted);
   font-size: 0.8rem;
   white-space: nowrap;
+}
+
+/* ---- Buttons ----------------------------------------------------------------- */
+
+.button,
+.button-primary,
+.add-button,
+.icon-button {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button:hover,
+.add-button:hover,
+.icon-button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.button-primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.button-primary:hover {
+  background: #8f3c19;
+}
+
+.button-danger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.add-button {
+  justify-self: start;
+  border-style: dashed;
+  color: var(--color-accent);
+  font-size: 0.9rem;
+}
+
+.icon-button {
+  min-width: 2rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* ---- List header, card tags and sample labels -------------------------------------------- */
+
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block-end: 0.75rem;
+}
+
+.list-header .list-heading {
+  margin-block-end: 0;
+}
+
+.recipe-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.badge-sample {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: #ece7f6;
+  color: #4f3d7a;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.sample-note {
+  margin-block-start: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-inline-start: 4px solid #8a76b8;
+  border-radius: var(--radius);
+  background: #f4f1fa;
+  font-size: 0.9rem;
+}
+
+.recipe-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.confirm-box {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+  background: var(--color-danger-soft);
+}
+
+/* By default a legend sits on the fieldset's border; floating it puts it inside the box. */
+.confirm-box > legend {
+  float: inline-start;
+  width: 100%;
+  padding: 0;
+  font-weight: 600;
+}
+
+/* ---- Editor -------------------------------------------------------------------- */
+
+.recipe-editor {
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.recipe-editor input,
+.recipe-editor select,
+.recipe-editor textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #c9b9a9;
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+}
+
+.recipe-editor textarea {
+  resize: vertical;
+}
+
+.recipe-editor [aria-invalid='true'] {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 1px var(--color-danger);
+}
+
+.editor-basics {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 40rem) {
+  .editor-basics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .editor-field-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.editor-field {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.field-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.field-hint {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.field-error {
+  color: var(--color-danger);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* A fieldset groups related inputs; its legend names the group for screen readers. */
+.editor-section {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.editor-section > legend {
+  width: 100%;
+  padding: 0;
+}
+
+.editor-group {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-page);
+}
+
+.editor-group-header {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.editor-rows {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor-row {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.ingredient-columns,
+.ingredient-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(5rem, 9rem) auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.ingredient-columns {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+
+.ingredient-columns span:last-child {
+  grid-column: 2;
+}
+
+.step-inputs {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: start;
+}
+
+/* Notes have no number column. */
+.step-inputs:not(:has(.step-number)) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.step-number {
+  min-width: 1.5rem;
+  padding-block-start: 0.45rem;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.source-inputs {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+/* Phones: the text gets the full width, and the quantity, the creators and the row's buttons
+   move to the line below it. */
+@media (max-width: 40rem) {
+  .ingredient-columns {
+    display: none;
+  }
+
+  .ingredient-inputs,
+  .source-inputs {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ingredient-inputs > :first-child,
+  .source-inputs > select,
+  .source-inputs > input[type='url'] {
+    grid-column: 1 / -1;
+  }
+
+  .step-inputs {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .step-inputs > .row-buttons {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .step-inputs:not(:has(.step-number)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .step-inputs:not(:has(.step-number)) > .row-buttons {
+    grid-column: 1;
+  }
+}
+
+.row-buttons {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.form-alert {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.form-alert ul {
+  margin: 0.25rem 0 0;
+  font-weight: 400;
+}
+
+.editor-footer {
+  display: grid;
+  gap: 0.75rem;
+  padding-block-start: 1rem;
+  border-block-start: 1px solid var(--color-border);
 }

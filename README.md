@@ -4,9 +4,11 @@ A personal recipe notebook that runs on your own computer. The goal: import reci
 posts, recipe websites, screenshots, or pasted text; review them; and keep them in a searchable
 collection that supports Hebrew and right-to-left text.
 
-> **Status: milestone 2 of 7.** A FastAPI backend and a React + TypeScript frontend run locally. The
-> page shows a recipe list and a cooking view built from **four sample recipes**. Nothing can be
-> imported or saved yet. Milestone 1 (Instagram feasibility) is documented in
+> **Status: milestone 3 of 7.** A FastAPI backend with a SQLite database and a React + TypeScript
+> frontend run locally. You can **create, edit and delete recipes** by hand, and they are saved on
+> this computer. A new database starts with three categories and **four invented sample recipes**,
+> labeled "דוגמה". Importing (from text, websites, screenshots or Instagram) comes in milestones 4–5.
+> Milestone 1 (Instagram feasibility) is documented in
 > [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
 > contract are in [docs/architecture.md](docs/architecture.md), and the original requirements are
 > in [docs/brief.md](docs/brief.md).
@@ -15,8 +17,8 @@ collection that supports Hebrew and right-to-left text.
 
 - Both servers listen on this computer only (`127.0.0.1` / `localhost`), and the API answers only
   requests addressed to those names.
-- Local data goes in one folder (`data/` by default, excluded from git). It holds Instagram probe
-  runs today; the recipes database (milestone 3) and uploaded screenshots (milestone 5) will go there too.
+- Local data goes in one folder (`data/` by default, excluded from git). It holds the recipes
+  database (`recipes.db`) and Instagram probe runs; uploaded screenshots (milestone 5) will go there too.
 - The notebook page loads nothing from the internet. The API documentation page (`/docs`) loads its
   viewer from cdn.jsdelivr.net, so it needs an internet connection.
 - **This will not be a fully offline app.** From milestone 4, recipe text and images that you submit
@@ -36,7 +38,8 @@ collection that supports Hebrew and right-to-left text.
 Exact versions are pinned in `backend/uv.lock` and `frontend/package-lock.json`. Tested together:
 
 - **Backend:** fastapi 0.147.0, uvicorn 0.54.0, pydantic 2.14.1, pydantic-settings 2.16.0,
-  httpx2 2.14.0, playwright 1.64.0, beautifulsoup4 4.15.0, pytest 9.1.1.
+  sqlalchemy 2.1.5 (with Python's built-in SQLite 3.53.1), httpx2 2.14.0, playwright 1.64.0,
+  beautifulsoup4 4.15.0, pytest 9.1.1.
 - **Frontend:** react 19.3.1, vite 8.3.4, typescript 7.0.2, vitest 5.0.5, @testing-library/react
   16.3.3, jsdom 30.1.3, oxlint 1.88.0.
 
@@ -108,13 +111,40 @@ npm run dev
 - **http://127.0.0.1:8000/docs**: the API's interactive documentation, generated from the code.
   You can call each endpoint from there.
 - **http://localhost:5173/api/health**: the same API reached through the page's server. This is
-  how the page will talk to the backend from milestone 3.
+  how the page talks to the backend.
 
-Stop either server with Ctrl+C in its terminal.
+Stop either server with Ctrl+C in its terminal. Start the backend first: if it is not running, the
+page says it cannot reach the server and offers "נסו שוב" (try again).
 
-In this milestone, the page shows the sample recipes in `frontend/src/sampleRecipes.ts`, and the
-backend serves the same samples at `/api/recipes`. The page does not call the API yet; that
-connection is milestone 3.
+The page only accepts changes from **http://localhost:5173**, so Vite always uses port 5173. If
+something else already uses that port (often an earlier `npm run dev` still running), Vite stops
+with "Port 5173 is already in use" instead of moving to another port. Close the other one first.
+
+### What you can do in the page
+
+- **Browse:** the list shows every recipe, newest first; click a card to open it.
+- **Create:** "מתכון חדש" opens an empty form. Only the title is required. Type each ingredient
+  line as written, and copy its amount into the quantity box ("200 גרם" from "200 גרם קמח"); leave
+  the quantity empty when the recipe gives none. The form refuses a quantity that is not in its line.
+- **Edit:** "עריכה" opens the recipe in the same form. Rows can be added, moved (▲ ▼) and removed (✕).
+  The category list offers only existing categories, or "לא מסווג" (not classified).
+- **Delete:** "מחיקה" asks first, in the page. Deleting cannot be undone.
+- Leaving the form with unsaved changes (another recipe, cancel, closing the tab) asks first.
+
+The four samples were invented for this project and are not based on real recipes or on the
+Instagram links. They are labeled "דוגמה" in the list and the recipe view. You can edit or delete them;
+once deleted, they are not added again.
+
+### Check that recipes are kept after a restart
+
+1. Create a recipe, and edit another one (for example, change a sample's title). Note the time in
+   "עודכן" (last saved) under the title.
+2. Stop both servers with Ctrl+C, then start them again with the same commands.
+3. Reload http://localhost:5173. The new recipe and the edit are still there, with the same "עודכן" time.
+
+You can also look inside the database while the backend is stopped, with any SQLite viewer (for
+example the "SQLite Viewer" extension in VS Code): `data/recipes.db` has the tables `recipes`,
+`recipe_sources` and `categories`. The ingredient groups and steps are stored as readable JSON.
 
 ## Commands
 
@@ -122,7 +152,7 @@ Backend, from `backend/`:
 
 | Command | What it does |
 |---|---|
-| `uv run pytest` | Backend tests. No network: the API is called in-process and HTTP is mocked. |
+| `uv run pytest` | Backend tests. No network: the API is called in-process, each test gets its own temporary database, and HTTP is mocked. Your `data/` folder is never touched. |
 | `uv run uvicorn app.main:app --reload --reload-dir app --host 127.0.0.1 --port 8000` | Runs the API (see above). |
 | `uv run python -m scripts.probe_instagram` | Live Instagram check: the three sample posts × 4 strategies = at most 12 page loads, 10 s apart. It stops at the first sign of rate limiting or a login wall. It prints the run folder, where it saves raw pages and a `summary.md`. |
 | `uv run python -m scripts.probe_instagram <url> …` | The same check for up to 10 of your own public post or Reel URLs. |
@@ -134,7 +164,7 @@ Frontend, from `frontend/`:
 | Command | What it does |
 |---|---|
 | `npm run dev` | Runs the page with instant updates (see above). |
-| `npm test` | Component tests with Vitest in a simulated browser (jsdom). Use `npx vitest` to re-run on every save. |
+| `npm test` | Page tests with Vitest in a simulated browser (jsdom), against an in-memory fake API, so no server is needed. Use `npx vitest` to re-run on every save. |
 | `npm run build` | Type-checks all TypeScript (`tsc -b`), then builds the production files into `frontend/dist/`. You don't need `dist/` yet; the build proves everything compiles. |
 | `npm run preview` | Serves the built `dist/` at http://localhost:4173. Opening `dist/index.html` directly shows a blank page, because the built files must be served. |
 | `npm run lint` | Checks the code for common mistakes, including accessibility problems, with Oxlint. |
@@ -145,12 +175,25 @@ unless you add `-Encoding UTF8`.
 ## Settings and where data lives
 
 All local data goes in one folder: `data/` at the repository root by default, excluded from git.
-Probe runs are saved in `<data folder>/instagram-probe/<run-id>/`. Back up by copying the folder.
+
+- **Recipes:** `<data folder>/recipes.db`, one SQLite file. The backend creates it on its first
+  start, with the starter categories and the sample recipes, and prints its location in the terminal
+  ("Using the recipes database at …").
+- **Back up:** stop the backend, then copy `recipes.db` (or the whole folder).
+- **Start over:** stop the backend, delete `recipes.db`, and start the backend again. You get a new
+  database with only the categories and samples. Everything you created is gone.
+- **Probe runs:** `<data folder>/instagram-probe/<run-id>/`.
 
 Settings use the `RECIPES_` prefix. You can set them in a `.env` file: copy `.env.example` to `.env`
-in the repository root and edit it in VS Code, which saves UTF-8. `.env` is git-ignored. Commands
-read it when they need a setting; the API itself uses none yet. A real environment variable wins
-over `.env`. In PowerShell:
+in the repository root and edit it in VS Code, which saves UTF-8. `.env` is git-ignored. The backend
+reads it when it starts. A real environment variable wins over `.env`.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `RECIPES_DATA_DIR` | `data/` in the repository | Where the database and other local data are kept. |
+| `RECIPES_SQL_ECHO` | `false` | `true` prints every SQL statement the backend runs, in its terminal. Useful for learning what the ORM does. |
+
+In PowerShell:
 
 ```powershell
 $env:RECIPES_DATA_DIR = "D:\Backups\recipe-notebook"   # this terminal session only
@@ -185,25 +228,33 @@ The project keeps these separate and reports which one was run:
 ├── backend/                         Python: uv project
 │   ├── pyproject.toml, uv.lock, .python-version
 │   ├── app/
-│   │   ├── main.py                  the FastAPI app: health check, host check, error handling, routers
+│   │   ├── main.py                  the FastAPI app: startup, host and origin checks, error handling, routers
 │   │   ├── config.py                settings from the environment and .env
 │   │   ├── errors.py                the single error format for API responses
 │   │   ├── schemas.py               the recipe data contract (Pydantic models)
-│   │   ├── sample_data.py           the sample recipes (milestone 2 only)
-│   │   ├── api/recipes.py           GET /api/recipes and /api/recipes/{id}
+│   │   ├── db.py                    the database connection and sessions (SQLAlchemy)
+│   │   ├── models.py                the database tables
+│   │   ├── crud.py                  reading and writing recipes; the category check
+│   │   ├── seed.py                  creates the tables; fills a new database once
+│   │   ├── sample_data.py           the starter categories and the four invented sample recipes
+│   │   ├── api/                     recipes.py (create, read, save, delete), categories.py (read)
 │   │   └── importers/instagram.py   Instagram URL parsing, page capture, caption analysis
 │   ├── scripts/probe_instagram.py   bounded live probe and offline analysis
-│   └── tests/                       pytest: API, contract, importer, probe, settings, code hygiene
+│   └── tests/                       pytest: API, persistence, contract, importer, probe, settings, code hygiene
 ├── frontend/                        React + TypeScript + Vite
 │   ├── index.html                   the page shell: lang="he" dir="rtl"
 │   ├── package.json, package-lock.json, vite.config.ts, tsconfig*.json, .oxlintrc.json
 │   └── src/
 │       ├── main.tsx                 starts React and renders <App>
-│       ├── App.tsx                  page layout; holds the selected-recipe state
+│       ├── App.tsx                  loads the notebook from the API; what is shown; save and delete
+│       ├── api.ts                   every call to the backend, and its error messages
+│       ├── editorForm.ts            the editor's form state, checks and conversions (no React)
 │       ├── types.ts                 the recipe contract in TypeScript
-│       ├── sampleRecipes.ts         the sample recipes (milestone 2 only)
+│       ├── labels.ts                display names, e.g. for source kinds
 │       ├── index.css                styles (right-to-left aware)
-│       ├── components/              RecipeList, RecipeCard, CategoryChip, RecipeView
-│       └── *.test.ts(x), test/      Vitest + Testing Library tests and their setup
+│       ├── components/              RecipeList, RecipeCard, RecipeView, RecipeActions, RecipeEditor
+│       │                            (with IngredientsEditor, StepsEditor, RowButtons, FieldError), CategoryChip
+│       ├── test/                    test setup, the fake API, sample recipes as test data
+│       └── *.test.ts(x)             Vitest + Testing Library tests
 └── data/                            local data (git-ignored)
 ```

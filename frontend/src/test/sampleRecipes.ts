@@ -1,7 +1,13 @@
-// Sample recipes for milestone 2. The same four recipes as backend/app/sample_data.py
-// (invented for this project). Keep the two in sync until milestone 3, when the
-// app loads recipes from the API and this file is deleted.
-import type { CategoryRef, Ingredient, Recipe } from './types'
+// Test data: the four invented sample recipes and the starter categories, shaped as the API
+// returns them. The page itself loads recipes from the API; the real samples are seeded into
+// the database by backend/app/sample_data.py.
+import type { Category, CategoryRef, Ingredient, Recipe } from '../types'
+
+export const sampleCategories: Category[] = [
+  { id: 1, name: 'קינוחים', description: 'עוגות, עוגיות, מאפים מתוקים וקינוחים', subcategories: [] },
+  { id: 2, name: 'בישולים', description: 'מנות עיקריות ותבשילים', subcategories: [] },
+  { id: 3, name: 'ארוחות קלילות', description: 'ארוחות קלות ומהירות, למשל פיצה מבצק יוגורט; לא בהכרח דל קלוריות', subcategories: [] },
+]
 
 const desserts: CategoryRef = { id: 1, name: 'קינוחים' }
 const cooking: CategoryRef = { id: 2, name: 'בישולים' }
@@ -64,6 +70,7 @@ export const sampleRecipes: Recipe[] = [
     sources: [{ kind: 'text', url: null, creators: [] }],
     created_at: created,
     updated_at: created,
+    is_sample: true,
   },
   {
     id: 2,
@@ -106,6 +113,7 @@ export const sampleRecipes: Recipe[] = [
     sources: [{ kind: 'text', url: null, creators: [] }],
     created_at: created,
     updated_at: created,
+    is_sample: true,
   },
   {
     id: 3,
@@ -147,6 +155,7 @@ export const sampleRecipes: Recipe[] = [
     sources: [{ kind: 'website', url: 'https://example.com/yogurt-pizza', creators: [] }],
     created_at: created,
     updated_at: created,
+    is_sample: true,
   },
   {
     id: 4,
@@ -182,5 +191,6 @@ export const sampleRecipes: Recipe[] = [
     sources: [{ kind: 'website', url: 'https://example.com/granola-bars', creators: ['Example Kitchen'] }],
     created_at: created,
     updated_at: created,
+    is_sample: true,
   },
 ]

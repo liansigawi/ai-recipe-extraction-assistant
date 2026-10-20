@@ -1,35 +1,55 @@
-"""Recipe endpoints.
+"""Recipe endpoints: list, read, create, save (update) and delete.
 
-Milestone 2: read-only, serving the sample recipes from app/sample_data.py.
-Milestone 3 replaces the sample list with the SQLite database and adds editing.
+Each route is a thin layer: FastAPI validates the input against the contract
+(app/schemas.py), gives the route a database session, and the route calls app/crud.py.
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Depends, Path, Response, status
+from sqlalchemy.orm import Session
 
-from app.errors import ERROR_RESPONSES, ApiError
-from app.sample_data import SAMPLE_RECIPES
-from app.schemas import Recipe
+from app import crud
+from app.db import get_session
+from app.errors import ERROR_RESPONSES
+from app.schemas import Recipe, RecipeInput
 
 router = APIRouter(prefix="/api/recipes", tags=["recipes"], responses=ERROR_RESPONSES)
 
 # Ids are positive and fit in SQLite's 64-bit integers; anything else is a 422 in the error format.
 RecipeId = Annotated[int, Path(ge=1, le=2**63 - 1)]
+# Depends(get_session): FastAPI calls get_session for each request and passes the session in.
+SessionDep = Annotated[Session, Depends(get_session)]
 
 
 # The return type annotation is also the response model: FastAPI validates the
 # data against it and documents it at /docs.
 @router.get("")
-def list_recipes() -> list[Recipe]:
-    """All recipes. Milestone 2: the four built-in sample recipes; nothing is saved yet."""
-    return SAMPLE_RECIPES
+def list_recipes(session: SessionDep) -> list[Recipe]:
+    """All recipes, newest first."""
+    return crud.list_recipes(session)
 
 
 @router.get("/{recipe_id}")
-def get_recipe(recipe_id: RecipeId) -> Recipe:
-    """One recipe by id. Milestone 2: one of the built-in sample recipes."""
-    for recipe in SAMPLE_RECIPES:
-        if recipe.id == recipe_id:
-            return recipe
-    raise ApiError(404, "recipe_not_found", f"There is no recipe with id {recipe_id}.")
+def get_recipe(recipe_id: RecipeId, session: SessionDep) -> Recipe:
+    """One recipe by id."""
+    return crud.get_recipe(session, recipe_id)
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def create_recipe(data: RecipeInput, session: SessionDep) -> Recipe:
+    """Create a recipe. Returns it with its new id and timestamps."""
+    return crud.create_recipe(session, data)
+
+
+@router.put("/{recipe_id}")
+def update_recipe(recipe_id: RecipeId, data: RecipeInput, session: SessionDep) -> Recipe:
+    """Save a recipe: replaces all its editable fields with the ones sent."""
+    return crud.update_recipe(session, recipe_id, data)
+
+
+@router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_recipe(recipe_id: RecipeId, session: SessionDep) -> Response:
+    """Delete a recipe and its sources."""
+    crud.delete_recipe(session, recipe_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

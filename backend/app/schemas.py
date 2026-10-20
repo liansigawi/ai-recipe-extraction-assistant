@@ -93,24 +93,40 @@ class StepGroup(ContractModel):
     steps: list[NonEmptyStr] = Field(min_length=1)  # in order, each as written; numbered when displayed
 
 
-class Source(ContractModel):
-    """Where the recipe came from. The original text itself is stored separately (milestone 3)."""
+SourceKind = Literal["instagram", "website", "screenshot", "text", "manual"]
 
-    kind: Literal["instagram", "website", "screenshot", "text"]
-    url: NonEmptyStr | None = None  # the post or page address, when there is one
+
+class Source(ContractModel):
+    """Where the recipe came from: editable attribution, part of the recipe.
+
+    The imported original (caption, page text, screenshots) will be stored apart from this, in
+    its own table that editing never rewrites (milestone 4).
+    """
+
+    kind: SourceKind  # how the recipe got here; "manual": typed in the editor
+    # The post or page address, when there is one. Only web links: no "javascript:" or "file:" addresses.
+    url: Annotated[NonEmptyStr, Field(pattern=r"^https?://\S+$")] | None = None
     creators: list[NonEmptyStr] = []  # attribution as given by the source; the first is the main author
 
 
-class Recipe(ContractModel):
-    id: int
+class RecipeContent(ContractModel):
+    """The recipe itself: what the editor changes. Shared by the read and write models below."""
+
     title: NonEmptyStr
-    category: CategoryRef | None = None  # None: not classified yet
-    subcategory: CategoryRef | None = None  # only together with a category
     servings: NonEmptyStr | None = None  # as written, e.g. "12 פרוסות"
-    ingredient_groups: list[IngredientGroup]
-    step_groups: list[StepGroup]
+    ingredient_groups: list[IngredientGroup] = []
+    step_groups: list[StepGroup] = []
     notes: list[NonEmptyStr] = []  # substitutions, storage, equipment, serving tips: only what the recipe says
     sources: list[Source] = []
+
+
+class Recipe(RecipeContent):
+    """A stored recipe, as the API returns it."""
+
+    id: int
+    category: CategoryRef | None = None  # None: not classified yet
+    subcategory: CategoryRef | None = None  # only together with a category
+    is_sample: bool = False  # True for the built-in examples, which were invented for the project
     # With a time zone, so the browser shows the right local time. Sent as e.g. "2026-10-19T08:00:00Z".
     created_at: AwareDatetime
     updated_at: AwareDatetime
@@ -120,3 +136,36 @@ class Recipe(ContractModel):
         if self.subcategory is not None and self.category is None:
             raise ValueError("a subcategory requires a category")
         return self
+
+
+class RecipeInput(RecipeContent):
+    """What the page sends to create or save a recipe.
+
+    Categories are referred to by id only. Whether those ids exist, and whether the
+    subcategory belongs to the category, is checked against the database (app/crud.py).
+    The server sets the id, the timestamps and is_sample itself.
+    """
+
+    category_id: int | None = None
+    subcategory_id: int | None = None
+
+    @model_validator(mode="after")
+    def _subcategory_needs_category(self) -> "RecipeInput":
+        if self.subcategory_id is not None and self.category_id is None:
+            raise ValueError("a subcategory requires a category")
+        return self
+
+
+class Subcategory(ContractModel):
+    id: int
+    name: NonEmptyStr
+    description: NonEmptyStr | None = None
+
+
+class Category(ContractModel):
+    """A top-level category with its subcategories, for the category picker."""
+
+    id: int
+    name: NonEmptyStr
+    description: NonEmptyStr | None = None
+    subcategories: list[Subcategory] = []

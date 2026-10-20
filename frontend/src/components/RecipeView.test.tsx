@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { sampleRecipes } from '../sampleRecipes'
+import { sampleRecipes } from '../test/sampleRecipes'
 import RecipeView from './RecipeView'
 
 const [chocolateCake, chicken, , granola] = sampleRecipes
@@ -78,6 +78,29 @@ describe('RecipeView', () => {
     expect(screen.getByText('קינוחים · עוגות')).toBeInTheDocument()
     expect(screen.getByText('baker').tagName).toBe('BDI')
     expect(screen.getByText('partner.shop').tagName).toBe('BDI')
+  })
+
+  it('says that a sample was invented, and says nothing of the kind for a saved recipe', () => {
+    const { unmount } = render(<RecipeView recipe={chocolateCake} />)
+    expect(screen.getByText(/מתכון דוגמה: הומצא/)).toBeInTheDocument()
+    unmount()
+
+    render(<RecipeView recipe={{ ...chocolateCake, is_sample: false }} />)
+    expect(screen.queryByText(/מתכון דוגמה/)).not.toBeInTheDocument()
+  })
+
+  it('shows a typed-in source and when the recipe was last saved', () => {
+    const recipe = {
+      ...chicken,
+      sources: [{ kind: 'manual' as const, url: null, creators: [] }],
+      updated_at: '2026-10-20T09:30:00Z',
+    }
+    render(<RecipeView recipe={recipe} actions={<button type="button">עריכה</button>} />)
+
+    expect(screen.getByText(/הוזן ידנית/)).toBeInTheDocument()
+    // <time> keeps the exact moment for machines; the text shows it in the computer's time zone.
+    expect(screen.getByText(/עודכן/).querySelector('time')).toHaveAttribute('dateTime', '2026-10-20T09:30:00Z')
+    expect(screen.getByRole('button', { name: 'עריכה' })).toBeInTheDocument() // whatever App passes as actions
   })
 
   it('shows an unclassified English recipe with its text direction set from the content', () => {

@@ -23,7 +23,10 @@ export default function RecipeCard({ recipe, isSelected, onSelect }: RecipeCardP
       <span className="recipe-card-title" dir="auto">
         {recipe.title}
       </span>
-      <CategoryChip category={recipe.category} />
+      <span className="recipe-card-tags">
+        <CategoryChip category={recipe.category} />
+        {recipe.is_sample && <span className="badge-sample">דוגמה</span>}
+      </span>
       <span className="recipe-card-meta">
         {ingredientCount} מצרכים · {stepCount} שלבים
       </span>

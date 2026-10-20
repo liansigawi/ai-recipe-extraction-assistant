@@ -1,6 +1,6 @@
 [project]
 name = "recipe-notebook-backend"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local Recipe Notebook backend: importers, extraction, persistence, API"
 # 3.14.0-3.14.6 have an asyncio bug that makes each Playwright call keep memory alive
 # until the browser connection closes (cpython#152569, playwright-python#3148).
@@ -12,6 +12,7 @@ dependencies = [
     "playwright>=1.64.0",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
+    "sqlalchemy>=2.1.5",
     "uvicorn>=0.54.0",
 ]
 

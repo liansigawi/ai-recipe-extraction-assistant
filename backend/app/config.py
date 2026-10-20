@@ -23,6 +23,12 @@ class Settings(BaseSettings):
 
     # Local data folder: database, uploads, probe output. Git-ignored by default.
     data_dir: Path = REPO_ROOT / "data"
+    # Print every SQL statement the backend runs (RECIPES_SQL_ECHO=true): handy for learning.
+    sql_echo: bool = False
+
+    @property
+    def database_path(self) -> Path:
+        return self.data_dir / "recipes.db"
 
     @field_validator("data_dir", mode="before")
     @classmethod
@@ -45,12 +51,17 @@ class Settings(BaseSettings):
         return path.resolve()
 
 
-def data_dir() -> Path:
-    """The data folder, read fresh from the environment and .env each time.
+def load_settings() -> Settings:
+    """Settings read fresh from the environment and .env.
 
     Raises ValueError with a one-line, human-readable message for a bad setting.
     """
     try:
-        return Settings().data_dir
+        return Settings()
     except ValidationError as exc:
         raise ValueError("; ".join(error["msg"].removeprefix("Value error, ") for error in exc.errors())) from None
+
+
+def data_dir() -> Path:
+    """The data folder, read fresh from the environment and .env each time."""
+    return load_settings().data_dir

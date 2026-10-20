@@ -1,5 +1,6 @@
 // The recipe data contract, mirroring backend/app/schemas.py.
 // The API sends exactly these field names (snake_case) and uses null for "no value".
+// `interface B extends A` means "everything in A, plus these fields".
 
 export interface CategoryRef {
   id: number
@@ -26,7 +27,8 @@ export interface StepGroup {
   steps: string[]
 }
 
-export type SourceKind = 'instagram' | 'website' | 'screenshot' | 'text'
+/** How the recipe got here; 'manual' means typed in the editor. */
+export type SourceKind = 'instagram' | 'website' | 'screenshot' | 'text' | 'manual'
 
 export interface Source {
   kind: SourceKind
@@ -35,18 +37,42 @@ export interface Source {
   creators: string[]
 }
 
-export interface Recipe {
-  id: number
+/** The recipe itself: what the editor changes. */
+export interface RecipeContent {
   title: string
-  /** null: not classified yet. */
-  category: CategoryRef | null
-  subcategory: CategoryRef | null
   servings: string | null
   ingredient_groups: IngredientGroup[]
   step_groups: StepGroup[]
   notes: string[]
   sources: Source[]
+}
+
+/** A stored recipe, as the API returns it. */
+export interface Recipe extends RecipeContent {
+  id: number
+  /** null: not classified yet. */
+  category: CategoryRef | null
+  subcategory: CategoryRef | null
+  /** true for the built-in examples, which were invented for the project. */
+  is_sample: boolean
   /** ISO 8601 date and time with a time zone, e.g. "2026-10-19T08:00:00Z". */
   created_at: string
   updated_at: string
+}
+
+/** What the page sends to create or save a recipe. Categories are chosen by id only. */
+export interface RecipeInput extends RecipeContent {
+  category_id: number | null
+  subcategory_id: number | null
+}
+
+export interface Subcategory {
+  id: number
+  name: string
+  description: string | null
+}
+
+/** A top-level category with its subcategories (GET /api/categories). */
+export interface Category extends Subcategory {
+  subcategories: Subcategory[]
 }

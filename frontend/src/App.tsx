@@ -1,28 +1,74 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { ApiError, deleteRecipe, errorMessage, listCategories, listRecipes } from './api'
+import RecipeActions from './components/RecipeActions'
+import RecipeEditor from './components/RecipeEditor'
 import RecipeList from './components/RecipeList'
 import RecipeView from './components/RecipeView'
-import type { Recipe } from './types'
+import type { Category, Recipe } from './types'
 
-interface AppProps {
-  recipes: Recipe[]
-}
+// What the main area shows. A "discriminated union": `kind` tells which shape the value has,
+// and TypeScript allows `recipeId` only where kind is 'edit'.
+type Mode = { kind: 'view' } | { kind: 'edit'; recipeId: number } | { kind: 'create' }
+type Loading = { status: 'loading' } | { status: 'failed'; message: string } | { status: 'ready' }
 
-// The selected recipe is needed by two components: the list (to highlight a card) and the
-// view (to show it). So the state lives here, in their common parent, and flows down as props.
-export default function App({ recipes }: AppProps) {
-  // useState returns the current value and a function that changes it and re-renders App.
+const DISCARD_QUESTION = 'לצאת מהעריכה? השינויים שלא נשמרו יאבדו.'
+
+// App owns the notebook's data and decides what is shown. The list, the recipe view and
+// the editor get what they need as props, and report back through function props.
+export default function App() {
+  const [recipes, setRecipes] = useState<Recipe[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState<Loading>({ status: 'loading' })
+  const [loadAttempt, setLoadAttempt] = useState(0) // changing it loads everything again
   // null means "the user has not chosen yet".
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [mode, setMode] = useState<Mode>({ kind: 'view' })
+  const [unsavedChanges, setUnsavedChanges] = useState(false)
+  const [notice, setNotice] = useState('') // "saved" / "deleted" confirmations
+
   // Derived on every render instead of stored: the chosen recipe, or the first one until the
   // user chooses (or if the chosen one is no longer in the list). undefined only for an empty list.
   const selected = recipes.find((recipe) => recipe.id === selectedId) ?? recipes.at(0)
+  const editing = mode.kind === 'edit' ? recipes.find((recipe) => recipe.id === mode.recipeId) : undefined
 
   // useRef keeps a reference to the recipe title element on the page.
   const titleRef = useRef<HTMLHeadingElement>(null)
+  // A ref can also hold a plain value that survives re-renders without causing one.
+  const focusTitleAfterRender = useRef(false)
 
-  // useEffect runs after React has updated the page. After the user picks a recipe, bring its
-  // title into view if it is off-screen (on narrow screens the recipe is below the list).
-  // Keyboard focus stays on the chosen card, like a tab that switches the panel beside it.
+  // Load the notebook from the API when the page opens, and again after "Try again".
+  useEffect(() => {
+    // Set when this request's answer is no longer wanted (a newer attempt started, or React's
+    // development-only practice run in StrictMode), so a late answer cannot overwrite a newer one.
+    let ignore = false
+    // Promise.all: both requests run at the same time; continue when both have answered.
+    Promise.all([listRecipes(), listCategories()]).then(
+      ([loadedRecipes, loadedCategories]) => {
+        if (ignore) return
+        setRecipes(loadedRecipes)
+        setCategories(loadedCategories)
+        setLoading({ status: 'ready' })
+      },
+      (error: unknown) => {
+        if (!ignore) setLoading({ status: 'failed', message: errorMessage(error) })
+      },
+    )
+    // The cleanup function: React calls it before running this effect again, and when App goes away.
+    return () => {
+      ignore = true
+    }
+  }, [loadAttempt])
+
+  // While the editor has unsaved changes, closing or reloading the tab asks first.
+  useEffect(() => {
+    if (!unsavedChanges) return
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [unsavedChanges])
+
+  // After the user picks a recipe, bring its title into view if it is off-screen (on narrow
+  // screens the recipe is below the list). Keyboard focus stays on the chosen card.
   useEffect(() => {
     const title = titleRef.current
     if (selectedId === null || title === null) return
@@ -32,29 +78,154 @@ export default function App({ recipes }: AppProps) {
     }
   }, [selectedId])
 
+  // No dependency list: runs after every render. Saving, cancelling and deleting remove the
+  // button that had keyboard focus, so they ask for focus to move to the title now shown.
+  useEffect(() => {
+    if (!focusTitleAfterRender.current) return
+    focusTitleAfterRender.current = false
+    titleRef.current?.focus()
+  })
+
+  /** Closes the editor, asking first if that would lose changes. false: the user chose to stay. */
+  function closeEditor(): boolean {
+    if (mode.kind !== 'view' && unsavedChanges && !window.confirm(DISCARD_QUESTION)) return false
+    setMode({ kind: 'view' })
+    setUnsavedChanges(false)
+    return true
+  }
+
+  function handleSelect(id: number) {
+    if (!closeEditor()) return
+    setSelectedId(id)
+    setNotice('')
+  }
+
+  function handleCreate() {
+    if (!closeEditor()) return
+    setMode({ kind: 'create' })
+    setNotice('')
+  }
+
+  function handleEdit(id: number) {
+    setMode({ kind: 'edit', recipeId: id })
+    setNotice('')
+  }
+
+  function handleCancel() {
+    if (closeEditor()) focusTitleAfterRender.current = true
+  }
+
+  function handleSaved(saved: Recipe) {
+    // An updater function receives the latest list. Replace the old copy, or put a new recipe
+    // first: the list is newest first, as the API sends it.
+    setRecipes((current) =>
+      current.some((recipe) => recipe.id === saved.id)
+        ? current.map((recipe) => (recipe.id === saved.id ? saved : recipe))
+        : [saved, ...current],
+    )
+    setSelectedId(saved.id)
+    setMode({ kind: 'view' })
+    setUnsavedChanges(false)
+    setNotice('המתכון נשמר.')
+    focusTitleAfterRender.current = true
+  }
+
+  async function handleDelete(id: number) {
+    try {
+      await deleteRecipe(id)
+    } catch (error) {
+      // Already gone, e.g. deleted in another tab: the goal is reached, so carry on.
+      // Any other failure goes back to RecipeActions, which shows it.
+      if (!(error instanceof ApiError && error.code === 'recipe_not_found')) throw error
+    }
+    setRecipes((current) => current.filter((recipe) => recipe.id !== id))
+    setSelectedId(null) // show the first recipe
+    setNotice('המתכון נמחק.')
+    focusTitleAfterRender.current = true
+  }
+
+  function handleRetry() {
+    setLoading({ status: 'loading' })
+    setLoadAttempt((attempt) => attempt + 1)
+  }
+
+  let content: ReactNode
+  if (mode.kind === 'create') {
+    // A different key gives a fresh editor with fresh state, instead of reusing the previous one.
+    content = (
+      <RecipeEditor
+        key="new"
+        categories={categories}
+        onSaved={handleSaved}
+        onCancel={handleCancel}
+        onDirtyChange={setUnsavedChanges}
+      />
+    )
+  } else if (editing !== undefined) {
+    content = (
+      <RecipeEditor
+        key={editing.id}
+        recipe={editing}
+        categories={categories}
+        onSaved={handleSaved}
+        onCancel={handleCancel}
+        onDirtyChange={setUnsavedChanges}
+      />
+    )
+  } else if (selected !== undefined) {
+    content = (
+      <RecipeView
+        recipe={selected}
+        titleRef={titleRef}
+        // key: a new recipe gets fresh buttons, so a delete question left open does not carry over.
+        actions={<RecipeActions key={selected.id} onEdit={() => handleEdit(selected.id)} onDelete={() => handleDelete(selected.id)} />}
+      />
+    )
+  } else {
+    content = <p className="empty-state">אין מתכון להצגה. אפשר להוסיף אחד בכפתור "מתכון חדש".</p>
+  }
+
   return (
     <div className="app">
       <header className="app-header">
         <h1 className="app-title">מחברת המתכונים</h1>
-        <p className="sample-banner">מתכוני דוגמה בלבד: המחברת עדיין לא שומרת ולא טוענת מתכונים.</p>
+        {/* <output> is a "status" region: a screen reader announces text that appears in it.
+            It stays in the page even when empty, so the announcement is not missed. */}
+        <output className="notice">{notice}</output>
       </header>
 
-      <div className="app-body">
-        <nav aria-labelledby="recipe-list-heading">
-          <h2 id="recipe-list-heading" className="list-heading">
-            מתכונים
-          </h2>
-          <RecipeList recipes={recipes} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
-        </nav>
+      {loading.status === 'loading' && <p className="empty-state">טוען את המתכונים…</p>}
 
-        <main>
-          {selected !== undefined ? (
-            <RecipeView recipe={selected} titleRef={titleRef} />
-          ) : (
-            <p className="empty-state">אין מתכון להצגה.</p>
-          )}
-        </main>
-      </div>
+      {loading.status === 'failed' && (
+        <div role="alert" className="load-error">
+          <p>לא הצלחנו לטעון את המחברת. {loading.message}</p>
+          <button type="button" className="button" onClick={handleRetry}>
+            נסו שוב
+          </button>
+        </div>
+      )}
+
+      {loading.status === 'ready' && (
+        <div className="app-body">
+          <nav aria-labelledby="recipe-list-heading">
+            <div className="list-header">
+              <h2 id="recipe-list-heading" className="list-heading">
+                מתכונים
+              </h2>
+              <button type="button" className="button-primary" onClick={handleCreate}>
+                מתכון חדש
+              </button>
+            </div>
+            <RecipeList
+              recipes={recipes}
+              selectedId={mode.kind === 'create' ? null : (editing ?? selected)?.id ?? null}
+              onSelect={handleSelect}
+            />
+          </nav>
+
+          <main>{content}</main>
+        </div>
+      )}
     </div>
   )
 }

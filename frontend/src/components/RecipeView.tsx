@@ -1,27 +1,35 @@
-import type { Ref } from 'react'
-import type { IngredientGroup, Recipe, Source, SourceKind, StepGroup } from '../types'
+import type { ReactNode, Ref } from 'react'
+import { SOURCE_LABELS } from '../labels'
+import type { IngredientGroup, Recipe, Source, StepGroup } from '../types'
 import CategoryChip from './CategoryChip'
 
-const SOURCE_LABELS: Record<SourceKind, string> = {
-  instagram: 'אינסטגרם',
-  website: 'אתר',
-  screenshot: 'צילום מסך',
-  text: 'טקסט שהודבק',
-}
+// Dates in the page's language and the computer's own time zone; the API sends them in UTC.
+const dateFormat = new Intl.DateTimeFormat('he-IL', { dateStyle: 'medium', timeStyle: 'short' })
 
 interface RecipeViewProps {
   recipe: Recipe
-  titleRef?: Ref<HTMLHeadingElement> // lets the parent reach the title element (App scrolls it into view)
+  titleRef?: Ref<HTMLHeadingElement> // lets the parent reach the title element (App scrolls and focuses it)
+  actions?: ReactNode // anything React can show; App passes the edit and delete buttons
 }
 
 // The cooking view: title and facts, then the ingredients ABOVE the numbered preparation steps.
 // dir="auto" on recipe text lets an English recipe read left to right inside the right-to-left page.
-export default function RecipeView({ recipe, titleRef }: RecipeViewProps) {
+export default function RecipeView({ recipe, titleRef, actions }: RecipeViewProps) {
   return (
     <article className="recipe-view">
-      <h2 ref={titleRef} className="recipe-title" dir="auto">
-        {recipe.title}
-      </h2>
+      <div className="recipe-header">
+        {/* tabIndex={-1}: not a Tab stop, but App can move focus here after saving or deleting. */}
+        <h2 ref={titleRef} className="recipe-title" dir="auto" tabIndex={-1}>
+          {recipe.title}
+        </h2>
+        {actions}
+      </div>
+      {recipe.is_sample && (
+        <p className="sample-note">
+          מתכון דוגמה: הומצא כדי להדגים את המחברת. הוא לא מבוסס על מתכון אמיתי, וגם לא על הקישורים מאינסטגרם ששלחתם. אפשר
+          לערוך או למחוק אותו.
+        </p>
+      )}
       <ul className="recipe-facts">
         <li>
           <CategoryChip category={recipe.category} subcategory={recipe.subcategory} />
@@ -32,6 +40,9 @@ export default function RecipeView({ recipe, titleRef }: RecipeViewProps) {
             <SourceLabel source={source} />
           </li>
         ))}
+        <li>
+          עודכן <time dateTime={recipe.updated_at}>{dateFormat.format(new Date(recipe.updated_at))}</time>
+        </li>
       </ul>
 
       <section className="recipe-section">
@@ -60,7 +71,7 @@ export default function RecipeView({ recipe, titleRef }: RecipeViewProps) {
 
 // The components below are used only by RecipeView, so they stay in this file and are not exported.
 // Their lists use the position (index) as key: fine for read-only lists that never reorder.
-// The editor in milestone 3 will need stable ids instead.
+// The editor's lists can change order, so they use stable keys instead (editorForm.ts).
 
 function IngredientGroups({ groups }: { groups: IngredientGroup[] }) {
   return (
