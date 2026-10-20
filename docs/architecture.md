@@ -11,22 +11,23 @@ Browser: React + TypeScript (Vite dev server, http://localhost:5173)
    ▼
 FastAPI backend (uvicorn, bound to 127.0.0.1:8000)
    ├─ api/             REST routes: recipes (create, read, save, delete) and categories (read),
-   │                   milestone 3; imports (planned, milestones 4-5)
+   │                   milestone 3; imports of pasted text, milestone 4
    ├─ crud.py          Reads and writes recipes; checks chosen category ids against the database.
    ├─ models + db      SQLAlchemy ORM over SQLite (data/recipes.db), milestone 3.
-   ├─ importers/       FETCH source content only: instagram (milestone 1); website,
-   │                   screenshots, text (planned, milestones 4-5). No AI.
-   ├─ extraction/      (planned, milestone 4) Claude API: source → recipe draft, validated with Pydantic.
-   ├─ classification   (planned, milestone 4) The model picks among existing category IDs; the
-   │                   backend checks them with crud.check_classification. Never creates categories.
+   ├─ migrate.py       Brings the database up to date at start-up (Alembic, migrations/), milestone 4.
+   ├─ extraction/      Claude API: pasted text → answer in a fixed JSON schema → checked → draft
+   │                   with review issues (milestone 4). Classification is part of the same answer:
+   │                   only ids of existing categories; the backend checks them. Never creates categories.
+   ├─ importers/       FETCH source content only: instagram (milestone 1); website, screenshots
+   │                   (planned, milestone 5). No AI.
    └─ files            (planned, milestone 5) Uploaded screenshots under data/uploads/, paths in the database.
           │
-          └─► Anthropic API (external, from milestone 4): only text/images sent for extraction and classification.
+          └─► Anthropic API (external, from milestone 4): only the pasted text and the category list.
 ```
 
 **Responsibilities.** React owns the interface and the user's in-progress input. FastAPI owns
 everything that needs trust or secrets: fetching sources, calling the model, validating, classifying,
-and saving. The Anthropic API key will live only in the backend's environment.
+and saving. The Anthropic API key lives only in the backend's settings (`.env` or the environment).
 
 **Local means local.** Both servers listen on this computer only. Data stays in `data/` (or
 `RECIPES_DATA_DIR`). The exception, from milestone 4: content you submit for AI extraction is sent to
@@ -152,51 +153,89 @@ How it encodes the brief's fidelity rules:
 - **An ingredient mentioned only in the steps** (strawberries in one real caption) is flagged for
   review with its source context. It is never added as an ingredient line.
 
-Planned additions, when the features need them: `status` (draft or saved) and `issues` (review
-flags with source context), both in milestone 4, where imported drafts first appear.
+**Review fields (milestone 4).** `status` is `draft` (imported, not reviewed) or `saved`.
+`issues` lists what to check, each with a `kind`, a Hebrew `message` and, when it is about specific
+words, a `quote` of the original. `original` holds the pasted text exactly as pasted, the model that
+read it and when; it is read-only: `RecipeInput` has no such field, so a save cannot change it.
 
-## Import flow (planned)
+## Import flow (milestone 4: pasted text)
 
-1. **Fetch** (importer): URL, text, or images → a *source record* (original text and/or files, URL,
-   creators, fetch outcome). If fetching fails, the API returns a specific error code, and the
-   frontend keeps the user's input and offers to paste the text or upload screenshots instead.
-2. **Extract** (model): source → recipe draft via structured output. The output model is built from
-   the contract's *content* fields (title, servings, ingredient groups, step groups, notes) plus
-   `issues`. It has no ids, timestamps, sources or category names. A quantity that is not quoted
-   word for word becomes `null` plus an issue, rather than rejecting the whole draft. Fields hold the
-   original wording. Missing information stays missing. Problems go into `issues`: no quantity
-   given, an ingredient only mentioned in the steps (with its source context), unreadable or cut-off
-   text, ambiguous alternatives.
-3. **Classify** (model, then backend validation): the model may only answer with the ID of an
-   existing category or subcategory, or "unresolved". Its output schema has **no free-text category
-   field**, so it cannot invent, suggest or name a new one. The backend then:
-   - checks the category ID exists and is a top-level category;
-   - checks the subcategory belongs to that category;
-   - turns anything invalid or ambiguous into *unresolved*, with an issue;
-   - **never creates, suggests or names a category.** Only the categories endpoint creates one,
-     called from the settings screen or the review screen's explicit "new category" form, where
-     the user types the name.
-   The model's confidence is not trusted as a probability.
-4. **Review**: the draft is saved immediately as `status = draft`, so nothing is lost. The user edits it,
-   picks or creates a category, and presses Save. A draft may stay unclassified.
+```text
+ImportPanel ── POST /api/imports/text {text, use_model} ──► app/api/imports.py
+  1. Pydantic: 1 to 20,000 characters, not blank. The text is kept exactly (no trimming).
+  2. claude.py: one Messages API request, with structured output (the JSON schema of
+     extraction/output.py, category ids limited to the existing ones), a 16,000-token answer
+     limit, a timeout (120 s) and two automatic retries for temporary errors.
+  3. review.py: checks every part of the answer and builds a draft with issues (below).
+  4. crud.create_import: checks the category ids against the database again, then saves the
+     draft (status "draft") and the original text in one transaction.          → 201 + the draft
+Any failure before step 4 saves nothing; the page keeps the pasted text (also in localStorage).
+```
 
-## Data model (milestone 3)
+**The pasted text is data, not instructions.** It goes into the user message between tags whose
+name ends with a random suffix made for each request, so the text cannot close the tag and pose
+as instructions; the system prompt says to ignore requests inside it. The answer can only be the
+schema's fields, and is checked like any other answer. Evaluation case 08 tests exactly this.
+
+**The checks in `review.py`** (nothing the model says is taken on trust):
+- every title, ingredient line, step, note and group name must appear in the original text (after
+  normalizing only spacing, Unicode form and invisible marks); a line that does not is kept, with a
+  `not_found_in_source` issue that quotes it;
+- every quantity must be written in its own line (`quoted_from`, the contract's rule); otherwise it
+  becomes `null` with a `quantity_not_in_line` issue, never an invented amount;
+- a title the model composed (no title in the text) gets a `missing_title` issue;
+- classification: only `fit = "clear"` with an existing category id (and, if given, one of that
+  category's subcategories) classifies. Anything else, including an inconsistent answer, stays
+  unclassified with a `classification_unresolved` issue whose message is written by the backend,
+  from the database's own category names;
+- issue messages from the model that mention categories are dropped, so no text in the draft can
+  suggest a new category; quotes that are not in the original are removed;
+- the model's own issues (`ingredient_only_in_steps`, `unclear_text`, `missing_information`,
+  `ambiguous_alternative`, `multiple_recipes`, `other`) are kept, at most 20.
+
+**Review and explicit save.** The draft opens in the editor with the original text (sticky, so it
+stays in view) and the issues; each issue can be marked "handled". "Save as recipe" (a plain
+button, never the form's Enter key) sends `status: "saved"` and no issues; "save draft" (the form's
+default action) keeps `status: "draft"` and the open issues. A draft may stay unclassified.
+
+**Without the model.** `use_model: false` saves the text as a draft without calling Claude, with a
+`not_extracted` issue and the first line as a stand-in title, for the person to fill in. It works
+with no API key.
+
+**Not yet:** websites, screenshots and Instagram links (milestone 5) will fetch a source first and
+then use the same extraction and checks.
+
+## Data model (milestones 3 and 4)
 
 The database is one SQLite file, `<data folder>/recipes.db`. The tables are defined as SQLAlchemy
-classes in [`backend/app/models.py`](../backend/app/models.py) and created when the backend starts
-(`Base.metadata.create_all`). A new database also gets the three starter categories and the four
-sample recipes (`backend/app/seed.py`), once: deleted samples are not added again.
+classes in [`backend/app/models.py`](../backend/app/models.py), and created and changed by
+migrations (below). A new database also gets the three starter categories and the four sample
+recipes (`backend/app/seed.py`), once: deleted samples are not added again.
 
 | Table | Columns | Notes |
 |---|---|---|
 | `categories` | `id`, `name`, `description`, `parent_id` (NULL = top level) | Subcategories are rows whose parent is a top-level category (one level deep). `UNIQUE(id, parent_id)` lets recipes reference the pair. The three starter categories (קינוחים, בישולים, ארוחות קלילות) are created with the database; after that only the user manages categories (milestone 6). |
-| `recipes` | `id`, `title`, `category_id`, `subcategory_id`, `servings`, `ingredient_groups` (JSON), `step_groups` (JSON), `notes` (JSON), `is_sample`, `created_at`, `updated_at` | Composite foreign key `(subcategory_id, category_id) → categories(id, parent_id)`, so the database rejects a subcategory under the wrong parent. See the enforcement notes below. Times are stored as UTC. |
+| `recipes` | `id`, `title`, `category_id`, `subcategory_id`, `servings`, `ingredient_groups` (JSON), `step_groups` (JSON), `notes` (JSON), `is_sample`, `created_at`, `updated_at`, `status`, `issues` (JSON) | Composite foreign key `(subcategory_id, category_id) → categories(id, parent_id)`, so the database rejects a subcategory under the wrong parent. See the enforcement notes below. Times are stored as UTC. `status` is `'draft'` or `'saved'` (a CHECK constraint). |
 | `recipe_sources` | `id`, `recipe_id`, `position`, `kind`, `url`, `creators` (JSON) | Editable attribution, in order. Deleting a recipe deletes its sources; saving replaces them. |
+| `recipe_imports` | `id`, `recipe_id` (unique), `kind`, `original_text`, `model`, `imported_at` | The imported original, exactly as pasted. Written once, when the import is saved; saving the recipe never touches it; deleting the recipe deletes it. |
 
-Planned: `status` and `issues` on `recipes` (milestone 4); an `imported_sources` table with the
-original text, fetch outcome and time, which saving a recipe never rewrites (milestone 4); and
-`source_files` with ordered screenshots, paths relative to the data folder (milestone 5). Adding
-columns to an existing database needs a migration, so milestone 4 introduces Alembic.
+Planned: `source_files` with ordered screenshots, paths relative to the data folder, and the fetch
+outcome for links (milestone 5).
+
+**Migrations.** Schema changes are Alembic scripts in `backend/migrations/versions/`: `0001`
+creates the milestone-3 tables statement for statement (a test compares it with
+`tests/fixtures/milestone3_schema.sql`); `0002` adds `status`, `issues` and `recipe_imports`
+with `ALTER TABLE ... ADD COLUMN`, which keeps the existing rows in place. At start-up,
+`app/migrate.py`:
+- creates a new database with every migration, then seeds it;
+- recognizes a milestone-3 database (tables but no `alembic_version`) and marks it as `0001`;
+- before changing an existing database, copies it with SQLite's backup API to
+  `recipes.backup-<UTC time>-before-<revision>.db`;
+- runs the migrations in **one transaction** with foreign keys off (SQLite's own procedure: with
+  them on, rebuilding a table would cascade-delete rows that point at it), then runs
+  `PRAGMA foreign_key_check` and `integrity_check`. Python's `sqlite3` would run `CREATE`/`ALTER`
+  outside the transaction, so the migration engine issues `BEGIN` itself; a test shows that without
+  this a failed upgrade leaves a half-changed database.
 
 **Enforcing the category rule in the database, not only in code.** SQLite checks foreign keys
 only when `PRAGMA foreign_keys=ON` is set on each connection, and SQLAlchemy does not set it by
@@ -226,12 +265,17 @@ Real relations (categories, sources, files) stay as proper tables with foreign k
 | `DELETE /api/recipes/{id}` | Delete with its sources (204, no body) | ✅ milestone 3 |
 | `GET /api/categories` | Top-level categories with their subcategories, for the picker | ✅ milestone 3 |
 | `POST /api/categories`, `PUT/DELETE /api/categories/{id}` | Manual category management | planned (milestone 6) |
-| `POST /api/imports` | Text, URL, or ordered images → source + draft recipe + issues | planned (milestones 4–5) |
+| `GET /api/extraction` | Is an API key configured, and which model imports use (never the key) | ✅ milestone 4 |
+| `POST /api/imports/text` | Pasted text → a saved draft with review issues and the original (201) | ✅ milestone 4 |
+| `POST /api/imports/link`, `/screenshots` | A URL or ordered images → the same draft flow | planned (milestone 5) |
 | `GET /api/files/{id}` | Serve a stored source image | planned (milestone 5) |
 
 Error codes the page branches on: `recipe_not_found` (404), `invalid_request` (422, with the invalid
 fields in `details`), `unknown_category` and `subcategory_not_in_category` (422, with the field in
-`details`), and `forbidden_origin` (403).
+`details`), and `forbidden_origin` (403). Imports add `not_a_recipe` (422),
+`extraction_not_configured` and `extraction_busy` (503), `extraction_timeout` (504), and
+`extraction_auth_failed`, `extraction_unreachable`, `extraction_refused`, `extraction_incomplete`,
+`extraction_invalid_output`, `extraction_failed` (502).
 
 Every failing response from the app uses one shape (`backend/app/errors.py`), including FastAPI's own
 404, 405 and 422 errors and unexpected server errors (500, with no internal details). `/docs`
@@ -255,16 +299,17 @@ redirect; a redirect would send the browser past the Vite proxy.
 │   │   ├── errors.py         the single error format
 │   │   ├── schemas.py        the recipe contract (Pydantic)
 │   │   ├── db.py, models.py  SQLAlchemy: engine and sessions; the tables
+│   │   ├── migrate.py        upgrades the database at start-up, after a backup
 │   │   ├── crud.py           recipe reads and writes; the category check
-│   │   ├── seed.py           creates the tables; fills a new database once
+│   │   ├── seed.py           fills a new database once
 │   │   ├── sample_data.py    the starter categories and the four invented sample recipes
-│   │   ├── api/              recipes.py, categories.py: the routes
-│   │   ├── importers/        instagram.py (milestone 1); website.py, screenshots.py (milestone 5)
-│   │   ├── extraction/       (milestone 4) model client, prompts, output schemas
-│   │   └── classification.py (milestone 4) the strict category rule
+│   │   ├── api/              recipes.py, categories.py, imports.py: the routes
+│   │   ├── extraction/       output.py (answer schema), prompt.py, claude.py (API call), review.py (checks)
+│   │   └── importers/        instagram.py (milestone 1); website.py, screenshots.py (milestone 5)
+│   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py, 0002_imports_and_review.py
 │   ├── scripts/              probe_instagram.py: live checks, run by hand
-│   ├── tests/                pytest: offline, fixtures and in-process API calls only
-│   └── evals/                (milestone 7) model-quality evaluation, explicitly invoked
+│   ├── tests/                pytest: offline, fixtures and in-process API calls only; never calls Claude
+│   └── evals/                the extraction quality check: paid, run by hand; cases/ (invented texts)
 ├── frontend/                 React + TypeScript + Vite
 │   └── src/                  main.tsx, App.tsx, types.ts, api.ts, editorForm.ts, components/, test/
 ├── data/                     git-ignored: recipes.db, uploads/, instagram-probe/
@@ -278,7 +323,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 1 | ✅ Instagram feasibility probe ([findings](instagram-feasibility.md)) | Separating fetching from interpretation; capturing raw data so analysis is testable offline |
 | 2 | ✅ FastAPI + Vite/React scaffold; recipe contract; sample recipe list and cooking view | React: components, props, lists and keys, `useState`, lifting state up, derived values, a first `useRef`/`useEffect`; RTL basics; API error format |
 | 3 | ✅ SQLite + SQLAlchemy models, recipe CRUD, editor; the page loads recipes from the API | Controlled forms, `useEffect` + `fetch` with cleanup, loading and error states, `key` to reset state, focus management; SQL behind the ORM, transactions, constraints |
-| 4 | Pasted text → Claude extraction → strict classification → review → save | Structured output, validation, enforcing the category rule in code |
+| 4 | ✅ Pasted text → Claude extraction → strict classification → review → save; migrations | Structured output, validating a model's answer, prompt injection, enforcing the category rule in code; migrations and transactions; `localStorage`; work that finishes after the user moved on |
 | 5 | Website (JSON-LD first), screenshots (ordered, multimodal), Instagram importer | Fallback paths, file uploads, bounded timeouts; running a browser from a server |
 | 6 | Category settings, search and filters, RTL polish, error handling | Composing screens, accessibility, mixed-direction text |
 | 7 | Regression tests, evaluation set, GitHub Actions, docs; then Docker if useful | Tests vs live checks vs model evaluation |
@@ -309,6 +354,16 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-19 | The editor checks the same rules as the backend before sending (title, quantity quoted from its line, http(s) links); the backend still decides | Messages appear at once, next to the field. Server refusals are mapped back to their form rows through the `loc` path. |
 | 2026-10-19 | Delete asks inside the page; leaving unsaved edits asks with the browser's `confirm` (and on tab close) | Delete is the destructive action, so its question stays next to the recipe and is keyboard friendly. The unsaved-changes question can come from any click, so a simple dialog fits. |
 | 2026-10-19 | Frontend tests replace `fetch` with an in-memory fake backend (`src/test/fakeApi.ts`) | Tests use the page end to end (load, type, save) and check the exact request bodies, with no server. The real round trip is checked by backend tests and a manual browser check. |
+| 2026-10-20 | Alembic migrations, run by the backend at start-up after a backup copy, in one transaction with foreign keys off; milestone-3 databases are stamped at `0001` | The user's database must be kept, never reset. A start-up upgrade needs no extra step; the backup and the all-or-nothing transaction make it safe; tests prove the rollback and that `0001` equals milestone 3's tables. |
+| 2026-10-20 | Default model `claude-opus-5-5`, configurable with `RECIPES_MODEL` | The most capable current model, for fidelity on long Hebrew captions. An import is one request, so the cost per recipe stays small; a cheaper model is one setting away. |
+| 2026-10-20 | One request per import does extraction and classification together, with structured output whose category ids are an `enum` of the existing ids | One request costs less and is faster than two. The model can only choose an existing id, ambiguity is an explicit answer (`fit`), and the backend still validates everything. |
+| 2026-10-20 | `messages.create` with a JSON schema, and our own parsing, rather than the SDK's `messages.parse` | We check the stop reason first (cut off, refused) and turn each case into its own error code; `parse` would fail on a cut-off answer with a generic error. |
+| 2026-10-20 | The model's answer schema is lenient; `review.py` turns problems into issues instead of rejecting the answer | One unquotable quantity should not discard a whole recipe. The person sees exactly what to check. |
+| 2026-10-20 | Every extracted line is checked against the original text | A cheap, deterministic way to catch invented or reworded content, whatever the model. |
+| 2026-10-20 | Classification messages are written by the backend; model messages that mention categories are dropped | The rule is "never suggest a new category": free text from the model could, so it is not shown. |
+| 2026-10-20 | A draft is saved only after a successful extraction; on failure the page keeps the text (also in `localStorage`) | Nothing half-made in the database, and nothing lost in the page, even after a reload. |
+| 2026-10-20 | "Save as recipe" is a plain button; the form's Enter key saves a draft | Saving a reviewed recipe must be deliberate. |
+| 2026-10-20 | The extraction quality check is a separate, explicitly run script with hand-written expectations; real captions stay in `data/` | Paid and model-dependent, so never part of the tests or CI. Third-party captions are not committed. |
 
 ## Known limitations
 
@@ -317,31 +372,32 @@ redirect; a redirect would send the browser past the Vite proxy.
   left to right. To be fixed in milestone 6: decide the direction once per recipe and let each line
   order its own text.
 - **Language of English recipes.** English recipe text inherits the page's `lang="he"`, so screen
-  readers may pronounce it with Hebrew rules. A per-recipe language (set at import, milestone 4) will
-  set `lang` and `dir` on the recipe.
+  readers may pronounce it with Hebrew rules. A per-recipe language will set `lang` and `dir` on the
+  recipe (milestone 6, with the other direction work).
 - **`/docs` needs the internet.** It loads its viewer from cdn.jsdelivr.net; the notebook page does not.
 - **Last save wins.** Two tabs editing the same recipe do not see each other's changes; the later
   save replaces the earlier one. A version check could be added if this ever matters.
 - **An edited sample stays a sample.** `is_sample` does not change on edit, even if every line is
   replaced. To keep a recipe of your own, create it with "מתכון חדש".
-- **No migrations yet.** A database created by an earlier version keeps its old columns. Until
-  milestone 4 adds Alembic, starting over means deleting `data/recipes.db` while the backend is stopped.
-- **Focus after removing a row.** The removed row's button had the focus, so focus falls back to the
-  page. To be improved with the other accessibility work in milestone 6.
-- **Quantities are typed by hand** in the editor. Imports (milestone 4) will fill them in, for review.
+- **Focus after removing a row or marking an issue handled.** The button had the focus, so focus
+  falls back to the page. To be improved with the other accessibility work in milestone 6.
+- **The source check is literal.** A line the model shortened (an emoji or a parenthesis dropped
+  from the middle) is flagged as not found, although nothing was invented. Better a false alarm than
+  a missed change; the quality check reports how often it happens.
+- **An import cannot be cancelled.** "ביטול" during an import leaves the page, but the request
+  continues and its draft appears in the list when it is ready.
+- **One import at a time per page**, and the import screen has a single text box (no multiple
+  recipes in one paste: the model takes the main one and flags `multiple_recipes`).
 
 ## Notes for upcoming milestones
 
-- **Milestone 4:**
-  - **Alembic first.** Add it before the `status` and `issues` columns, with a first migration that
-    matches today's tables, so existing databases are upgraded instead of recreated.
-  - **Imported originals in their own table.** Never rewritten by `PUT /api/recipes/{id}`.
-  - **Drafts reuse the editor.** An import is saved as a draft at once; review is the editor plus the
-    issues list. `RecipeInput` gains `status`.
-  - **Classification goes through `crud.check_classification`.** The model's answer is only an id;
-    anything that fails the check becomes unresolved.
-  - **New endpoints get the `Origin` check automatically** (it is a middleware for every non-GET request).
-  - **Versions** current as of 2026-10-18: anthropic 1.15.0.
+- **Milestone 5:**
+  - **Reuse the extraction.** A fetched caption or page text goes through the same
+    `ClaudeExtractor`, `build_draft` and `create_import`; `recipe_imports.kind` gains `instagram`,
+    `website` and `screenshots`, plus the URL and fetch outcome (a migration).
+  - **Screenshots** are sent as image blocks in the same request, in order; the source check in
+    `review.py` cannot compare with an image, so their lines need another review signal.
+  - **Add evaluation cases** for each new source kind before relying on it.
 - **Milestone 5 (Windows):** `uvicorn --reload` (and `fastapi dev`) runs on an event loop that cannot
   start subprocesses. Playwright then fails with an empty `NotImplementedError`. The importer must run
   Playwright in its own thread with `asyncio.run(..., loop_factory=asyncio.ProactorEventLoop)`, or in

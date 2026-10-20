@@ -1,7 +1,7 @@
 // A stand-in for the backend in tests. It replaces the browser's fetch and answers from memory
 // the way the FastAPI app does, so tests run without a server and can check what the page sent.
 import { vi } from 'vitest'
-import type { Category, Recipe, RecipeInput } from '../types'
+import type { Category, ExtractionInfo, Issue, Recipe, RecipeInput } from '../types'
 
 export interface Call {
   method: string
@@ -15,15 +15,43 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-export function fakeApi(initial: { recipes: Recipe[]; categories: Category[] }) {
+/** What the fake import returns for a pasted text: by default, built from its first two lines. */
+export type DraftMaker = (text: string, useModel: boolean) => Partial<Recipe>
+
+export const AMBIGUOUS: Issue = {
+  kind: 'classification_unresolved',
+  message: 'לא ברור לאיזו קטגוריה המתכון שייך: "קינוחים", "ארוחות קלילות". בחרו בעצמכם, או השאירו לא מסווג.',
+  quote: null,
+}
+
+function defaultDraft(text: string, useModel: boolean): Partial<Recipe> {
+  const lines = text.split('\n').map((line) => line.trim()).filter((line) => line !== '')
+  return {
+    title: lines[0] ?? 'מתכון ללא כותרת',
+    ingredient_groups: useModel && lines[1] ? [{ name: null, ingredients: [{ text: lines[1], quantity: null }] }] : [],
+    issues: useModel
+      ? [AMBIGUOUS, { kind: 'unclear_text', message: 'לא ברור כמה קמח.', quote: lines[1] ?? null }]
+      : [{ kind: 'not_extracted', message: 'הטקסט נשמר בלי עיבוד.', quote: null }],
+  }
+}
+
+export function fakeApi(initial: {
+  recipes: Recipe[]
+  categories: Category[]
+  extraction?: ExtractionInfo
+  draftFor?: DraftMaker
+}) {
   let recipes = structuredClone(initial.recipes) // a deep copy: tests cannot change the shared test data
   const categories = structuredClone(initial.categories)
+  const extraction = initial.extraction ?? { configured: true, model: 'claude-opus-5-5' }
+  const draftFor = initial.draftFor ?? defaultDraft
   let nextId = Math.max(0, ...recipes.map((recipe) => recipe.id)) + 1
   const calls: Call[] = []
   const queued: Response[] = [] // one-off answers, given before the normal ones
   let offline = false
+  let gate: Promise<void> | null = null // holds the next request back until released
 
-  function stored(input: RecipeInput, id: number, createdAt: string, isSample: boolean): Recipe {
+  function stored(input: RecipeInput, id: number, createdAt: string, existing?: Recipe): Recipe {
     const category = categories.find((option) => option.id === input.category_id)
     return {
       id,
@@ -35,7 +63,10 @@ export function fakeApi(initial: { recipes: Recipe[]; categories: Category[] }) 
       step_groups: input.step_groups,
       notes: input.notes,
       sources: input.sources,
-      is_sample: isSample,
+      is_sample: existing?.is_sample ?? false,
+      status: input.status,
+      issues: input.issues,
+      original: existing?.original ?? null, // like the real API: a save never changes the original
       created_at: createdAt,
       updated_at: SAVED_AT,
     }
@@ -45,6 +76,11 @@ export function fakeApi(initial: { recipes: Recipe[]; categories: Category[] }) 
     const method = init.method ?? 'GET'
     const body: unknown = typeof init.body === 'string' ? JSON.parse(init.body) : undefined
     calls.push({ method, path, body })
+    if (gate !== null) {
+      const waitFor = gate
+      gate = null
+      await waitFor
+    }
     if (offline) {
       throw new TypeError('Failed to fetch') // what fetch does when nothing answers
     }
@@ -53,10 +89,37 @@ export function fakeApi(initial: { recipes: Recipe[]; categories: Category[] }) 
 
     if (path === '/api/recipes' && method === 'GET') return json(200, recipes)
     if (path === '/api/categories' && method === 'GET') return json(200, categories)
+    if (path === '/api/extraction' && method === 'GET') return json(200, extraction)
     if (path === '/api/recipes' && method === 'POST') {
-      const recipe = stored(body as RecipeInput, nextId++, SAVED_AT, false)
+      const recipe = stored(body as RecipeInput, nextId++, SAVED_AT)
       recipes = [recipe, ...recipes]
       return json(201, recipe)
+    }
+    if (path === '/api/imports/text' && method === 'POST') {
+      const { text, use_model: useModel } = body as { text: string; use_model: boolean }
+      if (useModel && !extraction.configured) {
+        return json(503, { error: { code: 'extraction_not_configured', message: 'No key.', details: null } })
+      }
+      const draft: Recipe = {
+        id: nextId++,
+        title: 'טיוטה',
+        category: null,
+        subcategory: null,
+        servings: null,
+        ingredient_groups: [],
+        step_groups: [],
+        notes: [],
+        sources: [{ kind: 'text', url: null, creators: [] }],
+        is_sample: false,
+        status: 'draft',
+        issues: [],
+        original: { kind: 'text', text, model: useModel ? extraction.model : null, imported_at: SAVED_AT },
+        created_at: SAVED_AT,
+        updated_at: SAVED_AT,
+        ...draftFor(text, useModel),
+      }
+      recipes = [draft, ...recipes]
+      return json(201, draft)
     }
     const id = Number(/^\/api\/recipes\/(\d+)$/.exec(path)?.[1])
     const existing = recipes.find((recipe) => recipe.id === id)
@@ -64,7 +127,7 @@ export function fakeApi(initial: { recipes: Recipe[]; categories: Category[] }) 
       return json(404, { error: { code: 'recipe_not_found', message: `There is no recipe with id ${id}.`, details: null } })
     }
     if (method === 'PUT') {
-      const recipe = stored(body as RecipeInput, id, existing.created_at, existing.is_sample)
+      const recipe = stored(body as RecipeInput, id, existing.created_at, existing)
       recipes = recipes.map((item) => (item.id === id ? recipe : item))
       return json(200, recipe)
     }
@@ -87,6 +150,14 @@ export function fakeApi(initial: { recipes: Recipe[]; categories: Category[] }) 
     },
     answerNextWith(status: number, body: unknown) {
       queued.push(json(status, body))
+    },
+    /** The next request waits until the returned function is called: a slow answer. */
+    holdNext(): () => void {
+      let release = () => {}
+      gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      return release
     },
   }
 }

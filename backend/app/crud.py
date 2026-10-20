@@ -29,6 +29,18 @@ def to_schema(row: models.Recipe) -> schemas.Recipe:
         notes=row.notes,
         sources=[schemas.Source(kind=s.kind, url=s.url, creators=s.creators) for s in row.sources],
         is_sample=row.is_sample,
+        status=row.status,
+        issues=row.issues,
+        original=(
+            schemas.ImportedOriginal(
+                kind=row.original.kind,
+                text=row.original.original_text,
+                model=row.original.model,
+                imported_at=row.original.imported_at,
+            )
+            if row.original
+            else None
+        ),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -44,6 +56,7 @@ def _recipe_query():
             selectinload(models.Recipe.sources),
             selectinload(models.Recipe.category),
             selectinload(models.Recipe.subcategory),
+            selectinload(models.Recipe.original),
         )
         .order_by(models.Recipe.id.desc())
     )
@@ -130,6 +143,9 @@ def _apply(row: models.Recipe, data: schemas.RecipeInput) -> None:
         models.RecipeSource(position=index, kind=source.kind, url=source.url, creators=list(source.creators))
         for index, source in enumerate(data.sources)
     ]
+    row.status = data.status
+    row.issues = [issue.model_dump() for issue in data.issues]
+    # row.original is deliberately not touched: the imported text never changes after import.
 
 
 def create_recipe(session: Session, data: schemas.RecipeInput, *, is_sample: bool = False) -> schemas.Recipe:
@@ -139,6 +155,21 @@ def create_recipe(session: Session, data: schemas.RecipeInput, *, is_sample: boo
     _apply(row, data)
     session.add(row)
     # INSERT INTO recipes (...) VALUES (...); INSERT INTO recipe_sources (...) VALUES (...); COMMIT
+    session.commit()
+    return get_recipe(session, row.id)
+
+
+def create_import(
+    session: Session, draft: schemas.RecipeInput, *, original_text: str, model: str | None
+) -> schemas.Recipe:
+    """Save an imported draft together with the text it came from, in one transaction."""
+    check_classification(session, draft.category_id, draft.subcategory_id)
+    now = utc_now()
+    row = models.Recipe(created_at=now, updated_at=now)
+    _apply(row, draft)
+    row.original = models.RecipeImport(kind="text", original_text=original_text, model=model, imported_at=now)
+    session.add(row)
+    # INSERT INTO recipes ...; INSERT INTO recipe_sources ...; INSERT INTO recipe_imports ...; COMMIT
     session.commit()
     return get_recipe(session, row.id)
 
@@ -157,5 +188,6 @@ def update_recipe(session: Session, recipe_id: int, data: schemas.RecipeInput) -
 def delete_recipe(session: Session, recipe_id: int) -> None:
     row = _load(session, recipe_id)
     session.delete(row)
-    # DELETE FROM recipe_sources WHERE recipe_id = ?; DELETE FROM recipes WHERE id = ?; COMMIT
+    # DELETE FROM recipe_sources WHERE recipe_id = ?; DELETE FROM recipe_imports WHERE id = ?;
+    # DELETE FROM recipes WHERE id = ?; COMMIT
     session.commit()

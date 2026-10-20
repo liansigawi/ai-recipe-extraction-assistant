@@ -2,7 +2,7 @@
 // calling fetch themselves, so request details and error handling live in one place.
 //
 // The paths start with /api: in development Vite forwards them to FastAPI (vite.config.ts).
-import type { Category, Recipe, RecipeInput } from './types'
+import type { Category, ExtractionInfo, Recipe, RecipeInput } from './types'
 
 /** Any failed request: an error response from the API, or no answer at all. */
 export class ApiError extends Error {
@@ -62,6 +62,24 @@ export function errorMessage(error: unknown): string {
       return 'המתכון לא נמצא. ייתכן שנמחק בחלון אחר; רעננו את הדף.'
     case 'forbidden_origin':
       return 'השרת דחה את השינוי כי הדף לא נפתח מהכתובת הצפויה. פתחו את המחברת בכתובת http://localhost:5173'
+    // Importing with Claude (backend/app/extraction/claude.py and app/api/imports.py).
+    case 'extraction_not_configured':
+      return 'לא הוגדר מפתח ל-Claude API בשרת. ההוראות ב-README, בסעיף "Connect the Claude API".'
+    case 'extraction_auth_failed':
+      return 'Claude API לא קיבל את המפתח. בדקו את ANTHROPIC_API_KEY בקובץ .env והפעילו את השרת מחדש.'
+    case 'extraction_busy':
+      return 'Claude עמוס כרגע. נסו שוב בעוד כמה דקות.'
+    case 'extraction_timeout':
+      return 'Claude לא ענה בזמן. נסו שוב.'
+    case 'extraction_unreachable':
+      return 'אין חיבור ל-Claude API. בדקו את החיבור לאינטרנט ונסו שוב.'
+    case 'extraction_refused':
+    case 'extraction_incomplete':
+    case 'extraction_invalid_output':
+    case 'extraction_failed':
+      return `Claude לא הצליח לקרוא את המתכון הפעם (${error.message}). נסו שוב.`
+    case 'not_a_recipe':
+      return 'Claude לא מצא מתכון בטקסט.'
     default:
       return `הפעולה נכשלה: ${error.message}`
   }
@@ -85,4 +103,16 @@ export function updateRecipe(id: number, input: RecipeInput): Promise<Recipe> {
 
 export function deleteRecipe(id: number): Promise<void> {
   return request(`/api/recipes/${id}`, { method: 'DELETE' })
+}
+
+export function getExtractionInfo(): Promise<ExtractionInfo> {
+  return request('/api/extraction')
+}
+
+/**
+ * Pasted text -> a saved draft for review. With useModel = false the text is saved without
+ * Claude, to fill in by hand. Can take a minute: Claude reads the whole text.
+ */
+export function importText(text: string, useModel: boolean): Promise<Recipe> {
+  return request('/api/imports/text', { method: 'POST', body: JSON.stringify({ text, use_model: useModel }) })
 }

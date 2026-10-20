@@ -24,6 +24,7 @@ export default function RecipeCard({ recipe, isSelected, onSelect }: RecipeCardP
         {recipe.title}
       </span>
       <span className="recipe-card-tags">
+        {recipe.status === 'draft' && <span className="badge-draft">טיוטה</span>}
         <CategoryChip category={recipe.category} />
         {recipe.is_sample && <span className="badge-sample">דוגמה</span>}
       </span>

@@ -3,22 +3,27 @@
     categories        id, name, description, parent_id (NULL = top level)
     recipes           id, title, category_id, subcategory_id, servings,
                       ingredient_groups (JSON), step_groups (JSON), notes (JSON),
-                      is_sample, created_at, updated_at
+                      is_sample, created_at, updated_at, status, issues (JSON)
     recipe_sources    id, recipe_id, position, kind, url, creators (JSON)
+    recipe_imports    id, recipe_id, kind, original_text, model, imported_at
 
 Relationships:
 - a subcategory is a category row whose parent_id points at a top-level category;
 - a recipe points at a category and, optionally, one of its subcategories;
-- a recipe has an ordered list of sources (one-to-many); deleting the recipe deletes them.
+- a recipe has an ordered list of sources (one-to-many); deleting the recipe deletes them;
+- an imported recipe has one original (one-to-one), which saving never changes.
 
 Ordered recipe content (ingredient groups, step groups, notes) lives in JSON columns:
 a recipe is always loaded and saved as a whole, so its lists need no tables of their own.
+
+The tables themselves are created and changed by migrations (backend/migrations/), not from
+these classes. tests/test_migrations.py checks that the two agree.
 """
 
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, ForeignKey, ForeignKeyConstraint, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, ForeignKey, ForeignKeyConstraint, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, UTCDateTime
@@ -45,6 +50,7 @@ class Recipe(Base):
         ForeignKeyConstraint(["subcategory_id", "category_id"], ["categories.id", "categories.parent_id"]),
         # ...and a subcategory without a category (a pair with a NULL is not checked by the key above).
         CheckConstraint("subcategory_id IS NULL OR category_id IS NOT NULL", name="subcategory_needs_category"),
+        CheckConstraint("status IN ('draft', 'saved')", name="status_is_draft_or_saved"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -58,6 +64,8 @@ class Recipe(Base):
     is_sample: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    status: Mapped[str] = mapped_column(default="saved", server_default="saved")  # 'draft' or 'saved'
+    issues: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default="[]")
 
     # Read-only shortcuts to the category rows (the ids above are what we write).
     category: Mapped[Category | None] = relationship(
@@ -71,6 +79,9 @@ class Recipe(Base):
     sources: Mapped[list["RecipeSource"]] = relationship(
         cascade="all, delete-orphan", order_by="RecipeSource.position"
     )
+    # The imported original, if the recipe was imported. Saved with the recipe and deleted with it;
+    # crud.py never assigns it after creation, so editing cannot change it.
+    original: Mapped["RecipeImport | None"] = relationship(cascade="all, delete-orphan")
 
 
 class RecipeSource(Base):
@@ -82,3 +93,16 @@ class RecipeSource(Base):
     kind: Mapped[str]  # instagram, website, screenshot, text or manual
     url: Mapped[str | None]
     creators: Mapped[list[str]] = mapped_column(JSON)
+
+
+class RecipeImport(Base):
+    """The text a recipe was imported from, exactly as pasted. Kept apart from the editable recipe."""
+
+    __tablename__ = "recipe_imports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recipe_id: Mapped[int] = mapped_column(ForeignKey("recipes.id", ondelete="CASCADE"), unique=True)
+    kind: Mapped[str]  # "text" (pasted); screenshots and links come in milestone 5
+    original_text: Mapped[str] = mapped_column(Text)
+    model: Mapped[str | None]  # the Claude model that read it; None: saved without a model
+    imported_at: Mapped[datetime] = mapped_column(UTCDateTime)

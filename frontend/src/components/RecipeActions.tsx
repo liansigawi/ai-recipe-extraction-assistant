@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { errorMessage } from '../api'
 
 interface RecipeActionsProps {
+  /** The edit button's text: "עריכה", or "בדיקה ושמירה" for a draft. */
+  editLabel?: string
   onEdit: () => void
   /** Deletes the recipe; returns a Promise so this component can wait for it and show a failure. */
   onDelete: () => Promise<void>
 }
 
 // Edit and delete buttons for the recipe being shown. Deleting asks first, in the page itself.
-export default function RecipeActions({ onEdit, onDelete }: RecipeActionsProps) {
+export default function RecipeActions({ editLabel = 'עריכה', onEdit, onDelete }: RecipeActionsProps) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,7 +37,7 @@ export default function RecipeActions({ onEdit, onDelete }: RecipeActionsProps) 
     return (
       <div className="button-row">
         <button type="button" className="button" onClick={onEdit}>
-          עריכה
+          {editLabel}
         </button>
         <button type="button" className="button button-danger" onClick={() => setConfirming(true)}>
           מחיקה

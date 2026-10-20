@@ -1,20 +1,13 @@
-"""Prepare the database at start-up.
+"""Fill a brand-new database with the starter categories and the sample recipes.
 
-- Every start: create any missing tables (CREATE TABLE ... for tables that do not exist yet).
-- Only for a brand-new database file: add the starter categories and the sample recipes.
-  So samples you delete stay deleted, and your recipes are never touched.
+Called only when app/migrate.py has just created the tables, so samples you delete stay
+deleted, and your recipes are never touched.
 """
 
-from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import crud, models
-from app.db import Base
 from app.sample_data import SAMPLE_RECIPES, STARTER_CATEGORIES
-
-
-def create_tables(engine: Engine) -> None:
-    Base.metadata.create_all(engine)
 
 
 def seed_new_database(session_factory: sessionmaker[Session]) -> None:

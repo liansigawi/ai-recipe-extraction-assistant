@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ApiError, deleteRecipe, errorMessage, listCategories, listRecipes } from './api'
+import ImportPanel from './components/ImportPanel'
 import RecipeActions from './components/RecipeActions'
 import RecipeEditor from './components/RecipeEditor'
 import RecipeList from './components/RecipeList'
@@ -8,7 +9,7 @@ import type { Category, Recipe } from './types'
 
 // What the main area shows. A "discriminated union": `kind` tells which shape the value has,
 // and TypeScript allows `recipeId` only where kind is 'edit'.
-type Mode = { kind: 'view' } | { kind: 'edit'; recipeId: number } | { kind: 'create' }
+type Mode = { kind: 'view' } | { kind: 'edit'; recipeId: number } | { kind: 'create' } | { kind: 'import' }
 type Loading = { status: 'loading' } | { status: 'failed'; message: string } | { status: 'ready' }
 
 const DISCARD_QUESTION = 'לצאת מהעריכה? השינויים שלא נשמרו יאבדו.'
@@ -35,6 +36,12 @@ export default function App() {
   const titleRef = useRef<HTMLHeadingElement>(null)
   // A ref can also hold a plain value that survives re-renders without causing one.
   const focusTitleAfterRender = useRef(false)
+  // What the page showed at the latest render, for code that runs later, such as an import that
+  // finishes after the user has moved on. (A ref is updated in an effect, not while rendering.)
+  const latest = useRef({ mode, shownId: selected?.id ?? null })
+  useEffect(() => {
+    latest.current = { mode, shownId: selected?.id ?? null }
+  })
 
   // Load the notebook from the API when the page opens, and again after "Try again".
   useEffect(() => {
@@ -106,6 +113,28 @@ export default function App() {
     setNotice('')
   }
 
+  function handleImport() {
+    if (!closeEditor()) return
+    setMode({ kind: 'import' })
+    setNotice('')
+  }
+
+  function handleImported(draft: Recipe) {
+    setRecipes((current) => [draft, ...current])
+    if (latest.current.mode.kind === 'import') {
+      // Straight on to the review: the draft opens in the editor, beside its original text.
+      setSelectedId(draft.id)
+      setMode({ kind: 'edit', recipeId: draft.id })
+      setNotice('הטיוטה מוכנה: השוו אותה לטקסט המקורי, תקנו, ושמרו.')
+    } else {
+      // The user went elsewhere while Claude was reading: do not pull them away. Until they pick
+      // a recipe the page shows the first one, which would now be the draft, so pin the one shown.
+      const shownId = latest.current.shownId
+      setSelectedId((current) => current ?? shownId)
+      setNotice(`הטיוטה "${draft.title}" מוכנה לבדיקה ברשימה.`)
+    }
+  }
+
   function handleEdit(id: number) {
     setMode({ kind: 'edit', recipeId: id })
     setNotice('')
@@ -126,7 +155,7 @@ export default function App() {
     setSelectedId(saved.id)
     setMode({ kind: 'view' })
     setUnsavedChanges(false)
-    setNotice('המתכון נשמר.')
+    setNotice(saved.status === 'draft' ? 'הטיוטה נשמרה. אפשר להמשיך לבדוק אותה אחר כך.' : 'המתכון נשמר.')
     focusTitleAfterRender.current = true
   }
 
@@ -150,7 +179,9 @@ export default function App() {
   }
 
   let content: ReactNode
-  if (mode.kind === 'create') {
+  if (mode.kind === 'import') {
+    content = <ImportPanel onImported={handleImported} onCancel={handleCancel} />
+  } else if (mode.kind === 'create') {
     // A different key gives a fresh editor with fresh state, instead of reusing the previous one.
     content = (
       <RecipeEditor
@@ -178,7 +209,14 @@ export default function App() {
         recipe={selected}
         titleRef={titleRef}
         // key: a new recipe gets fresh buttons, so a delete question left open does not carry over.
-        actions={<RecipeActions key={selected.id} onEdit={() => handleEdit(selected.id)} onDelete={() => handleDelete(selected.id)} />}
+        actions={
+          <RecipeActions
+            key={selected.id}
+            editLabel={selected.status === 'draft' ? 'בדיקה ושמירה' : 'עריכה'}
+            onEdit={() => handleEdit(selected.id)}
+            onDelete={() => handleDelete(selected.id)}
+          />
+        }
       />
     )
   } else {
@@ -212,13 +250,18 @@ export default function App() {
               <h2 id="recipe-list-heading" className="list-heading">
                 מתכונים
               </h2>
-              <button type="button" className="button-primary" onClick={handleCreate}>
-                מתכון חדש
-              </button>
+              <div className="button-row">
+                <button type="button" className="button-primary" onClick={handleImport}>
+                  ייבוא מטקסט
+                </button>
+                <button type="button" className="button" onClick={handleCreate}>
+                  מתכון חדש
+                </button>
+              </div>
             </div>
             <RecipeList
               recipes={recipes}
-              selectedId={mode.kind === 'create' ? null : (editing ?? selected)?.id ?? null}
+              selectedId={mode.kind === 'create' || mode.kind === 'import' ? null : (editing ?? selected)?.id ?? null}
               onSelect={handleSelect}
             />
           </nav>

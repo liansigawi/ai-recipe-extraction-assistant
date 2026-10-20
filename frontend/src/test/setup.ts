@@ -7,4 +7,5 @@ afterEach(() => {
   cleanup() // remove what each test rendered, so tests cannot affect each other
   vi.unstubAllGlobals() // put back anything a test replaced, such as fetch (test/fakeApi.ts)
   vi.restoreAllMocks()
+  localStorage.clear() // e.g. the import screen's kept text
 })

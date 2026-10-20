@@ -47,6 +47,40 @@ export interface RecipeContent {
   sources: Source[]
 }
 
+/** 'draft': imported, not reviewed yet. 'saved': saved as a recipe. */
+export type RecipeStatus = 'draft' | 'saved'
+
+/** What an import flagged for review (backend/app/schemas.py explains each kind). */
+export type IssueKind =
+  | 'ingredient_only_in_steps'
+  | 'unclear_text'
+  | 'missing_information'
+  | 'ambiguous_alternative'
+  | 'multiple_recipes'
+  | 'other'
+  | 'missing_title'
+  | 'quantity_not_in_line'
+  | 'not_found_in_source'
+  | 'classification_unresolved'
+  | 'not_extracted'
+
+export interface Issue {
+  kind: IssueKind
+  /** For the person, in Hebrew. */
+  message: string
+  /** The exact words of the original text it is about, or null. */
+  quote: string | null
+}
+
+/** The text a recipe was imported from, exactly as pasted. Read-only. */
+export interface ImportedOriginal {
+  kind: 'text'
+  text: string
+  /** The Claude model that read it; null: saved without a model. */
+  model: string | null
+  imported_at: string
+}
+
 /** A stored recipe, as the API returns it. */
 export interface Recipe extends RecipeContent {
   id: number
@@ -55,6 +89,11 @@ export interface Recipe extends RecipeContent {
   subcategory: CategoryRef | null
   /** true for the built-in examples, which were invented for the project. */
   is_sample: boolean
+  status: RecipeStatus
+  /** What to check before saving a draft. */
+  issues: Issue[]
+  /** null: typed in by hand. */
+  original: ImportedOriginal | null
   /** ISO 8601 date and time with a time zone, e.g. "2026-10-19T08:00:00Z". */
   created_at: string
   updated_at: string
@@ -64,6 +103,16 @@ export interface Recipe extends RecipeContent {
 export interface RecipeInput extends RecipeContent {
   category_id: number | null
   subcategory_id: number | null
+  status: RecipeStatus
+  /** The issues still open, when saving a draft. */
+  issues: Issue[]
+}
+
+/** GET /api/extraction: can imports use Claude right now? */
+export interface ExtractionInfo {
+  /** An Anthropic API key is set on the backend. */
+  configured: boolean
+  model: string
 }
 
 export interface Subcategory {

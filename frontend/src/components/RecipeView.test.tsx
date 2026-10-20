@@ -116,3 +116,22 @@ describe('RecipeView', () => {
     expect(screen.getByText('Example Kitchen').tagName).toBe('BDI')
   })
 })
+
+describe('RecipeView for imported recipes', () => {
+  const original = { kind: 'text' as const, text: 'עוף בסיר\n\nמטגנים את הבצל…', model: 'claude-opus-5-5', imported_at: '2026-10-20T09:30:00Z' }
+
+  it('marks a draft as not reviewed yet, with the number of points to check', () => {
+    const issue = { kind: 'unclear_text' as const, message: 'לא ברור.', quote: null }
+    render(<RecipeView recipe={{ ...chicken, status: 'draft', issues: [issue, issue], original }} />)
+    expect(screen.getByText(/טיוטה מיובאת שעוד לא נבדקה \(2 נקודות לבדיקה\)/)).toBeInTheDocument()
+  })
+
+  it('keeps the original text, closed, below the facts', () => {
+    render(<RecipeView recipe={{ ...chicken, original }} />)
+    const details = screen.getByText('הטקסט המקורי').closest('details')!
+    expect(details).not.toHaveAttribute('open')
+    expect(details.querySelector('.original-text-body')?.textContent).toBe(original.text)
+    expect(screen.getByText('claude-opus-5-5').tagName).toBe('BDI')
+    expect(screen.queryByText(/טיוטה מיובאת/)).not.toBeInTheDocument()
+  })
+})

@@ -2,6 +2,7 @@ import type { ReactNode, Ref } from 'react'
 import { SOURCE_LABELS } from '../labels'
 import type { IngredientGroup, Recipe, Source, StepGroup } from '../types'
 import CategoryChip from './CategoryChip'
+import OriginalText from './OriginalText'
 
 // Dates in the page's language and the computer's own time zone; the API sends them in UTC.
 const dateFormat = new Intl.DateTimeFormat('he-IL', { dateStyle: 'medium', timeStyle: 'short' })
@@ -30,6 +31,13 @@ export default function RecipeView({ recipe, titleRef, actions }: RecipeViewProp
           לערוך או למחוק אותו.
         </p>
       )}
+      {recipe.status === 'draft' && (
+        <p className="draft-note">
+          טיוטה מיובאת שעוד לא נבדקה
+          {recipe.issues.length > 0 && ` (${recipe.issues.length} נקודות לבדיקה)`}. לחצו "בדיקה ושמירה" כדי להשוות אותה לטקסט
+          המקורי ולשמור כמתכון.
+        </p>
+      )}
       <ul className="recipe-facts">
         <li>
           <CategoryChip category={recipe.category} subcategory={recipe.subcategory} />
@@ -44,6 +52,7 @@ export default function RecipeView({ recipe, titleRef, actions }: RecipeViewProp
           עודכן <time dateTime={recipe.updated_at}>{dateFormat.format(new Date(recipe.updated_at))}</time>
         </li>
       </ul>
+      {recipe.original !== null && <OriginalText original={recipe.original} />}
 
       <section className="recipe-section">
         <h3 className="section-title">מצרכים</h3>

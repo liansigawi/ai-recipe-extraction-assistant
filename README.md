@@ -4,10 +4,11 @@ A personal recipe notebook that runs on your own computer. The goal: import reci
 posts, recipe websites, screenshots, or pasted text; review them; and keep them in a searchable
 collection that supports Hebrew and right-to-left text.
 
-> **Status: milestone 3 of 7.** A FastAPI backend with a SQLite database and a React + TypeScript
-> frontend run locally. You can **create, edit and delete recipes** by hand, and they are saved on
-> this computer. A new database starts with three categories and **four invented sample recipes**,
-> labeled "דוגמה". Importing (from text, websites, screenshots or Instagram) comes in milestones 4–5.
+> **Status: milestone 4 of 7.** A FastAPI backend with a SQLite database and a React + TypeScript
+> frontend run locally. You can **paste recipe text and have Claude turn it into a draft**, review
+> the draft beside the original text, and save it explicitly; or create, edit and delete recipes by
+> hand. A new database starts with three categories and **four invented sample recipes**, labeled
+> "דוגמה". Importing from websites, screenshots and Instagram links comes in milestone 5.
 > Milestone 1 (Instagram feasibility) is documented in
 > [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
 > contract are in [docs/architecture.md](docs/architecture.md), and the original requirements are
@@ -21,8 +22,11 @@ collection that supports Hebrew and right-to-left text.
   database (`recipes.db`) and Instagram probe runs; uploaded screenshots (milestone 5) will go there too.
 - The notebook page loads nothing from the internet. The API documentation page (`/docs`) loads its
   viewer from cdn.jsdelivr.net, so it needs an internet connection.
-- **This will not be a fully offline app.** From milestone 4, recipe text and images that you submit
-  for AI extraction will be sent to the Anthropic API.
+- **What is sent to Anthropic.** When you press "קריאה עם Claude" on the import screen, the text
+  you pasted and the list of your category names and descriptions are sent to the Anthropic API.
+  Nothing else from the notebook is sent, and "שמירה בלי עיבוד" (save without processing) sends
+  nothing. From milestone 5, screenshots you submit will be sent the same way.
+- **The API key stays on this computer**, in the backend's settings. The page never receives it.
 - The Instagram probe (and the importer, from milestone 5) contacts Instagram's servers directly from
   this computer: instagram.com, plus its content hosts (cdninstagram.com, fbcdn.net) when a browser is used.
 
@@ -38,8 +42,8 @@ collection that supports Hebrew and right-to-left text.
 Exact versions are pinned in `backend/uv.lock` and `frontend/package-lock.json`. Tested together:
 
 - **Backend:** fastapi 0.147.0, uvicorn 0.54.0, pydantic 2.14.1, pydantic-settings 2.16.0,
-  sqlalchemy 2.1.5 (with Python's built-in SQLite 3.53.1), httpx2 2.14.0, playwright 1.64.0,
-  beautifulsoup4 4.15.0, pytest 9.1.1.
+  sqlalchemy 2.1.5 (with Python's built-in SQLite 3.53.1), alembic 1.20.0, anthropic 1.15.0,
+  httpx2 2.14.0, playwright 1.64.0, beautifulsoup4 4.15.0, pytest 9.1.1.
 - **Frontend:** react 19.3.1, vite 8.3.4, typescript 7.0.2, vitest 5.0.5, @testing-library/react
   16.3.3, jsdom 30.1.3, oxlint 1.88.0.
 
@@ -131,6 +135,34 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
 - **Delete:** "מחיקה" asks first, in the page. Deleting cannot be undone.
 - Leaving the form with unsaved changes (another recipe, cancel, closing the tab) asks first.
 
+### Import a recipe from pasted text
+
+Needs an API key: see [Connect the Claude API](#connect-the-claude-api). Without one, you can still
+save the text as a draft and fill it in yourself.
+
+1. **"ייבוא מטקסט"** (import from text): paste a recipe, for example an Instagram caption or text
+   copied from a website, and press **"קריאה עם Claude"**. It usually takes less than a minute.
+2. The draft opens for **review**. At the top is the original text exactly as you pasted it (it
+   stays in view while you scroll), then the points to check, then the editable form:
+   - lines that Claude could not copy exactly from the text, quantities that are not written in
+     their line (left empty), an ingredient that only the steps mention (not added), missing or
+     unclear information;
+   - the category: Claude may only pick one of your existing categories. When it is not clear, the
+     recipe stays "לא מסווג" (not classified), with an explanation. Nothing ever creates a category.
+3. Fix what needs fixing and mark each point **"טופל"** (handled). Then:
+   - **"שמירה כמתכון"** (save as recipe) saves it as a recipe. Only this button does that; Enter
+     in a field never does.
+   - **"שמירת טיוטה"** (save draft) keeps it as a draft, with the points still open, to continue
+     later. Drafts are marked "טיוטה" in the list.
+
+The original text is stored with the recipe and never changes when you edit it; open
+"הטקסט המקורי" (the original text) in the recipe view to see it.
+
+If anything fails (no internet, Claude busy, no API key), nothing is saved and your text stays in
+the box, even after a reload: it is kept in this browser until an import succeeds. You can try
+again, or press **"שמירה בלי עיבוד"** (save without processing) to keep the text as a draft and fill
+in the recipe yourself.
+
 The four samples were invented for this project and are not based on real recipes or on the
 Instagram links. They are labeled "דוגמה" in the list and the recipe view. You can edit or delete them;
 once deleted, they are not added again.
@@ -144,7 +176,40 @@ once deleted, they are not added again.
 
 You can also look inside the database while the backend is stopped, with any SQLite viewer (for
 example the "SQLite Viewer" extension in VS Code): `data/recipes.db` has the tables `recipes`,
-`recipe_sources` and `categories`. The ingredient groups and steps are stored as readable JSON.
+`recipe_sources`, `recipe_imports` (the original texts) and `categories`. The ingredient groups and
+steps are stored as readable JSON.
+
+## Connect the Claude API
+
+Importing with "קריאה עם Claude" uses the Claude API, which needs an API key from Anthropic. Each
+import is one paid request: a few thousand tokens for a typical recipe. The Claude Console shows
+your usage, and lets you set a spending limit.
+
+1. **Create a key.** Sign in to the Claude Console at https://platform.claude.com, open
+   **API keys**, and create a key. It starts with `sk-ant-`. Copy it.
+2. **Put it in `.env`, in VS Code.** In the repository folder (next to this README), copy
+   `.env.example` to a new file named `.env`, and add this line with your key (no quotes, no spaces):
+
+   ```text
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+
+   Save the file. Type the key into the editor, not into a terminal command: terminals keep a
+   history of what you type.
+3. **Check that git ignores it.** `git check-ignore -v .env` should print the `.gitignore` line that
+   ignores it, and `git status` should not list `.env`.
+4. **Use it.** No restart is needed: the backend reads the key at each import. The import screen
+   says whether a key is configured (the page is told *whether* there is a key, never the key).
+
+Keep the key to yourself: never paste it into a chat, an issue, a commit or a screenshot. If it
+leaks, delete it in the Console and create a new one.
+
+Optional settings, also in `.env`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `RECIPES_MODEL` | `claude-opus-5-5` | The Claude model for imports. `claude-sonnet-5-5` is cheaper. |
+| `RECIPES_MODEL_TIMEOUT_SECONDS` | `120` | How long one request may take before the import reports a timeout. |
 
 ## Commands
 
@@ -152,7 +217,10 @@ Backend, from `backend/`:
 
 | Command | What it does |
 |---|---|
-| `uv run pytest` | Backend tests. No network: the API is called in-process, each test gets its own temporary database, and HTTP is mocked. Your `data/` folder is never touched. |
+| `uv run pytest` | Backend tests. No network: the API is called in-process, each test gets its own temporary database, and HTTP and Claude are replaced by stand-ins. Your `data/` folder, `.env` and API key are never used. |
+| `uv run python -m evals.run_extraction` | **Paid.** The extraction quality check: one real Claude request per case (at most 15). See [Three kinds of checks](#three-kinds-of-checks). |
+| `uv run python -m app.migrate` | Upgrades the database now (the backend also does it when it starts), after a backup copy. |
+| `uv run alembic history` | Lists the database migrations. |
 | `uv run uvicorn app.main:app --reload --reload-dir app --host 127.0.0.1 --port 8000` | Runs the API (see above). |
 | `uv run python -m scripts.probe_instagram` | Live Instagram check: the three sample posts × 4 strategies = at most 12 page loads, 10 s apart. It stops at the first sign of rate limiting or a login wall. It prints the run folder, where it saves raw pages and a `summary.md`. |
 | `uv run python -m scripts.probe_instagram <url> …` | The same check for up to 10 of your own public post or Reel URLs. |
@@ -182,7 +250,15 @@ All local data goes in one folder: `data/` at the repository root by default, ex
 - **Back up:** stop the backend, then copy `recipes.db` (or the whole folder).
 - **Start over:** stop the backend, delete `recipes.db`, and start the backend again. You get a new
   database with only the categories and samples. Everything you created is gone.
-- **Probe runs:** `<data folder>/instagram-probe/<run-id>/`.
+- **Probe runs:** `<data folder>/instagram-probe/<run-id>/`. **Quality check results:**
+  `<data folder>/evals/extraction/<run>/`.
+
+**Database upgrades.** When a new version of the notebook needs a changed database (a *migration*,
+for example milestone 4's draft status and original texts), the backend upgrades it when it starts.
+It first copies the file to `recipes.backup-<date>-<time>-before-<migration>.db` in the same folder,
+then upgrades it in one step that either completes or changes nothing. Your recipes are kept. The
+terminal says what it did. To go back, stop the backend and put the backup copy in place of
+`recipes.db`. Delete old backup copies when you no longer need them.
 
 Settings use the `RECIPES_` prefix. You can set them in a `.env` file: copy `.env.example` to `.env`
 in the repository root and edit it in VS Code, which saves UTF-8. `.env` is git-ignored. The backend
@@ -192,6 +268,7 @@ reads it when it starts. A real environment variable wins over `.env`.
 |---|---|---|
 | `RECIPES_DATA_DIR` | `data/` in the repository | Where the database and other local data are kept. |
 | `RECIPES_SQL_ECHO` | `false` | `true` prints every SQL statement the backend runs, in its terminal. Useful for learning what the ORM does. |
+| `ANTHROPIC_API_KEY`, `RECIPES_MODEL`, `RECIPES_MODEL_TIMEOUT_SECONDS` | | See [Connect the Claude API](#connect-the-claude-api). |
 
 In PowerShell:
 
@@ -213,8 +290,13 @@ The project keeps these separate and reports which one was run:
    parsing, the API contract, and the interface behavior, not that Instagram works today.
 2. **Live importer checks** (`scripts/probe_instagram.py`): run by hand against real Instagram pages.
    Results are recorded with dates in [docs/instagram-feasibility.md](docs/instagram-feasibility.md).
-3. **Model-quality evaluation** (milestone 7): will compare AI extraction against checked
-   expectations. Run explicitly; bounded; uses paid API calls.
+3. **Extraction quality check** (`uv run python -m evals.run_extraction`, from `backend/`): real,
+   paid Claude requests on representative recipe texts, compared with expectations written by hand
+   (missing or changed lines, quantities, timings, invented content, classification, missing
+   flags). Run explicitly; at most 15 requests per run. Cases: `backend/evals/cases/` (invented
+   texts, in git) and, with `--cases-dir ../data/evals/local-cases`, your own (for example real
+   captions; git-ignored). The report is saved in `data/evals/extraction/`; findings are recorded in
+   [docs/extraction-quality.md](docs/extraction-quality.md). Milestone 7 extends it.
 
 ## Repository layout (so far)
 
@@ -234,13 +316,18 @@ The project keeps these separate and reports which one was run:
 │   │   ├── schemas.py               the recipe data contract (Pydantic models)
 │   │   ├── db.py                    the database connection and sessions (SQLAlchemy)
 │   │   ├── models.py                the database tables
+│   │   ├── migrate.py               brings the database up to date at start-up (with a backup first)
 │   │   ├── crud.py                  reading and writing recipes; the category check
-│   │   ├── seed.py                  creates the tables; fills a new database once
+│   │   ├── seed.py                  fills a new database once
 │   │   ├── sample_data.py           the starter categories and the four invented sample recipes
-│   │   ├── api/                     recipes.py (create, read, save, delete), categories.py (read)
+│   │   ├── api/                     recipes.py, categories.py, imports.py (pasted text -> draft)
+│   │   ├── extraction/              Claude: the answer's schema, the prompt, the API call, the checks
 │   │   └── importers/instagram.py   Instagram URL parsing, page capture, caption analysis
+│   ├── migrations/                  database migrations (Alembic): 0001 milestone 3, 0002 imports
+│   ├── alembic.ini                  Alembic's settings, for its command line
+│   ├── evals/                       the extraction quality check (paid; run by hand) and its cases
 │   ├── scripts/probe_instagram.py   bounded live probe and offline analysis
-│   └── tests/                       pytest: API, persistence, contract, importer, probe, settings, code hygiene
+│   └── tests/                       pytest: API, persistence, migrations, extraction, contract, importer, settings…
 ├── frontend/                        React + TypeScript + Vite
 │   ├── index.html                   the page shell: lang="he" dir="rtl"
 │   ├── package.json, package-lock.json, vite.config.ts, tsconfig*.json, .oxlintrc.json
@@ -253,7 +340,8 @@ The project keeps these separate and reports which one was run:
 │       ├── labels.ts                display names, e.g. for source kinds
 │       ├── index.css                styles (right-to-left aware)
 │       ├── components/              RecipeList, RecipeCard, RecipeView, RecipeActions, RecipeEditor
-│       │                            (with IngredientsEditor, StepsEditor, RowButtons, FieldError), CategoryChip
+│       │                            (with IngredientsEditor, StepsEditor, RowButtons, FieldError), CategoryChip,
+│       │                            ImportPanel, ReviewIssues, OriginalText
 │       ├── test/                    test setup, the fake API, sample recipes as test data
 │       └── *.test.ts(x)             Vitest + Testing Library tests
 └── data/                            local data (git-ignored)

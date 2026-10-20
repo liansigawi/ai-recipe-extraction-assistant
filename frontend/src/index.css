@@ -621,3 +621,149 @@ p {
   padding-block-start: 1rem;
   border-block-start: 1px solid var(--color-border);
 }
+
+/* ---- Import and review (milestone 4) ----------------------------------------------- */
+
+.badge-draft {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: #fff1c2;
+  color: #6b4e00;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.draft-note,
+.form-note {
+  margin-block-start: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-inline-start: 4px solid #d9a400;
+  border-radius: var(--radius);
+  background: #fff8e0;
+  font-size: 0.9rem;
+}
+
+.import-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.import-panel textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.6rem;
+  border: 1px solid #c9b9a9;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+.import-panel textarea[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.import-panel textarea:read-only {
+  background: var(--color-page);
+}
+
+.working-note {
+  display: block;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* The original text, exactly as pasted: line breaks kept, long lines wrapped. */
+.original-text {
+  margin-block-start: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-page);
+}
+
+.original-text > summary {
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.original-text-meta {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.original-text-body {
+  max-height: 22rem;
+  overflow: auto;
+  padding: 0 0.75rem 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+
+/* On the review screen it stays in view while the form scrolls beside it. */
+.original-text-sticky {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 1;
+  box-shadow: var(--shadow);
+}
+
+.original-text-sticky .original-text-body {
+  max-height: 35vh;
+}
+
+.review-issues {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.review-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-issue {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ecd9a0;
+  border-radius: var(--radius);
+  background: #fffbea;
+}
+
+.review-issue-text {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.issue-kind {
+  color: #6b4e00;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.issue-quote {
+  margin: 0;
+  padding-inline-start: 0.6rem;
+  border-inline-start: 3px solid #d9a400;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.review-done {
+  color: var(--color-success);
+  font-weight: 600;
+}

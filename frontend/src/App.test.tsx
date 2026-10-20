@@ -81,6 +81,7 @@ describe('browsing', () => {
     const user = userEvent.setup()
     await renderApp()
 
+    await user.tab() // the "import" button
     await user.tab() // the "new recipe" button
     await user.tab() // the first card
     await user.tab() // the second card
@@ -158,6 +159,8 @@ describe('creating a recipe', () => {
           step_groups: [{ name: null, steps: ['מערבבים הכול.'] }],
           notes: [],
           sources: [],
+          status: 'saved',
+          issues: [],
         },
       },
     ])
@@ -274,6 +277,8 @@ describe('editing a recipe', () => {
       step_groups: cake.step_groups,
       notes: cake.notes,
       sources: cake.sources,
+      status: 'saved',
+      issues: [],
     })
     expect(recipeHeading('עוגת שוקולד מריר')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /עוגת שוקולד מריר/ })).toHaveAttribute('aria-current', 'true')

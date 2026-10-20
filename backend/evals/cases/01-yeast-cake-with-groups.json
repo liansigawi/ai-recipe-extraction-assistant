@@ -1,0 +1,25 @@
+{
+  "about": "Invented. A Hebrew cake with two ingredient groups, fractions, a time range, a pan size and a substitution as notes, and an intro, hashtags and a mention that must be left out.",
+  "expect": {
+    "title": "עוגת שמרים בחושה עם קרם וניל",
+    "title_written_in_text": true,
+    "category": "קינוחים",
+    "ingredient_groups": ["לבצק", "לקרם"],
+    "ingredient_count": 11,
+    "ingredients": [
+      ["3 כוסות קמח לבן", "3 כוסות"],
+      ["1/2 כוס סוכר", "1/2 כוס"],
+      ["1 שקית שמרים יבשים (10 גרם)"],
+      ["2 ביצים", "2"],
+      ["100 גרם חמאה רכה", "100 גרם"],
+      ["3/4 כוס חלב פושר", "3/4 כוס"],
+      ["קורט מלח", "קורט"],
+      ["1 כוס חלב", "1 כוס"],
+      ["1 כפית תמצית וניל", "1 כפית"],
+      ["2 כפות קורנפלור", "2 כפות"],
+      ["1/4 כוס סוכר", "1/4 כוס"]
+    ],
+    "mentions": ["8 דקות", "שעה וחצי", "170 מעלות", "35-40 דקות", "תבנית אינגליש קייק ארוכה (30 ס\"מ)", "מרגרינה"],
+    "content_excludes": ["#", "@baking.friend", "שמרו את הפוסט"]
+  }
+}

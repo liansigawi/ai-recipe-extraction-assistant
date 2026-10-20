@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError, createRecipe, deleteRecipe, errorMessage, listRecipes } from './api'
+import { ApiError, createRecipe, deleteRecipe, errorMessage, importText, listRecipes } from './api'
 import type { RecipeInput } from './types'
 
 function answer(response: Response | Error) {
@@ -17,6 +17,8 @@ const input: RecipeInput = {
   step_groups: [],
   notes: [],
   sources: [],
+  status: 'saved',
+  issues: [],
 }
 
 describe('api', () => {
@@ -68,5 +70,25 @@ describe('errorMessage', () => {
       'הפעולה נכשלה: Something went wrong on the server.',
     )
     expect(errorMessage(new Error('anything'))).toBe('אירעה שגיאה לא צפויה. נסו שוב.')
+  })
+})
+
+describe('importing', () => {
+  it('sends the pasted text and the choice of using Claude', async () => {
+    const fetchMock = answer(new Response(JSON.stringify({ id: 9, status: 'draft' }), { status: 201 }))
+    await importText('חביתה\n2 ביצים', false)
+    expect(fetchMock).toHaveBeenCalledWith('/api/imports/text', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ text: 'חביתה\n2 ביצים', use_model: false }),
+    }))
+  })
+
+  it('explains each import failure in Hebrew', () => {
+    const message = (code: string) => errorMessage(new ApiError(502, code, 'detail'))
+    expect(message('extraction_not_configured')).toMatch(/README/)
+    expect(message('extraction_auth_failed')).toMatch(/ANTHROPIC_API_KEY/)
+    expect(message('extraction_busy')).toMatch(/עמוס/)
+    expect(message('extraction_invalid_output')).toBe('Claude לא הצליח לקרוא את המתכון הפעם (detail). נסו שוב.')
+    expect(message('not_a_recipe')).toBe('Claude לא מצא מתכון בטקסט.')
   })
 })

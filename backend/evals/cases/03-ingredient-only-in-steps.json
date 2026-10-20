@@ -1,0 +1,17 @@
+{
+  "about": "Invented. The steps use strawberries that the ingredient list never names: they must be flagged, not added. An alternative inside a line stays in that line.",
+  "expect": {
+    "title": "מאפינס שוקולד צ'יפס",
+    "servings": "12 יחידות",
+    "category": "קינוחים",
+    "ingredient_count": 6,
+    "ingredients": [
+      ["2 כוסות קמח תופח", "2 כוסות"],
+      ["1/2 כוס שמן או חמאה מומסת", "1/2 כוס"],
+      ["1 כוס שוקולד צ'יפס", "1 כוס"]
+    ],
+    "not_ingredients": ["תות"],
+    "issue_kinds": ["ingredient_only_in_steps"],
+    "mentions": ["20-22 דקות", "180 מעלות"]
+  }
+}

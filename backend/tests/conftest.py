@@ -10,7 +10,25 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import Settings
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def no_dotenv_and_no_real_claude(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Applies to every test: your .env and API key are never used, and Claude is never called.
+
+    Your .env may hold a real ANTHROPIC_API_KEY; a test must not spend it. Tests that need an
+    extractor pass a stand-in (see test_api_imports.py).
+    """
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    for name in ("ANTHROPIC_API_KEY", "RECIPES_ANTHROPIC_API_KEY", "RECIPES_MODEL", "RECIPES_MODEL_TIMEOUT_SECONDS"):
+        monkeypatch.delenv(name, raising=False)
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("A test tried to create a real Claude API client.")
+
+    monkeypatch.setattr("anthropic.Anthropic", refuse)
 
 
 @pytest.fixture

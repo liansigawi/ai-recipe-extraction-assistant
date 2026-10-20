@@ -71,6 +71,9 @@ export const sampleRecipes: Recipe[] = [
     created_at: created,
     updated_at: created,
     is_sample: true,
+    status: 'saved',
+    issues: [],
+    original: null,
   },
   {
     id: 2,
@@ -114,6 +117,9 @@ export const sampleRecipes: Recipe[] = [
     created_at: created,
     updated_at: created,
     is_sample: true,
+    status: 'saved',
+    issues: [],
+    original: null,
   },
   {
     id: 3,
@@ -156,6 +162,9 @@ export const sampleRecipes: Recipe[] = [
     created_at: created,
     updated_at: created,
     is_sample: true,
+    status: 'saved',
+    issues: [],
+    original: null,
   },
   {
     id: 4,
@@ -192,5 +201,8 @@ export const sampleRecipes: Recipe[] = [
     created_at: created,
     updated_at: created,
     is_sample: true,
+    status: 'saved',
+    issues: [],
+    original: null,
   },
 ]

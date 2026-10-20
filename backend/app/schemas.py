@@ -24,32 +24,32 @@ Fidelity rules this shape encodes (docs/brief.md, section 6):
 import re
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # Invisible characters that can sit at the edges of copied text: zero-width space,
 # joiners and direction marks (U+200B-U+200F), the Arabic letter mark, bidi
 # embeddings/overrides and isolates, and the byte-order mark. At the start of a title
 # an LRM makes the browser lay a Hebrew title out left to right.
-_INVISIBLE = (
+INVISIBLE_CHARACTERS = (
     "\N{ZERO WIDTH SPACE}-\N{RIGHT-TO-LEFT MARK}"
     "\N{ARABIC LETTER MARK}"
     "\N{LEFT-TO-RIGHT EMBEDDING}-\N{RIGHT-TO-LEFT OVERRIDE}"
     "\N{LEFT-TO-RIGHT ISOLATE}-\N{POP DIRECTIONAL ISOLATE}"
     "\N{ZERO WIDTH NO-BREAK SPACE}"
 )
-_EDGES = re.compile(rf"^[\s{_INVISIBLE}]+|[\s{_INVISIBLE}]+$")
+_EDGES = re.compile(rf"^[\s{INVISIBLE_CHARACTERS}]+|[\s{INVISIBLE_CHARACTERS}]+$")
 
 
-def _trim_edges(value: str) -> str:
+def trim_edges(value: str) -> str:
     """Remove spaces and invisible marks at both ends; marks inside the text are kept."""
     return _EDGES.sub("", value)
 
 
 # A reusable "text that is not empty" type: trimmed first, then checked (the order matters).
-NonEmptyStr = Annotated[str, AfterValidator(_trim_edges), Field(min_length=1)]
+NonEmptyStr = Annotated[str, AfterValidator(trim_edges), Field(min_length=1)]
 
 
-def _quoted_from(quantity: str, text: str) -> bool:
+def quoted_from(quantity: str, text: str) -> bool:
     """True when `quantity` appears in `text` without being cut out of a longer number."""
     before = r"(?<![\d.,/])" if quantity[0].isdigit() else ""  # not the "00" of "200"
     after = r"(?![\d]|[.,/]\d)" if quantity[-1].isdigit() else ""  # not the "2" of "2.5" or "200"
@@ -78,7 +78,7 @@ class Ingredient(ContractModel):
 
     @model_validator(mode="after")
     def _quantity_is_quoted_from_text(self) -> "Ingredient":
-        if self.quantity is not None and not _quoted_from(self.quantity, self.text):
+        if self.quantity is not None and not quoted_from(self.quantity, self.text):
             raise ValueError(f"quantity {self.quantity!r} must be quoted exactly as written in {self.text!r}")
         return self
 
@@ -99,8 +99,8 @@ SourceKind = Literal["instagram", "website", "screenshot", "text", "manual"]
 class Source(ContractModel):
     """Where the recipe came from: editable attribution, part of the recipe.
 
-    The imported original (caption, page text, screenshots) will be stored apart from this, in
-    its own table that editing never rewrites (milestone 4).
+    The imported original text is kept apart from this, in `Recipe.original`, which editing
+    never changes.
     """
 
     kind: SourceKind  # how the recipe got here; "manual": typed in the editor
@@ -120,6 +120,50 @@ class RecipeContent(ContractModel):
     sources: list[Source] = []
 
 
+# --- Review: drafts, issues and the imported original --------------------------------------------
+
+# "draft": imported and not reviewed yet. "saved": the person saved it as a recipe.
+RecipeStatus = Literal["draft", "saved"]
+
+# What an import can flag for review. The model may report the first group; the backend adds
+# the second group from its own checks of the model's answer (app/extraction/review.py).
+ModelIssueKind = Literal[
+    "ingredient_only_in_steps",  # the steps use an ingredient the list does not name; it is NOT added
+    "unclear_text",  # cut off, garbled, or wording that can be read two ways
+    "missing_information",  # something a cook needs that the text does not give
+    "ambiguous_alternative",  # an "or ..." whose scope is unclear
+    "multiple_recipes",  # the text holds more than one recipe; only the main one was taken
+    "other",
+]
+BackendIssueKind = Literal[
+    "missing_title",  # the text has no title; one was composed from its words
+    "quantity_not_in_line",  # the model's quantity is not written in its line; left empty
+    "not_found_in_source",  # a line that does not appear in the original text: check it
+    "classification_unresolved",  # no single existing category clearly fits; left unclassified
+    "not_extracted",  # saved without the model: fill in the recipe from the original text
+]
+IssueKind = ModelIssueKind | BackendIssueKind
+
+
+class Issue(ContractModel):
+    """Something the person should check before saving an imported draft."""
+
+    kind: IssueKind
+    message: NonEmptyStr  # for the person, in Hebrew
+    quote: NonEmptyStr | None = None  # the exact words of the original text it is about, if any
+
+
+class ImportedOriginal(ContractModel):
+    """The text a recipe was imported from, exactly as pasted. Read-only: saving never changes it."""
+
+    model_config = ConfigDict(str_strip_whitespace=False)  # returned exactly as stored, edges included
+
+    kind: Literal["text"]  # screenshots and links come in milestone 5
+    text: str
+    model: NonEmptyStr | None  # the Claude model that read it; None: saved without a model
+    imported_at: AwareDatetime
+
+
 class Recipe(RecipeContent):
     """A stored recipe, as the API returns it."""
 
@@ -127,6 +171,9 @@ class Recipe(RecipeContent):
     category: CategoryRef | None = None  # None: not classified yet
     subcategory: CategoryRef | None = None  # only together with a category
     is_sample: bool = False  # True for the built-in examples, which were invented for the project
+    status: RecipeStatus = "saved"
+    issues: list[Issue] = []  # what to check before saving a draft
+    original: ImportedOriginal | None = None  # None: typed in by hand
     # With a time zone, so the browser shows the right local time. Sent as e.g. "2026-10-19T08:00:00Z".
     created_at: AwareDatetime
     updated_at: AwareDatetime
@@ -143,11 +190,14 @@ class RecipeInput(RecipeContent):
 
     Categories are referred to by id only. Whether those ids exist, and whether the
     subcategory belongs to the category, is checked against the database (app/crud.py).
-    The server sets the id, the timestamps and is_sample itself.
+    The server sets the id, the timestamps and is_sample itself. The imported original is
+    not part of this model, so a save cannot change it.
     """
 
     category_id: int | None = None
     subcategory_id: int | None = None
+    status: RecipeStatus = "saved"  # the review screen sends "draft" to keep reviewing later
+    issues: list[Issue] = []  # the issues still open, when saving a draft
 
     @model_validator(mode="after")
     def _subcategory_needs_category(self) -> "RecipeInput":
@@ -169,3 +219,32 @@ class Category(ContractModel):
     name: NonEmptyStr
     description: NonEmptyStr | None = None
     subcategories: list[Subcategory] = []
+
+
+# --- Importing ---------------------------------------------------------------------------------
+
+MAX_IMPORT_CHARACTERS = 20_000  # a long recipe page is about 10,000; an Instagram caption at most 2,200
+
+
+class TextImport(ContractModel):
+    """POST /api/imports/text: recipe text the person pasted."""
+
+    # Kept exactly as pasted, spaces and line breaks included: no trimming here.
+    model_config = ConfigDict(str_strip_whitespace=False)
+
+    text: str = Field(min_length=1, max_length=MAX_IMPORT_CHARACTERS)
+    use_model: bool = True  # False: save the text as a draft to fill in by hand, without Claude
+
+    @field_validator("text")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not trim_edges(value):
+            raise ValueError("the text is empty")
+        return value
+
+
+class ExtractionInfo(ContractModel):
+    """GET /api/extraction: can the backend send text to Claude right now?"""
+
+    configured: bool  # an Anthropic API key is set
+    model: str  # the Claude model imports use

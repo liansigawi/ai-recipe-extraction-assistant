@@ -1,0 +1,17 @@
+{
+  "about": "Invented. Two alternative methods in separate passages must become separate step groups with their own times; an ingredient without an amount; reused cooking liquid.",
+  "expect": {
+    "title": "תבשיל עוף עם תפוחי אדמה",
+    "category": "בישולים",
+    "ingredient_count": 7,
+    "ingredients": [
+      ["8 שוקיים עוף", "8"],
+      ["3 תפוחי אדמה, חתוכים לקוביות", "3"],
+      ["1 כפית פפריקה מתוקה", "1 כפית"],
+      ["מלח ופלפל", null],
+      ["3 כוסות מים", "3 כוסות"]
+    ],
+    "step_groups_include": ["בסיר לחץ", "בסיר רגיל"],
+    "mentions": ["20 דקות", "כשעה ורבע", "2 כוסות מים", "נוזלי הבישול"]
+  }
+}

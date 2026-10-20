@@ -1,7 +1,7 @@
 // The recipe editor's form state, and the pure functions around it: a recipe -> form fields,
 // form fields -> what the API expects, validation, and small list helpers.
 // No React here, so all of it is easy to test (editorForm.test.ts).
-import type { Recipe, RecipeInput, SourceKind } from './types'
+import type { Issue, Recipe, RecipeInput, RecipeStatus, SourceKind } from './types'
 
 // --- Form state --------------------------------------------------------------------------
 
@@ -46,6 +46,10 @@ export interface SourceRow {
   /** Names separated by commas. */
   creators: string
 }
+/** A review issue of an imported draft; the person can mark it as handled (it is then removed). */
+export interface IssueRow extends Issue {
+  key: string
+}
 
 /** Every field is a string while editing, because that is what inputs hold. */
 export interface RecipeForm {
@@ -58,6 +62,8 @@ export interface RecipeForm {
   step_groups: StepGroupForm[]
   notes: NoteRow[]
   sources: SourceRow[]
+  /** Still open review issues (imported drafts only). */
+  issues: IssueRow[]
 }
 
 /** Error messages by field path, e.g. "ingredient_groups.0.ingredients.2.quantity". */
@@ -82,6 +88,7 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
       step_groups: [emptyStepGroup()],
       notes: [],
       sources: [],
+      issues: [],
     }
   }
   return {
@@ -89,20 +96,28 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
     category_id: recipe.category ? String(recipe.category.id) : '',
     subcategory_id: recipe.subcategory ? String(recipe.subcategory.id) : '',
     servings: recipe.servings ?? '',
-    ingredient_groups: recipe.ingredient_groups.map((group) => ({
-      key: newKey(),
-      name: group.name ?? '',
-      ingredients: group.ingredients.map((ingredient) => ({
-        key: newKey(),
-        text: ingredient.text,
-        quantity: ingredient.quantity ?? '',
-      })),
-    })),
-    step_groups: recipe.step_groups.map((group) => ({
-      key: newKey(),
-      name: group.name ?? '',
-      steps: group.steps.map((text) => ({ key: newKey(), text })),
-    })),
+    // A recipe without ingredients or steps (e.g. a draft saved without Claude) starts with one
+    // empty row of each, like a new recipe, ready to type into. Empty rows are never sent.
+    ingredient_groups:
+      recipe.ingredient_groups.length === 0
+        ? [emptyIngredientGroup()]
+        : recipe.ingredient_groups.map((group) => ({
+            key: newKey(),
+            name: group.name ?? '',
+            ingredients: group.ingredients.map((ingredient) => ({
+              key: newKey(),
+              text: ingredient.text,
+              quantity: ingredient.quantity ?? '',
+            })),
+          })),
+    step_groups:
+      recipe.step_groups.length === 0
+        ? [emptyStepGroup()]
+        : recipe.step_groups.map((group) => ({
+            key: newKey(),
+            name: group.name ?? '',
+            steps: group.steps.map((text) => ({ key: newKey(), text })),
+          })),
     notes: recipe.notes.map((text) => ({ key: newKey(), text })),
     sources: recipe.sources.map((source) => ({
       key: newKey(),
@@ -110,6 +125,7 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
       url: source.url ?? '',
       creators: source.creators.join(', '),
     })),
+    issues: recipe.issues.map((issue) => ({ ...issue, key: newKey() })),
   }
 }
 
@@ -123,8 +139,14 @@ const orNull = (text: string) => (blank(text) ? null : text.trim())
  * (they hold nothing), so `pathMap` records which form row each saved row came from:
  * an error the server reports for "ingredient_groups.0.ingredients.1" can then be shown
  * next to the right input, even if an empty row above it was skipped.
+ *
+ * `status` comes from the button pressed: 'saved' saves a recipe (open issues are dropped:
+ * the person has reviewed it); 'draft' keeps a draft with its open issues for later.
  */
-export function formToInput(form: RecipeForm): { input: RecipeInput; pathMap: Record<string, string> } {
+export function formToInput(
+  form: RecipeForm,
+  status: RecipeStatus = 'saved',
+): { input: RecipeInput; pathMap: Record<string, string> } {
   const pathMap: Record<string, string> = {}
 
   const ingredient_groups: RecipeInput['ingredient_groups'] = []
@@ -180,6 +202,8 @@ export function formToInput(form: RecipeForm): { input: RecipeInput; pathMap: Re
     step_groups,
     notes,
     sources,
+    status,
+    issues: status === 'draft' ? form.issues.map(({ kind, message, quote }) => ({ kind, message, quote })) : [],
   }
   return { input, pathMap }
 }

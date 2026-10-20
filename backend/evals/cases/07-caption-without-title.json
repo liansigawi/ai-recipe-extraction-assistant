@@ -1,0 +1,16 @@
+{
+  "about": "Invented, Instagram style. No title line: one is composed and flagged. Emoji used as bullets are dropped, the lines kept. Calls to action, mentions and hashtags are left out.",
+  "expect": {
+    "title_written_in_text": false,
+    "issue_kinds": ["missing_title"],
+    "ingredient_count": 8,
+    "ingredients": [
+      ["4 עגבניות בשלות, קצוצות", "4"],
+      ["1 פלפל אדום", "1"],
+      ["1/2 כפית כמון", "1/2 כפית"],
+      ["שמן זית", null]
+    ],
+    "mentions": ["5 דקות", "15 דקות", "6-8 דקות"],
+    "content_excludes": ["@shakshuka.lovers", "#", "תייגו"]
+  }
+}

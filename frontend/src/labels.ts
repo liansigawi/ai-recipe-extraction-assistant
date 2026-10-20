@@ -1,5 +1,5 @@
 // Display names shared by several components.
-import type { SourceKind } from './types'
+import type { IssueKind, SourceKind } from './types'
 
 export const SOURCE_LABELS: Record<SourceKind, string> = {
   instagram: 'אינסטגרם',
@@ -11,3 +11,18 @@ export const SOURCE_LABELS: Record<SourceKind, string> = {
 
 /** Every source kind, in the order the editor offers them. */
 export const SOURCE_KINDS = Object.keys(SOURCE_LABELS) as SourceKind[]
+
+/** A short title for each kind of review issue. */
+export const ISSUE_LABELS: Record<IssueKind, string> = {
+  ingredient_only_in_steps: 'מצרך שמופיע רק בהוראות',
+  unclear_text: 'טקסט לא ברור',
+  missing_information: 'מידע חסר',
+  ambiguous_alternative: 'חלופה לא ברורה',
+  multiple_recipes: 'כמה מתכונים בטקסט',
+  other: 'לבדיקה',
+  missing_title: 'כותרת',
+  quantity_not_in_line: 'כמות',
+  not_found_in_source: 'לא נמצא בטקסט המקורי',
+  classification_unresolved: 'קטגוריה',
+  not_extracted: 'לא עובד',
+}

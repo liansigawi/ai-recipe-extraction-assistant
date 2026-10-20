@@ -1,0 +1,10 @@
+{
+  "about": "Invented. A sweet snack between 'desserts' and 'light meals': either unresolved or desserts is reasonable; no new category may appear anywhere.",
+  "expect": {
+    "category_one_of": [null, "קינוחים"],
+    "ingredient_count": 5,
+    "ingredients": [["1 כוס תמרים מגולענים", "1 כוס"], ["קוקוס לגלגול", null]],
+    "mentions": ["עד שבוע"],
+    "content_excludes": ["חטיפים", "snack"]
+  }
+}

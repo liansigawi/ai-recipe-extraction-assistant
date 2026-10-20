@@ -13,11 +13,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import categories, recipes
+from app.api import categories, imports, recipes
 from app.config import load_settings
 from app.db import make_engine, make_session_factory
 from app.errors import error_response, install_error_handlers
-from app.seed import create_tables, seed_new_database
+from app.migrate import describe, upgrade_database
+from app.seed import seed_new_database
 
 log = logging.getLogger("uvicorn.error")  # uvicorn shows this logger's INFO lines in the terminal
 
@@ -27,22 +28,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Runs once at start-up (before `yield`) and once at shutdown (after it)."""
     settings = load_settings()
     database_path = settings.database_path
-    is_new = not database_path.exists()
+    # Create the tables, or bring an older database up to date (with a backup copy first).
+    upgrade = upgrade_database(database_path)
+    log.info(describe(upgrade, database_path))
     engine = make_engine(database_path, echo=settings.sql_echo)
-    create_tables(engine)
     app.state.session_factory = make_session_factory(engine)
-    if is_new:
+    if upgrade.created:
         seed_new_database(app.state.session_factory)
-        log.info("Created a new recipes database with the starter categories and sample recipes: %s", database_path)
-    else:
-        log.info("Using the recipes database at %s", database_path)
+        log.info("Added the starter categories and the sample recipes")
     yield
     engine.dispose()
 
 
 app = FastAPI(
     title="Recipe Notebook API",
-    version="0.3.0",
+    version="0.4.0",
     description="Local backend of the recipe notebook. All endpoints live under /api. "
     "Recipes and categories are stored in a local SQLite file.",
     lifespan=lifespan,
@@ -73,6 +73,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost
 install_error_handlers(app)
 app.include_router(recipes.router)
 app.include_router(categories.router)
+app.include_router(imports.router)
 
 
 @app.get("/api/health", tags=["health"])

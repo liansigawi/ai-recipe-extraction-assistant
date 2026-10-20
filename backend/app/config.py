@@ -1,13 +1,14 @@
 """Application settings, read from environment variables or the repository's .env file.
 
-Every setting uses the prefix RECIPES_ (for example RECIPES_DATA_DIR). A real
-environment variable wins over the same line in .env. See .env.example.
+Every setting uses the prefix RECIPES_ (for example RECIPES_DATA_DIR), except the
+Anthropic API key, which uses its standard name ANTHROPIC_API_KEY. A real environment
+variable wins over the same line in .env. See .env.example.
 """
 
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError, field_validator
+from pydantic import AliasChoices, Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,9 +27,21 @@ class Settings(BaseSettings):
     # Print every SQL statement the backend runs (RECIPES_SQL_ECHO=true): handy for learning.
     sql_echo: bool = False
 
+    # The key for the Claude API. SecretStr: printed as '**********', never as the key itself.
+    anthropic_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("ANTHROPIC_API_KEY", "RECIPES_ANTHROPIC_API_KEY")
+    )
+    # The Claude model that reads imported text (RECIPES_MODEL), and how long one request may take.
+    model: str = "claude-opus-5-5"
+    model_timeout_seconds: float = Field(default=120, gt=0, le=600)
+
     @property
     def database_path(self) -> Path:
         return self.data_dir / "recipes.db"
+
+    @property
+    def extraction_configured(self) -> bool:
+        return self.anthropic_api_key is not None and self.anthropic_api_key.get_secret_value().strip() != ""
 
     @field_validator("data_dir", mode="before")
     @classmethod

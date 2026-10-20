@@ -1,0 +1,17 @@
+{
+  "about": "Invented. An English recipe stays in English; 'to taste' is not an amount; a range with an en dash and a can size stay as written. A quick lunch: a light meal.",
+  "expect": {
+    "title": "Chickpea & Feta Lunch Salad",
+    "category": "ארוחות קלילות",
+    "ingredient_count": 8,
+    "ingredients": [
+      ["1 (15 oz) can chickpeas, drained and rinsed"],
+      ["1 cup cherry tomatoes, halved", "1 cup"],
+      ["1/3 cup crumbled feta", "1/3 cup"],
+      ["2–3 tbsp olive oil", "2–3 tbsp"],
+      ["Juice of 1 lemon"],
+      ["Salt and pepper, to taste", null]
+    ],
+    "mentions": ["2 hours"]
+  }
+}

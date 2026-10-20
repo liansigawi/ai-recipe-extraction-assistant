@@ -26,6 +26,8 @@ describe('recipeToForm and formToInput', () => {
         step_groups: recipe.step_groups,
         notes: recipe.notes,
         sources: recipe.sources,
+        status: 'saved',
+        issues: [],
       })
     }
   })
@@ -148,5 +150,34 @@ describe('list helpers', () => {
     expect(moveItem(items, 2, 1)).toBe(items) // past the end: nothing to do
     expect(removeAt(items, 0)).toEqual(['b', 'c'])
     expect(items).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('drafts and their review issues', () => {
+  const issue = { kind: 'unclear_text' as const, message: 'לא ברור כמה קמח.', quote: '200 גרם קמח' }
+  const draft = { ...sampleRecipes[0], status: 'draft' as const, issues: [issue] }
+
+  it('the form keeps the open issues, each with its own key', () => {
+    const form = recipeToForm(draft)
+    expect(form.issues).toHaveLength(1)
+    expect(form.issues[0]).toMatchObject(issue)
+    expect(form.issues[0].key).toMatch(/^row-/)
+  })
+
+  it('"save draft" sends the open issues back without their keys; "save as recipe" ends the review', () => {
+    const form = recipeToForm(draft)
+    expect(formToInput(form, 'draft').input).toMatchObject({ status: 'draft', issues: [issue] })
+    expect(formToInput(form, 'saved').input).toMatchObject({ status: 'saved', issues: [] })
+  })
+})
+
+describe('an empty recipe in the editor', () => {
+  it('starts with one empty ingredient row and step, which are not sent', () => {
+    const empty = { ...sampleRecipes[0], ingredient_groups: [], step_groups: [] }
+    const form = recipeToForm(empty)
+    expect(form.ingredient_groups).toHaveLength(1)
+    expect(form.ingredient_groups[0].ingredients).toHaveLength(1)
+    expect(form.step_groups[0].steps).toHaveLength(1)
+    expect(formToInput(form).input).toMatchObject({ ingredient_groups: [], step_groups: [] })
   })
 })

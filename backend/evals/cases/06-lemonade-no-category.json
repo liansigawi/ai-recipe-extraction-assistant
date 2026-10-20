@@ -1,0 +1,11 @@
+{
+  "about": "Invented. A drink fits none of the three categories: it must stay unresolved, with no new category suggested.",
+  "expect": {
+    "category": null,
+    "issue_kinds": ["classification_unresolved"],
+    "ingredient_count": 5,
+    "ingredients": [["1 ליטר מים קרים", "1 ליטר"], ["קרח להגשה", null]],
+    "mentions": ["לפחות שעה"],
+    "content_excludes": ["משקאות", "drinks"]
+  }
+}

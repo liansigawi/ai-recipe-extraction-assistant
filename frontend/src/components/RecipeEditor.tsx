@@ -16,9 +16,11 @@ import {
   type SourceRow,
 } from '../editorForm'
 import { SOURCE_KINDS, SOURCE_LABELS } from '../labels'
-import type { Category, Recipe } from '../types'
+import type { Category, Recipe, RecipeStatus } from '../types'
 import FieldError from './FieldError'
 import IngredientsEditor from './IngredientsEditor'
+import OriginalText from './OriginalText'
+import ReviewIssues from './ReviewIssues'
 import RowButtons from './RowButtons'
 import StepsEditor from './StepsEditor'
 
@@ -33,22 +35,29 @@ interface RecipeEditorProps {
 }
 
 /** The form as the API would receive it, as text: equal text means nothing to save. */
-const savedShape = (form: RecipeForm) => JSON.stringify(formToInput(form).input)
+const savedShape = (form: RecipeForm, status: RecipeStatus) => JSON.stringify(formToInput(form, status).input)
 
 // A controlled form: every input shows a value from `form` state, and every keystroke
 // updates that state. React, not the browser, is the one place the current text lives.
+//
+// For an imported draft it is the review screen: the original text and the points to check
+// are shown above the form, and saving is explicit: "save as recipe", or "save draft" to
+// continue later.
 export default function RecipeEditor({ recipe, categories, onSaved, onCancel, onDirtyChange }: RecipeEditorProps) {
   const id = useId()
+  const isDraft = recipe?.status === 'draft'
+  const keptStatus: RecipeStatus = isDraft ? 'draft' : 'saved'
   // A function given to useState runs on the first render only: the form starts from the
   // recipe once, and later renders keep the person's changes.
   const [form, setForm] = useState(() => recipeToForm(recipe))
-  const [openedShape] = useState(() => savedShape(form))
+  const [openedShape] = useState(() => savedShape(form, keptStatus))
   const [checkFields, setCheckFields] = useState(false) // turned on by the first attempt to save
   const [serverErrors, setServerErrors] = useState<FieldErrors>({})
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [refusedSaves, setRefusedSaves] = useState(0)
   const formRef = useRef<HTMLFormElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
 
   // Derived on every render, not stored: once the person has tried to save, the form is checked
@@ -58,9 +67,12 @@ export default function RecipeEditor({ recipe, categories, onSaved, onCancel, on
   const category = categories.find((option) => String(option.id) === form.category_id)
 
   // When the editor opens, put the cursor in the title. An effect with [] runs once, after the first render.
+  // A draft's review starts at the top instead: the original text and the points to check come first,
+  // and focusing the title would scroll them away.
   useEffect(() => {
-    titleInputRef.current?.focus()
-  }, [])
+    if (isDraft) headingRef.current?.focus()
+    else titleInputRef.current?.focus()
+  }, [isDraft])
 
   // After a refused save, move the cursor to the first field with a problem.
   useEffect(() => {
@@ -73,19 +85,32 @@ export default function RecipeEditor({ recipe, categories, onSaved, onCancel, on
   function update(next: RecipeForm) {
     setForm(next)
     setServerErrors({}) // the server's verdict was about the previous content
-    onDirtyChange(savedShape(next) !== openedShape)
+    onDirtyChange(savedShape(next, keptStatus) !== openedShape)
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault() // stop the browser's own form submission, which would reload the page
+    // Enter in a field, or the form's submit button: a draft stays a draft; a recipe is saved.
+    void save(keptStatus)
+  }
+
+  async function save(status: RecipeStatus) {
     if (saving) return
+    if (
+      isDraft &&
+      status === 'saved' &&
+      form.issues.length > 0 &&
+      !window.confirm(`נשארו ${form.issues.length} נקודות שלא סומנו כטופלו. לשמור כמתכון בכל זאת?`)
+    ) {
+      return
+    }
     setCheckFields(true)
     setSaveError(null)
     if (Object.keys(validateForm(form)).length > 0) {
       setRefusedSaves((count) => count + 1)
       return
     }
-    const { input, pathMap } = formToInput(form)
+    const { input, pathMap } = formToInput(form, status)
     setSaving(true)
     try {
       // await: wait for the server's answer without freezing the page.
@@ -109,10 +134,17 @@ export default function RecipeEditor({ recipe, categories, onSaved, onCancel, on
   return (
     // noValidate: the browser's own error bubbles are turned off, so the form's messages are the only ones.
     <form ref={formRef} className="recipe-editor" onSubmit={handleSubmit} noValidate aria-labelledby={`${id}-heading`}>
-      <h2 id={`${id}-heading`} className="recipe-title">
-        {recipe === undefined ? 'מתכון חדש' : 'עריכת מתכון'}
+      <h2 ref={headingRef} id={`${id}-heading`} className="recipe-title" tabIndex={-1}>
+        {recipe === undefined ? 'מתכון חדש' : isDraft ? 'בדיקת טיוטה' : 'עריכת מתכון'}
       </h2>
       {recipe?.is_sample && <p className="sample-note">זה מתכון דוגמה שהומצא. גם אחרי עריכה הוא יישאר מסומן כדוגמה.</p>}
+      {isDraft && (
+        <p className="draft-note">
+          טיוטה מיובאת: השוו אותה לטקסט המקורי, תקנו מה שצריך, ושמרו כמתכון. אפשר גם לשמור כטיוטה ולהמשיך אחר כך.
+        </p>
+      )}
+      {recipe?.original != null && <OriginalText original={recipe.original} open={isDraft} sticky={isDraft} />}
+      {isDraft && <ReviewIssues issues={form.issues} onChange={(issues) => update({ ...form, issues })} />}
 
       <div className="editor-basics">
         <div className="editor-field editor-field-wide">
@@ -224,14 +256,29 @@ export default function RecipeEditor({ recipe, categories, onSaved, onCancel, on
             {saveError}
           </p>
         )}
-        <div className="button-row">
-          <button type="submit" className="button-primary">
-            {saving ? 'שומר…' : 'שמירה'}
-          </button>
-          <button type="button" className="button" onClick={onCancel}>
-            ביטול
-          </button>
-        </div>
+        {isDraft ? (
+          <div className="button-row">
+            {/* type="button": only a deliberate click saves a draft as a recipe, never Enter in a field. */}
+            <button type="button" className="button-primary" onClick={() => void save('saved')}>
+              {saving ? 'שומר…' : 'שמירה כמתכון'}
+            </button>
+            <button type="submit" className="button">
+              שמירת טיוטה
+            </button>
+            <button type="button" className="button" onClick={onCancel}>
+              ביטול
+            </button>
+          </div>
+        ) : (
+          <div className="button-row">
+            <button type="submit" className="button-primary">
+              {saving ? 'שומר…' : 'שמירה'}
+            </button>
+            <button type="button" className="button" onClick={onCancel}>
+              ביטול
+            </button>
+          </div>
+        )}
       </div>
     </form>
   )
