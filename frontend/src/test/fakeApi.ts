@@ -43,7 +43,7 @@ export function fakeApi(initial: {
 }) {
   let recipes = structuredClone(initial.recipes) // a deep copy: tests cannot change the shared test data
   const categories = structuredClone(initial.categories)
-  const extraction = initial.extraction ?? { configured: true, model: 'claude-opus-5-5' }
+  let extraction: ExtractionInfo = initial.extraction ?? { configured: true, provider: 'claude', model: 'claude-opus-5-5', local: false, problem: null }
   const draftFor = initial.draftFor ?? defaultDraft
   let nextId = Math.max(0, ...recipes.map((recipe) => recipe.id)) + 1
   const calls: Call[] = []
@@ -150,6 +150,10 @@ export function fakeApi(initial: {
     },
     answerNextWith(status: number, body: unknown) {
       queued.push(json(status, body))
+    },
+    /** What GET /api/extraction answers from now on, e.g. after Ollama was started. */
+    setExtraction(info: ExtractionInfo) {
+      extraction = info
     },
     /** The next request waits until the returned function is called: a slow answer. */
     holdNext(): () => void {

@@ -1,16 +1,66 @@
 {
   "about": "Invented, Instagram style. No title line: one is composed and flagged. Emoji used as bullets are dropped, the lines kept. Calls to action, mentions and hashtags are left out.",
   "expect": {
-    "title_written_in_text": false,
-    "issue_kinds": ["missing_title"],
-    "ingredient_count": 8,
-    "ingredients": [
-      ["4 עגבניות בשלות, קצוצות", "4"],
-      ["1 פלפל אדום", "1"],
-      ["1/2 כפית כמון", "1/2 כפית"],
-      ["שמן זית", null]
+    "title_composed": true,
+    "category_one_of": [
+      "ארוחות קלילות",
+      null
     ],
-    "mentions": ["5 דקות", "15 דקות", "6-8 דקות"],
-    "content_excludes": ["@shakshuka.lovers", "#", "תייגו"]
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "4 עגבניות בשלות, קצוצות",
+            "4"
+          ],
+          [
+            "1 פלפל אדום",
+            "1"
+          ],
+          [
+            "1 בצל",
+            "1"
+          ],
+          [
+            "2 שיני שום",
+            "2 שיני"
+          ],
+          [
+            "4 ביצים",
+            "4"
+          ],
+          [
+            "1 כפית פפריקה",
+            "1 כפית"
+          ],
+          [
+            "1/2 כפית כמון",
+            "1/2 כפית"
+          ],
+          [
+            "שמן זית",
+            null
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מטגנים בצל ופלפל בשמן זית 5 דקות.",
+      "מוסיפים שום ותבלינים, ואחריהם את העגבניות.",
+      "מבשלים 15 דקות על אש בינונית.",
+      "יוצרים גומות, שוברים לתוכן את הביצים, מכסים ומבשלים עוד 6-8 דקות."
+    ],
+    "excluded": [
+      "מי עוד מכין שקשוקה בכל שישי בבוקר?",
+      "אצלנו זו כבר מסורת!",
+      "בתיאבון!",
+      "תייגו חבר שאוהב שקשוקה 👇 @shakshuka.lovers #שקשוקה #ארוחתבוקר",
+      "#",
+      "@shakshuka.lovers"
+    ],
+    "warnings": [
+      "missing_title"
+    ]
   }
 }

@@ -15,14 +15,16 @@ FastAPI backend (uvicorn, bound to 127.0.0.1:8000)
    ├─ crud.py          Reads and writes recipes; checks chosen category ids against the database.
    ├─ models + db      SQLAlchemy ORM over SQLite (data/recipes.db), milestone 3.
    ├─ migrate.py       Brings the database up to date at start-up (Alembic, migrations/), milestone 4.
-   ├─ extraction/      Claude API: pasted text → answer in a fixed JSON schema → checked → draft
+   ├─ extraction/      A model reads pasted text → answer in a fixed JSON schema → checked → draft
    │                   with review issues (milestone 4). Classification is part of the same answer:
    │                   only ids of existing categories; the backend checks them. Never creates categories.
+   │                   The model is the Claude API or a local model through Ollama (RECIPES_EXTRACTOR).
    ├─ importers/       FETCH source content only: instagram (milestone 1); website, screenshots
    │                   (planned, milestone 5). No AI.
    └─ files            (planned, milestone 5) Uploaded screenshots under data/uploads/, paths in the database.
           │
-          └─► Anthropic API (external, from milestone 4): only the pasted text and the category list.
+          ├─► Anthropic API (external, from milestone 4): only the pasted text and the category list.
+          └─► or Ollama on 127.0.0.1:11434 (this computer): the same request, nothing leaves the machine.
 ```
 
 **Responsibilities.** React owns the interface and the user's in-progress input. FastAPI owns
@@ -163,10 +165,14 @@ read it and when; it is read-only: `RecipeInput` has no such field, so a save ca
 ```text
 ImportPanel ── POST /api/imports/text {text, use_model} ──► app/api/imports.py
   1. Pydantic: 1 to 20,000 characters, not blank. The text is kept exactly (no trimming).
-  2. claude.py: one Messages API request, with structured output (the JSON schema of
-     extraction/output.py, category ids limited to the existing ones), a 16,000-token answer
-     limit, a timeout (120 s) and two automatic retries for temporary errors.
-  3. review.py: checks every part of the answer and builds a draft with issues (below).
+  2. segments.py cuts the text into numbered passages; prompt.py builds the request.
+     claude.py (or ollama.py): one request, with structured output (the JSON schema of
+     extraction/output.py: one required role per passage, category ids limited to the existing
+     ones), a 16,000-token answer limit, a timeout (120 s; 600 s locally) and, for Claude, two
+     automatic retries for temporary errors. The local model then gets a second, short request:
+     the category of the finished draft (one retry on a server error).
+  3. review.py: copies each labeled passage from the original, checks every other part of the
+     answer and builds a draft with issues (below).
   4. crud.create_import: checks the category ids against the database again, then saves the
      draft (status "draft") and the original text in one transaction.          → 201 + the draft
 Any failure before step 4 saves nothing; the page keeps the pasted text (also in localStorage).
@@ -178,20 +184,34 @@ as instructions; the system prompt says to ignore requests inside it. The answer
 schema's fields, and is checked like any other answer. Evaluation case 08 tests exactly this.
 
 **The checks in `review.py`** (nothing the model says is taken on trust):
-- every title, ingredient line, step, note and group name must appear in the original text (after
+- in reference mode (the default), ingredient lines, steps, notes and group names are not written
+  by the model at all: each is the exact text of the passages it labeled. Every passage must have
+  a role; one without, or a "continues" with nothing before it, becomes an `unused_text` or
+  `invalid_reference` issue that quotes it. Labels ("איך מכינים:"), lines of only hashtags and the
+  title line are never content, whatever role they get;
+- in text mode, every title, ingredient line, step, note and group name must appear in the original text (after
   normalizing only spacing, Unicode form and invisible marks); a line that does not is kept, with a
   `not_found_in_source` issue that quotes it;
-- every quantity must be written in its own line (`quoted_from`, the contract's rule); otherwise it
-  becomes `null` with a `quantity_not_in_line` issue, never an invented amount;
-- a title the model composed (no title in the text) gets a `missing_title` issue;
+- in reference mode the quantity is not the model's: `quantity.py` reads it from the copied line
+  by the rules of [quantity-conventions.md](quantity-conventions.md), as a span of that line. In
+  text mode every quantity must be written in its own line (`quoted_from`, the contract's rule);
+  otherwise it becomes `null` with a `quantity_not_in_line` issue, never an invented amount;
+- a title the model composed (no title in the text), or one it says is written but no line starts
+  with, gets a `missing_title` issue;
 - classification: only `fit = "clear"` with an existing category id (and, if given, one of that
   category's subcategories) classifies. Anything else, including an inconsistent answer, stays
   unclassified with a `classification_unresolved` issue whose message is written by the backend,
   from the database's own category names;
-- issue messages from the model that mention categories are dropped, so no text in the draft can
-  suggest a new category; quotes that are not in the original are removed;
-- the model's own issues (`ingredient_only_in_steps`, `unclear_text`, `missing_information`,
-  `ambiguous_alternative`, `multiple_recipes`, `other`) are kept, at most 20.
+- review points are tied to evidence, with fixed messages written here. In reference mode the
+  model writes no messages: it points at a passage and names the kind (`unclear_text`,
+  `ambiguous_alternative`, `multiple_recipes`, or a request inside the text, shown as `other`),
+  and the passage is quoted; a point without its passage is not shown. "Used in the steps but not
+  listed" is shown only if the step writes those words and no ingredient line has them. Missing
+  information (an oven temperature, a baking time) is decided here, from the text. A tip labeled
+  inside the ingredient list gets a point: it may be an ingredient. The same point is never shown twice;
+- in text mode, issue messages from the model that mention categories are dropped, so no text in
+  the draft can suggest a new category; quotes that are not in the original are removed; the
+  model's own issues are kept, at most 20.
 
 **Review and explicit save.** The draft opens in the editor with the original text (sticky, so it
 stays in view) and the issues; each issue can be marked "handled". "Save as recipe" (a plain
@@ -304,12 +324,13 @@ redirect; a redirect would send the browser past the Vite proxy.
 │   │   ├── seed.py           fills a new database once
 │   │   ├── sample_data.py    the starter categories and the four invented sample recipes
 │   │   ├── api/              recipes.py, categories.py, imports.py: the routes
-│   │   ├── extraction/       output.py (answer schema), prompt.py, claude.py (API call), review.py (checks)
+│   │   ├── extraction/       output.py (answer schema), prompt.py, claude.py / ollama.py (the model call),
+│   │   │                     choose.py (which one), segments.py (numbered passages), review.py (checks)
 │   │   └── importers/        instagram.py (milestone 1); website.py, screenshots.py (milestone 5)
 │   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py, 0002_imports_and_review.py
 │   ├── scripts/              probe_instagram.py: live checks, run by hand
 │   ├── tests/                pytest: offline, fixtures and in-process API calls only; never calls Claude
-│   └── evals/                the extraction quality check: paid, run by hand; cases/ (invented texts)
+│   └── evals/                the extraction quality check, run by hand; cases/ (invented texts), compare.py
 ├── frontend/                 React + TypeScript + Vite
 │   └── src/                  main.tsx, App.tsx, types.ts, api.ts, editorForm.ts, components/, test/
 ├── data/                     git-ignored: recipes.db, uploads/, instagram-probe/
@@ -364,6 +385,25 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-20 | A draft is saved only after a successful extraction; on failure the page keeps the text (also in `localStorage`) | Nothing half-made in the database, and nothing lost in the page, even after a reload. |
 | 2026-10-20 | "Save as recipe" is a plain button; the form's Enter key saves a draft | Saving a reviewed recipe must be deliberate. |
 | 2026-10-20 | The extraction quality check is a separate, explicitly run script with hand-written expectations; real captions stay in `data/` | Paid and model-dependent, so never part of the tests or CI. Third-party captions are not committed. |
+| 2026-10-20 | A local extractor through Ollama, chosen with `RECIPES_EXTRACTOR=ollama`; same schema, same checks | The user asked to run extraction on their GPU. One small class beside `claude.py`; everything after the model call is shared, so a weaker model produces more review points, never unchecked drafts. |
+| 2026-10-20 | Ollama gets the JSON schema twice: as `format` (constrained output) and written into the instructions | Ollama keeps the answer in the schema's shape but, unlike the Claude API, does not show the model the field descriptions. |
+| 2026-10-20 | Ollama context 8,192 tokens by default; `think: false` for reasoning models; temperature 0 | Measured on the user's RTX 5060 Laptop (8 GB): 8k keeps qwen3:8b 100% on the GPU (6.2 GB), 10k and 12k spill 11–15% to the CPU; the longest real caption needs about 4,850 tokens. Ollama's default (4k under 24 GB) would cut long captions. |
+| 2026-10-20 | The Ollama address must be on this computer | The import screen promises that a local model's text stays here. |
+| 2026-10-20 | `review.py` removes decoration (bullets, emoji bullets, list numbers, heading markers), rejoins unnamed list fragments, drops duplicate notes and flags hashtags or "save the post" lines | The local model's quality check run showed these leftovers; all are decoration under the contract's rules, so removing them is safe for every model. Wording is never changed, and promotional lines are flagged, not deleted. |
+| 2026-10-20 | **Extraction by reference** (`RECIPES_EXTRACTION_MODE=references`, the default): the model labels numbered passages, and `review.py` copies the recipe's wording from the original. Retyping (`text`) is kept as an option for comparison | The corrupted words were the model's own most likely tokens ("מג׳הול" → " hollow" at 29%, the right "הול" at 8%), identical across 12 runs and with or without the schema: no setting or prompt reliably stops a model from retyping a word wrongly. The backend changed nothing. With references, altered wording fell from 15–21 lines per run to none, and drafts needing no correction rose from 7–8 to 10 of 20; quantities got worse (5 → 11) and imports about 1.9× slower ([extraction-quality.md](extraction-quality.md)). |
+| 2026-10-20 | Passages are lines, cut after sentence ends and after a label's colon, and at the commas of a list that follows a label; never at other commas or dashes | The simplest cut that handles the cases: prose paragraphs, "מה צריך: a, b, c" lists, a step that continues on the next line. Cutting at every comma made the model split one ingredient ("1 can chickpeas, drained") or step in two. |
+| 2026-10-20 | The answer gives **one role per passage**, under a key the schema writes for the model (number + opening words), all required and in order; not ranges of passage numbers | Tried ranges first: the model forgot the last passages of 4–5 recipes per run (flagged, but missing from the draft) and wrote quantities without their unit, having no line in view. With forced keys no passage can be skipped, and each label and quantity is written next to the passage's own words. Cost: the answer is about 1.5× longer, and an import about 1.9× slower. |
+| 2026-10-20 | A title the model wrote that is not in the text is replaced by the passage it labeled as the title | The model retyped "מרק" with a Cyrillic letter in titles too. Its own label says which words are the title, so nothing is guessed; a composed title (none in the text) is still flagged. |
+| 2026-10-20 | (Replaced on 2026-10-21.) The quantity was chosen by the model among the line's first words | Exact, but the model's judgment: re-scored on every line, 26 of 143 quantities were wrong, and the amount is not always at the start ("בצל אחד גדול"). |
+| 2026-10-21 | **The quantity is read from the copied line by `quantity.py`**, following written conventions ([quantity-conventions.md](quantity-conventions.md)); the model only labels passages | The conventions were written first, then the expectations of all 25 cases by hand (a second, independent annotation agreed on all 144 quantities both covered), then the code. It agreed with every expected quantity, including the 57 of the five held-out cases written by someone else. The quantity is an exact span of the line, so scaling can later change only that span. |
+| 2026-10-21 | The evaluation checks every ingredient line and quantity, every preparation sentence, tips, facts (yield, times), text that is not part of the recipe, title, category and expected review points, and counts problems apart from failed checks | The earlier check covered 90 of 143 quantities and could not see a lost "Ready in 10 minutes"; "no correction needed" claimed more than it checked. Re-scored, the baseline had 26 wrong quantities, not 11. |
+| 2026-10-21 | Roles: an ingredient includes what is only for topping, garnish or serving; a new `info` role keeps yield and time lines as notes, with their label | Two ingredients ("…להגשה", "לציפוי - …") were kept as notes and "Ready in 10 minutes" was lost. |
+| 2026-10-21 | The labels decide whether a text is a recipe | The model once wrote `is_recipe: false` first, then labeled five ingredients and a step: the caption was rejected. |
+| 2026-10-21 | Review points: the model points, the backend writes fixed messages and checks the evidence; missing information is decided from the text | The model's own messages were sometimes nonsense ("אין מידע על טמפרטורה של הכביסה…", shown twice, on a recipe that gives its times) and missed real ones (strawberries only in the steps). |
+| 2026-10-21 | The local model is asked for the category in a second, short request about the finished draft; if it fails, the first answer's category stays. Ollama server errors on a chat request are retried once | Measured on the same 25 drafts: 2 wrong categories instead of 6 (more left unresolved, which the person settles). About 1 s more per import. The retry: Ollama's GPU runner crashed twice in about 350 requests and worked again on the next one. |
+| 2026-10-21 | No example in the instructions or the answer schema may appear in an evaluation case (a test enforces it) | Several examples had come from the cases themselves, including the user's caption, which flatters the measurement. |
+| 2026-10-20 | Ollama requests send `"shift": false` | Without it, an answer that fills the working memory makes Ollama drop the oldest half (the instructions and the text) and continue: one runaway answer ran 28,000 tokens until the 10-minute timeout. Now it stops at the limit and the import reports it. |
+| 2026-10-20 | No compact-JSON request, although it is about 30% faster | Measured on the 20 cases: more wrong quantities in both modes (references 16 instead of 11) and fewer drafts without corrections (8 instead of 10). Quality first. |
 
 ## Known limitations
 
@@ -388,6 +428,22 @@ redirect; a redirect would send the browser past the Vite proxy.
   continues and its draft appears in the list when it is ready.
 - **One import at a time per page**, and the import screen has a single text box (no multiple
   recipes in one paste: the model takes the main one and flags `multiple_recipes`).
+- **A local model's wrong category is not caught.** The backend can check that a category exists,
+  not that it fits: Qwen3 8B put a lemonade under desserts and a honey tart under main dishes. The
+  review screen shows the chosen category, and the person decides.
+- **Quantities follow fixed rules, not judgment.** `quantity.py` knows the common Hebrew and
+  English amounts and units; an unusual unit or wording gives no quantity (never a wrong one
+  invented), and the line itself is always complete. Words that look like amounts in an
+  unexpected place could be taken; the 202 expected quantities had no such case.
+- **Roles are the model's judgment.** An introduction or a call to action labeled as a tip ends up
+  in the notes (calls to action are flagged); a sentence that goes on to the next line may become
+  two steps. Nothing is lost or reworded, but the draft can need moving or deleting. Run to run the
+  labels vary (the same model, temperature 0, on a GPU).
+- **"Used only in the steps" depends on the model noticing it**; the backend only confirms it.
+  Missing information is checked for baking only (temperature, time).
+- **Reference mode with Claude is untested here.** Its schema has one property per passage, named
+  by the passage's opening words; no API key was available to check it against the Claude API.
+  If it fails, `RECIPES_EXTRACTION_MODE=text` restores the earlier request.
 
 ## Notes for upcoming milestones
 

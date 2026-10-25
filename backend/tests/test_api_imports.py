@@ -56,12 +56,37 @@ def recipe_count(client) -> int:
 
 
 def test_extraction_info_says_whether_a_key_is_set_and_never_shows_it(client, monkeypatch):
-    assert client.get("/api/extraction").json() == {"configured": False, "model": "claude-opus-5-5"}
+    claude = {"provider": "claude", "local": False}
+    assert client.get("/api/extraction").json() == claude | {
+        "configured": False, "model": "claude-opus-5-5", "problem": "no_api_key"
+    }
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-never-real")
     monkeypatch.setenv("RECIPES_MODEL", "claude-sonnet-5-5")
     response = client.get("/api/extraction")
-    assert response.json() == {"configured": True, "model": "claude-sonnet-5-5"}
+    assert response.json() == claude | {"configured": True, "model": "claude-sonnet-5-5", "problem": None}
     assert "sk-ant" not in response.text
+
+
+@pytest.mark.parametrize("problem", [None, "ollama_unreachable", "ollama_model_missing"])
+def test_extraction_info_for_a_local_model_says_the_text_stays_here(client, monkeypatch, problem):
+    monkeypatch.setenv("RECIPES_EXTRACTOR", "ollama")
+    monkeypatch.setenv("RECIPES_OLLAMA_MODEL", "qwen3:8b")
+    monkeypatch.setattr("app.extraction.choose.ollama_problem", lambda url, model: problem)
+    assert client.get("/api/extraction").json() == {
+        "configured": problem is None, "provider": "ollama", "model": "qwen3:8b", "local": True, "problem": problem
+    }
+
+
+def test_the_chosen_extractor_is_built_from_the_settings(monkeypatch):
+    from app.config import load_settings
+    from app.extraction.choose import make_extractor
+    from app.extraction.ollama import OllamaExtractor
+
+    monkeypatch.setenv("RECIPES_EXTRACTOR", "ollama")
+    monkeypatch.setenv("RECIPES_OLLAMA_CONTEXT_TOKENS", "16384")
+    extractor = make_extractor(load_settings())  # builds it, connects to nothing yet
+    assert isinstance(extractor, OllamaExtractor) and extractor.model == "qwen3:8b"
+    assert extractor._context_tokens == 16384
 
 
 def test_an_import_saves_a_draft_with_the_original_text_exactly_as_pasted(client, use):

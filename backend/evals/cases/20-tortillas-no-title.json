@@ -1,0 +1,45 @@
+{
+ "about": "Hebrew pan-fried filled tortillas with no title line (the text opens with an introduction): 'כוס וחצי', a number word after the ingredient, a comma list after a label, a frying purpose and a 'purpose - ingredient' serving line, a time line, dash-bulleted steps and an unlabeled substitution tip. Written independently as a held-out case.",
+ "expect": {
+  "title_composed": true,
+  "category": "ארוחות קלילות",
+  "ingredient_groups": [
+   {
+    "name": null,
+    "items": [
+     ["4 טורטיות בינוניות", "4"],
+     ["כוס וחצי גבינה צהובה מגוררת", "כוס וחצי"],
+     ["חצי כוס תירס מקופסה, מסונן", "חצי כוס"],
+     ["פלפל אדום אחד, חתוך לקוביות קטנות", "אחד"],
+     ["2-3 כפות שמנת חמוצה", "2-3 כפות"],
+     ["מלח", null],
+     ["פלפל שחור", null],
+     ["אורגנו יבש", null],
+     ["חמאה לטיגון", null],
+     ["להגשה - סלסה או שמנת חמוצה", null]
+    ]
+   }
+  ],
+  "preparation": [
+   "מערבבים בקערה את הגבינה, התירס, הפלפל האדום והשמנת החמוצה ומתבלים",
+   "מורחים את המלית על חצי מכל טורטיה ומקפלים לחצי סהר",
+   "ממיסים מעט חמאה במחבת על אש בינונית ומטגנים כל טורטיה 2-3 דקות מכל צד, עד שהיא זהובה והגבינה נמסה",
+   "חותכים למשולשים ומגישים מיד"
+  ],
+  "tips": [
+   "אם אין תירס, אפשר לשים פטריות מוקפצות או זיתים"
+  ],
+  "facts": [
+   "זמן כולל: 20 דקות"
+  ],
+  "excluded": [
+   "ערב של אמצע שבוע, אין כוח לבשל ובמקרר יש בדיוק מה שצריך",
+   "הילדים קוראים לזה \"הפיצה המקופלת\" ומבקשים את זה כל שבוע",
+   "שתפו עם מי שצריך רעיון לארוחת ערב",
+   "#ארוחתערב #מהיר_וטעים #טורטיה #ארוחות_קלילות"
+  ],
+  "warnings": [
+   "missing_title"
+  ]
+ }
+}

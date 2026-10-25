@@ -1,4 +1,5 @@
-"""The request sent to the Claude API, and how its answers and failures are handled.
+"""The request sent to the Claude API, and how its answers and failures are handled (text mode; the
+reference mode is tested in test_extraction_references.py).
 
 A fake SDK client records each request and returns a prepared answer or raises a prepared
 error, so no network call is ever made.
@@ -55,7 +56,9 @@ def reply(answer: dict | str = ANSWER, stop_reason: str = "end_turn"):
 
 def extractor_with(result) -> tuple[ClaudeExtractor, FakeMessages]:
     messages = FakeMessages(result)
-    extractor = ClaudeExtractor(api_key=FAKE_KEY, model="claude-opus-5-5", timeout=60, client=SimpleNamespace(messages=messages))
+    extractor = ClaudeExtractor(
+        api_key=FAKE_KEY, model="claude-opus-5-5", timeout=60, mode="text", client=SimpleNamespace(messages=messages)
+    )
     return extractor, messages
 
 

@@ -26,6 +26,8 @@ collection that supports Hebrew and right-to-left text.
   you pasted and the list of your category names and descriptions are sent to the Anthropic API.
   Nothing else from the notebook is sent, and "שמירה בלי עיבוד" (save without processing) sends
   nothing. From milestone 5, screenshots you submit will be sent the same way.
+- **Or nothing at all:** with a local model ([Run extraction on this computer](#run-extraction-on-this-computer-ollama)),
+  the text is read on this computer and is not sent anywhere. The import screen says which one is in use.
 - **The API key stays on this computer**, in the backend's settings. The page never receives it.
 - The Instagram probe (and the importer, from milestone 5) contacts Instagram's servers directly from
   this computer: instagram.com, plus its content hosts (cdninstagram.com, fbcdn.net) when a browser is used.
@@ -211,14 +213,91 @@ Optional settings, also in `.env`:
 | `RECIPES_MODEL` | `claude-opus-5-5` | The Claude model for imports. `claude-sonnet-5-5` is cheaper. |
 | `RECIPES_MODEL_TIMEOUT_SECONDS` | `120` | How long one request may take before the import reports a timeout. |
 
+## Run extraction on this computer (Ollama)
+
+Instead of Claude, a local model can read imported text, with [Ollama](https://ollama.com). The text
+then never leaves this computer, and imports cost nothing. The backend checks a local model's
+answers exactly like Claude's, but **expect more points to check**: on the quality check, Qwen3 8B
+sometimes chose a wrong category, a quantity without its unit, or kept an introduction as a note
+(details in [docs/extraction-quality.md](docs/extraction-quality.md)). It no longer retypes the
+recipe, so it cannot misspell its words: see [How the model reads a recipe](#how-the-model-reads-a-recipe).
+
+1. **Install Ollama:** `winget install --id Ollama.Ollama -e`. It runs a small server on this
+   computer only (`127.0.0.1:11434`) and starts with Windows; quit it from its tray icon. Do not
+   change `OLLAMA_HOST`: that would open it to your network.
+2. **Download a model** (about 5 GB): `ollama pull qwen3:8b`. If `ollama` is not found, open a new
+   terminal (or use `%LOCALAPPDATA%\Programs\Ollama\ollama.exe`).
+3. **Choose it** in `.env`: `RECIPES_EXTRACTOR=ollama`. No restart needed. The import screen now
+   says the text stays on this computer, and its button reads "קריאה עם המודל המקומי".
+
+Tested on an RTX 5060 Laptop GPU (8 GB): a long Instagram caption takes 20–30 seconds, a short
+recipe 6–20 seconds; the first import after a while also loads the model (a few seconds). Check
+with `ollama ps` that the model runs on the GPU: `100% GPU` is fast; a CPU share is much slower.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `RECIPES_EXTRACTOR` | `claude` | `ollama`: read imported text with a local model. |
+| `RECIPES_OLLAMA_MODEL` | `qwen3:8b` | The Ollama model to use (`ollama list` shows what you have). |
+| `RECIPES_OLLAMA_CONTEXT_TOKENS` | `8192` | The model's working memory for one import. 8k fits qwen3:8b entirely in 8 GB and is enough for long captions (one needed about 4,850). For longer texts the import says it ran out; raise it, and part of the model moves to the CPU. |
+| `RECIPES_OLLAMA_TIMEOUT_SECONDS` | `600` | How long one local import may take. |
+| `RECIPES_OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama runs. Only addresses on this computer are accepted. |
+| `RECIPES_EXTRACTION_MODE` | `references` | How the model answers (below). `text`: it retypes the recipe, the first approach, kept for comparison. Applies to Claude too. |
+
+To free the space again: `ollama rm qwen3:8b`, and uninstall Ollama like any app.
+
+### How the model reads a recipe
+
+A small model retyping Hebrew sometimes swaps a word for a similar-looking one: Qwen3 8B turned
+"מג׳הול" into "מג׳ hollow" and "שוט" into "שט". So, by default, the model does not retype the
+recipe at all:
+
+1. The backend cuts your text into **numbered passages**: each line, and inside a line each
+   sentence, and each item of a list after a label ("מה צריך: כוס עדשים, כוס אורז, …"). The same
+   text always gives the same passages.
+2. The model sees the text with the numbers (`[4] חצי תמר מג׳הול`) and answers with **a role for
+   every passage, in order**: title, ingredient heading, ingredient (also what is only for a
+   topping, a garnish or serving), step heading, step, "continues" (the rest of the passage before
+   it), tip, yield or time (kept as a note), or not part of the recipe (introductions, calls to
+   action, hashtags). The answer's format lists every passage, so none can be skipped.
+3. The backend **copies each ingredient, step, heading and tip from your text**, character for
+   character, in the text's order. Only bullets, step numbers and emoji at the start of a line are
+   left out.
+4. The backend **reads each ingredient's quantity from its copied line**, by fixed rules
+   ([docs/quantity-conventions.md](docs/quantity-conventions.md)): the amount and its unit, wherever
+   they are ("3 כוסות" in "3 כוסות קמח", "אחד" in "בצל אחד גדול"), or nothing when the line has no
+   amount. The quantity is always a piece of the line, never a converted or invented amount.
+
+The model still decides a few things, and the backend checks each:
+- a **title**: a title it says is written must start a line of the text; if the model retyped
+  it wrongly but labeled the title line, that line's own words are used; otherwise it counts as
+  composed and is flagged;
+- the **servings** (must be in the text, otherwise flagged), and the **category**: only one of
+  your existing categories, and when unsure the recipe stays unclassified. With the local model the
+  category is asked in a second, short request about the finished draft (its copied lines), which
+  chose wrong categories less often than asking in the same answer;
+- **which passages to point out**: the model can point at a passage that looks cut off or
+  unclear, an "or" whose scope is unclear, or a request inside the text, and at an ingredient a
+  step uses that the list does not have. The **messages are written by the backend**, quote the
+  passage, and appear once. "Used only in the steps" is shown only if the step really writes
+  those words and no ingredient line has them. Missing information (an oven temperature, a
+  baking time) is checked by the backend from the text itself.
+
+Anything the backend cannot place is flagged, never guessed: a passage without a role, or one
+that "continues" nothing, becomes a review point that quotes it ("קטע שלא שובץ", "הפניה לא
+תקינה"). Your original text is saved unchanged with the recipe.
+
 ## Commands
 
 Backend, from `backend/`:
 
 | Command | What it does |
 |---|---|
-| `uv run pytest` | Backend tests. No network: the API is called in-process, each test gets its own temporary database, and HTTP and Claude are replaced by stand-ins. Your `data/` folder, `.env` and API key are never used. |
-| `uv run python -m evals.run_extraction` | **Paid.** The extraction quality check: one real Claude request per case (at most 15). See [Three kinds of checks](#three-kinds-of-checks). |
+| `uv run pytest` | Backend tests. No network: the API is called in-process, each test gets its own temporary database, and HTTP, Claude and Ollama are replaced by stand-ins. Your `data/` folder, `.env` and API key are never used. |
+| `uv run python -m evals.run_extraction` | **Paid with Claude.** The extraction quality check: one real request per case (at most 30). See [Three kinds of checks](#three-kinds-of-checks). |
+| `uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/evals/local-cases` | The same check with the local model: free, about 5 minutes for all 25 cases on an 8 GB GPU. |
+| `uv run python -m evals.compare <run folder> <run folder>` | Two quality-check runs side by side, case by case. |
+| `uv run python -m evals.rescore <run folder> …` | Scores saved runs again with today's expectations and checks, from their saved drafts. No model calls. |
+| `uv run python -m evals.rebuild <label> <run folder> …` | Rebuilds saved runs' drafts from their saved model answers with today's backend code, and scores them: measures a backend change alone. No model calls. |
 | `uv run python -m app.migrate` | Upgrades the database now (the backend also does it when it starts), after a backup copy. |
 | `uv run alembic history` | Lists the database migrations. |
 | `uv run uvicorn app.main:app --reload --reload-dir app --host 127.0.0.1 --port 8000` | Runs the API (see above). |
@@ -290,10 +369,11 @@ The project keeps these separate and reports which one was run:
    parsing, the API contract, and the interface behavior, not that Instagram works today.
 2. **Live importer checks** (`scripts/probe_instagram.py`): run by hand against real Instagram pages.
    Results are recorded with dates in [docs/instagram-feasibility.md](docs/instagram-feasibility.md).
-3. **Extraction quality check** (`uv run python -m evals.run_extraction`, from `backend/`): real,
-   paid Claude requests on representative recipe texts, compared with expectations written by hand
-   (missing or changed lines, quantities, timings, invented content, classification, missing
-   flags). Run explicitly; at most 15 requests per run. Cases: `backend/evals/cases/` (invented
+3. **Extraction quality check** (`uv run python -m evals.run_extraction`, from `backend/`): real
+   model requests (paid with Claude, free with the local model) on representative recipe texts,
+   compared with expectations written by hand (changed wording, missing or invented lines,
+   quantities, timings, grouping, classification, missing flags, unnecessary warnings). Run
+   explicitly; at most 30 cases per run. Cases: `backend/evals/cases/` (invented
    texts, in git) and, with `--cases-dir ../data/evals/local-cases`, your own (for example real
    captions; git-ignored). The report is saved in `data/evals/extraction/`; findings are recorded in
    [docs/extraction-quality.md](docs/extraction-quality.md). Milestone 7 extends it.
@@ -321,7 +401,7 @@ The project keeps these separate and reports which one was run:
 │   │   ├── seed.py                  fills a new database once
 │   │   ├── sample_data.py           the starter categories and the four invented sample recipes
 │   │   ├── api/                     recipes.py, categories.py, imports.py (pasted text -> draft)
-│   │   ├── extraction/              Claude: the answer's schema, the prompt, the API call, the checks
+│   │   ├── extraction/              passages (segments.py), answer schema, prompts, Claude / Ollama calls, the checks
 │   │   └── importers/instagram.py   Instagram URL parsing, page capture, caption analysis
 │   ├── migrations/                  database migrations (Alembic): 0001 milestone 3, 0002 imports
 │   ├── alembic.ini                  Alembic's settings, for its command line

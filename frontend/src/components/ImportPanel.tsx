@@ -37,15 +37,20 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
   // A function given to useState runs once, on the first render: start from the kept text.
   const [text, setText] = useState(readStoredText)
   const [info, setInfo] = useState<ExtractionInfo | null>(null)
+  const [infoCheck, setInfoCheck] = useState(0) // changing it asks the backend again ("check again")
   const [working, setWorking] = useState<'model' | 'manual' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const textRef = useRef<HTMLTextAreaElement>(null)
+
+  // Who reads the text: Claude (sent to Anthropic) or a local model (stays on this computer).
+  const local = info?.local ?? false
+  const readLabel = local ? 'קריאה עם המודל המקומי' : 'קריאה עם Claude'
 
   useEffect(() => {
     textRef.current?.focus()
   }, [])
 
-  // Can imports use Claude right now? (Is an API key set on the backend?)
+  // Can imports use the model right now? (An API key for Claude; Ollama running, for a local model.)
   useEffect(() => {
     let ignore = false
     getExtractionInfo().then(
@@ -59,7 +64,7 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
     return () => {
       ignore = true
     }
-  }, [])
+  }, [infoCheck])
 
   function change(value: string) {
     setText(value)
@@ -99,7 +104,7 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
         ייבוא מתכון מטקסט
       </h2>
       <p className="field-hint">
-        הדביקו מתכון: כיתוב מאינסטגרם, טקסט מאתר או מהודעה. Claude יסדר אותו לטיוטה, ואתם תבדקו אותה מול הטקסט המקורי ותשמרו.
+        הדביקו מתכון: כיתוב מאינסטגרם, טקסט מאתר או מהודעה. מודל שפה יסדר אותו לטיוטה, ואתם תבדקו אותה מול הטקסט המקורי ותשמרו.
       </p>
 
       <div className="editor-field">
@@ -124,20 +129,42 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
       </div>
 
       {info !== null && !info.configured && (
-        <p className="form-note">
-          לא הוגדר מפתח ל-Claude API בשרת, ולכן אפשר כרגע רק לשמור את הטקסט בלי עיבוד ולמלא את המתכון בעצמכם. ההוראות ב-README,
-          בסעיף "Connect the Claude API".
+        <div className="form-note">
+          <p>
+            {info.problem === 'ollama_unreachable' && 'Ollama לא פועל במחשב הזה. הפעילו את Ollama (מתפריט התחל) ובדקו שוב.'}
+            {info.problem === 'ollama_model_missing' && (
+              <>
+                המודל <bdi>{info.model}</bdi> עוד לא הורד ל-Ollama. הריצו בטרמינל <bdi>ollama pull {info.model}</bdi> ובדקו שוב.
+              </>
+            )}
+            {info.problem === 'no_api_key' &&
+              'לא הוגדר מפתח ל-Claude API בשרת. ההוראות ב-README, בסעיף "Connect the Claude API".'}{' '}
+            בינתיים אפשר לשמור את הטקסט בלי עיבוד ולמלא את המתכון בעצמכם.
+          </p>
+          {info.local && (
+            <button type="button" className="button" onClick={() => setInfoCheck((count) => count + 1)}>
+              בדיקה שוב
+            </button>
+          )}
+        </div>
+      )}
+      {info !== null && info.configured && !info.local && (
+        <p className="field-hint">
+          בלחיצה על "{readLabel}" הטקסט ורשימת הקטגוריות נשלחים ל-Anthropic (מודל <bdi>{info.model}</bdi>). הטקסט המקורי נשמר כפי שהוא,
+          לצד הטיוטה.
         </p>
       )}
-      {info !== null && info.configured && (
+      {info !== null && info.configured && info.local && (
         <p className="field-hint">
-          בלחיצה על "קריאה עם Claude" הטקסט ורשימת הקטגוריות נשלחים ל-Anthropic (מודל <bdi>{info.model}</bdi>). הטקסט המקורי נשמר כפי
-          שהוא, לצד הטיוטה.
+          בלחיצה על "{readLabel}" הטקסט נקרא כאן, במחשב הזה, על ידי <bdi>{info.model}</bdi> (Ollama), ולא נשלח לשום מקום. הטקסט
+          המקורי נשמר כפי שהוא, לצד הטיוטה.
         </p>
       )}
 
       {/* <output> is announced by screen readers when its text changes. */}
-      <output className="working-note">{working === 'model' ? 'Claude קורא את המתכון… בדרך כלל זה לוקח פחות מדקה.' : ''}</output>
+      <output className="working-note">
+        {working === 'model' && (local ? 'המודל המקומי קורא את המתכון… בדרך כלל זה לוקח עד דקה.' : 'Claude קורא את המתכון… בדרך כלל זה לוקח פחות מדקה.')}
+      </output>
       {error !== null && (
         <p role="alert" className="form-alert">
           {error}
@@ -151,7 +178,7 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
           disabled={info !== null && !info.configured}
           onClick={() => start(true)}
         >
-          {working === 'model' ? 'Claude קורא…' : 'קריאה עם Claude'}
+          {working === 'model' ? 'קורא…' : readLabel}
         </button>
         <button type="button" className="button" onClick={() => start(false)}>
           {working === 'manual' ? 'שומר…' : 'שמירה בלי עיבוד'}

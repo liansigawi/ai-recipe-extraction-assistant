@@ -1,0 +1,56 @@
+{
+  "about": "Held out: written before measuring the revised approach and not used to tune it. A personal introduction, the ingredients as one comma list after a label that also gives the servings, an alternative ('סילאן או דבש'), and the method as one paragraph.",
+  "expect": {
+    "title": "פרגיות בתנור בלי מאמץ",
+    "category": "בישולים",
+    "ingredient_groups": [
+      {
+        "name": [
+          null,
+          "מצרכים (4 מנות)"
+        ],
+        "items": [
+          [
+            "1 ק״ג פרגיות",
+            "1 ק״ג"
+          ],
+          [
+            "3 כפות סילאן או דבש",
+            "3 כפות"
+          ],
+          [
+            "2 כפות רוטב סויה",
+            "2 כפות"
+          ],
+          [
+            "4 שיני שום כתושות",
+            "4 שיני"
+          ],
+          [
+            "כף פפריקה מתוקה",
+            "כף"
+          ],
+          [
+            "מלח ופלפל",
+            null
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מערבבים את הסילאן, הסויה, השום והפפריקה בקערה.",
+      "מוסיפים את הפרגיות ומשרים לפחות חצי שעה, אפשר גם לילה במקרר.",
+      "מסדרים בתבנית ואופים בתנור שחומם ל-200 מעלות כ-35 דקות, עד שהפרגיות שחומות."
+    ],
+    "tips": [
+      "מגישים עם אורז לבן."
+    ],
+    "yield": {
+      "text": "4 מנות",
+      "number": "4"
+    },
+    "excluded": [
+      "היום אני משתפת אתכם במתכון שאני מכינה כמעט כל שבוע, הילדים פשוט מתים עליו."
+    ]
+  }
+}

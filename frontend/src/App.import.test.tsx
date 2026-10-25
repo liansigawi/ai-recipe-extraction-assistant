@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { AMBIGUOUS, fakeApi, type DraftMaker } from './test/fakeApi'
 import { sampleCategories, sampleRecipes } from './test/sampleRecipes'
+import type { ExtractionInfo } from './types'
 
 // Importing pasted text, reviewing the draft, and saving it, against the fake backend.
 // The fake import turns the text into a draft: its first line is the title, its second an
@@ -11,18 +12,20 @@ import { sampleCategories, sampleRecipes } from './test/sampleRecipes'
 
 const PASTED = 'עוגת תפוזים\n200 גרם קמח\nמערבבים ואופים.'
 
-async function openImport(options: { configured?: boolean; draftFor?: DraftMaker } = {}) {
+const CLAUDE: ExtractionInfo = { configured: true, provider: 'claude', model: 'claude-opus-5-5', local: false, problem: null }
+const NO_KEY: ExtractionInfo = { ...CLAUDE, configured: false, problem: 'no_api_key' }
+const LOCAL: ExtractionInfo = { configured: true, provider: 'ollama', model: 'qwen3:8b', local: true, problem: null }
+
+async function openImport(options: { configured?: boolean; extraction?: ExtractionInfo; draftFor?: DraftMaker } = {}) {
   const user = userEvent.setup()
-  const api = fakeApi({
-    recipes: sampleRecipes,
-    categories: sampleCategories,
-    extraction: { configured: options.configured ?? true, model: 'claude-opus-5-5' },
-    draftFor: options.draftFor,
-  })
+  const extraction = options.extraction ?? (options.configured === false ? NO_KEY : CLAUDE)
+  const api = fakeApi({ recipes: sampleRecipes, categories: sampleCategories, extraction, draftFor: options.draftFor })
   const view = render(<App />)
   await user.click(await screen.findByRole('button', { name: 'ייבוא מטקסט' }))
-  // Wait until the panel knows whether Claude can be used.
-  await screen.findByText(options.configured === false ? /לא הוגדר מפתח/ : /נשלחים ל-Anthropic/)
+  // Wait until the panel knows whether and how the model can be used.
+  await screen.findByText(
+    !extraction.configured ? /אפשר לשמור את הטקסט בלי עיבוד/ : extraction.local ? /ולא נשלח לשום מקום/ : /נשלחים ל-Anthropic/,
+  )
   return { user, api, view }
 }
 
@@ -161,5 +164,34 @@ describe('importing pasted text', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'עוגת שוקולד עם גנאש' })).toBeInTheDocument() // still here
     const list = within(within(screen.getByRole('navigation')).getByRole('list'))
     expect(list.getAllByRole('button')[0]).toHaveTextContent('עוגת תפוזים')
+  })
+})
+
+describe('importing with a local model (Ollama)', () => {
+  it('says the text stays on this computer, and names the model', async () => {
+    const { user, api } = await openImport({ extraction: LOCAL })
+    expect(screen.getByText(/הטקסט נקרא כאן, במחשב הזה/)).toHaveTextContent('qwen3:8b')
+    expect(screen.queryByText(/Anthropic/)).not.toBeInTheDocument()
+    await user.click(textBox())
+    await user.paste(PASTED)
+    await user.click(screen.getByRole('button', { name: 'קריאה עם המודל המקומי' }))
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+    expect(api.changes()[0].body).toEqual({ text: PASTED, use_model: true })
+  })
+
+  it('explains when Ollama is not running, and checks again on request', async () => {
+    const { user, api } = await openImport({ extraction: { ...LOCAL, configured: false, problem: 'ollama_unreachable' } })
+    expect(screen.getByText(/Ollama לא פועל במחשב הזה/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'קריאה עם המודל המקומי' })).toBeDisabled()
+
+    api.setExtraction(LOCAL) // the person started Ollama
+    await user.click(screen.getByRole('button', { name: 'בדיקה שוב' }))
+    expect(await screen.findByText(/הטקסט נקרא כאן, במחשב הזה/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'קריאה עם המודל המקומי' })).toBeEnabled()
+  })
+
+  it('says which command downloads a missing model', async () => {
+    await openImport({ extraction: { ...LOCAL, configured: false, problem: 'ollama_model_missing' } })
+    expect(screen.getByText(/עוד לא הורד ל-Ollama/)).toHaveTextContent('ollama pull qwen3:8b')
   })
 })

@@ -1,10 +1,48 @@
 {
   "about": "Invented. A sweet snack between 'desserts' and 'light meals': either unresolved or desserts is reasonable; no new category may appear anywhere.",
   "expect": {
-    "category_one_of": [null, "קינוחים"],
-    "ingredient_count": 5,
-    "ingredients": [["1 כוס תמרים מגולענים", "1 כוס"], ["קוקוס לגלגול", null]],
-    "mentions": ["עד שבוע"],
-    "content_excludes": ["חטיפים", "snack"]
+    "title": "כדורי אנרגיה תמרים ושקדים",
+    "category_one_of": [
+      null,
+      "קינוחים"
+    ],
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 כוס תמרים מגולענים",
+            "1 כוס"
+          ],
+          [
+            "1/2 כוס שקדים",
+            "1/2 כוס"
+          ],
+          [
+            "2 כפות קקאו",
+            "2 כפות"
+          ],
+          [
+            "2 כפות חמאת בוטנים",
+            "2 כפות"
+          ],
+          [
+            "קוקוס לגלגול",
+            null
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "טוחנים את התמרים והשקדים במעבד מזון, מוסיפים את הקקאו וחמאת הבוטנים ומעבדים לעיסה.",
+      "יוצרים כדורים ומגלגלים בקוקוס."
+    ],
+    "tips": [
+      "שומרים במקרר עד שבוע."
+    ],
+    "never_suggested": [
+      "חטיפים",
+      "snack"
+    ]
   }
 }

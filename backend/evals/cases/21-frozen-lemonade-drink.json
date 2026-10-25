@@ -1,0 +1,52 @@
+{
+ "about": "Hebrew frozen lemonade, a drink that fits no category: a mention inside the introduction, 'ועוד' joining two amounts, an amount after a prefix with a volume in parentheses, approximations, a serving line inside the list, a yield line, and one tip that is both a substitution and storage advice. Written independently as a held-out case.",
+ "expect": {
+  "title": "לימונענע גרוסה ביתית",
+  "category": null,
+  "ingredient_groups": [
+   {
+    "name": "לסירופ",
+    "items": [
+     ["חצי כוס ועוד 2 כפות סוכר", "חצי כוס ועוד 2 כפות"],
+     ["חצי כוס מים רותחים", "חצי כוס"]
+    ]
+   },
+   {
+    "name": "ללימונענע",
+    "items": [
+     ["מיץ מ-5 לימונים (כ-200 מ״ל)", "5"],
+     ["2 חופנים עלי נענע טריים", "2 חופנים"],
+     ["4 כוסות מים קרים", "4 כוסות"],
+     ["כ-3 כוסות קרח", "3 כוסות"],
+     ["לימון פרוס ועלי נענע להגשה", null]
+    ]
+   }
+  ],
+  "preparation": [
+   "ממיסים את הסוכר במים הרותחים ומצננים לסירופ",
+   "בבלנדר שמים את מיץ הלימון, הנענע, הסירופ ושתי כוסות מהמים הקרים וטוחנים דקה",
+   "מסננים לקנקן, מוסיפים את שאר המים ומערבבים",
+   "ממש לפני ההגשה טוחנים את הקרח בבלנדר עם כוס מהמשקה עד שמתקבל גרד, ומחזירים לקנקן",
+   "מגישים בכוסות עם פרוסות לימון ועלי נענע"
+  ],
+  "tips": [
+   "אפשר להחליף את הסוכר בסילאן, והסירופ נשמר בצנצנת סגורה במקרר עד שבועיים"
+  ],
+  "facts": [
+   "יוצא קנקן של כ-8 כוסות"
+  ],
+  "yield": {
+   "text": "יוצא קנקן של כ-8 כוסות",
+   "number": "8"
+  },
+  "excluded": [
+   "בקיץ הזה אנחנו לא קונים יותר בקבוקים, מכינים קנקן בבוקר וזהו",
+   "מתכון של @tamar.bamitbach שהתאמתי קצת לטעם שלנו",
+   "שמרו לימים החמים",
+   "#לימונענע #משקאות_קיץ #קיץ_ישראלי"
+  ],
+  "warnings": [
+   "classification_unresolved"
+  ]
+ }
+}

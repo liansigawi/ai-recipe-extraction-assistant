@@ -1,11 +1,45 @@
 {
   "about": "Invented. A drink fits none of the three categories: it must stay unresolved, with no new category suggested.",
   "expect": {
+    "title": "לימונדה נענע ביתית",
     "category": null,
-    "issue_kinds": ["classification_unresolved"],
-    "ingredient_count": 5,
-    "ingredients": [["1 ליטר מים קרים", "1 ליטר"], ["קרח להגשה", null]],
-    "mentions": ["לפחות שעה"],
-    "content_excludes": ["משקאות", "drinks"]
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 ליטר מים קרים",
+            "1 ליטר"
+          ],
+          [
+            "3/4 כוס סוכר",
+            "3/4 כוס"
+          ],
+          [
+            "1 כוס מיץ לימון סחוט",
+            "1 כוס"
+          ],
+          [
+            "חופן עלי נענע",
+            "חופן"
+          ],
+          [
+            "קרח להגשה",
+            null
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "ממיסים את הסוכר בכוס מים חמים, מוסיפים את שאר המים, את מיץ הלימון והנענע.",
+      "מצננים לפחות שעה ומגישים עם קרח."
+    ],
+    "never_suggested": [
+      "משקאות",
+      "drinks"
+    ],
+    "warnings": [
+      "classification_unresolved"
+    ]
   }
 }

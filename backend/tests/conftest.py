@@ -15,20 +15,29 @@ from app.main import app
 
 
 @pytest.fixture(autouse=True)
-def no_dotenv_and_no_real_claude(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Applies to every test: your .env and API key are never used, and Claude is never called.
+def no_dotenv_and_no_real_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Applies to every test: your .env and settings are never used, and no real model is called.
 
-    Your .env may hold a real ANTHROPIC_API_KEY; a test must not spend it. Tests that need an
-    extractor pass a stand-in (see test_api_imports.py).
+    Your .env may hold a real ANTHROPIC_API_KEY (a test must not spend it) or choose Ollama, which
+    may be running on this computer (a test must not depend on it). Tests that need an extractor
+    pass a stand-in or a fake connection (see test_api_imports.py, test_extraction_ollama.py).
     """
     monkeypatch.setitem(Settings.model_config, "env_file", None)
-    for name in ("ANTHROPIC_API_KEY", "RECIPES_ANTHROPIC_API_KEY", "RECIPES_MODEL", "RECIPES_MODEL_TIMEOUT_SECONDS"):
+    for name in (
+        "ANTHROPIC_API_KEY", "RECIPES_ANTHROPIC_API_KEY", "RECIPES_MODEL", "RECIPES_MODEL_TIMEOUT_SECONDS",
+        "RECIPES_EXTRACTOR", "RECIPES_OLLAMA_MODEL", "RECIPES_OLLAMA_URL", "RECIPES_OLLAMA_CONTEXT_TOKENS",
+        "RECIPES_OLLAMA_TIMEOUT_SECONDS",
+    ):
         monkeypatch.delenv(name, raising=False)
 
-    def refuse(*args: object, **kwargs: object) -> None:
-        raise AssertionError("A test tried to create a real Claude API client.")
+    def refuse(what: str):
+        def refused(*args: object, **kwargs: object) -> None:
+            raise AssertionError(f"A test tried to {what}.")
 
-    monkeypatch.setattr("anthropic.Anthropic", refuse)
+        return refused
+
+    monkeypatch.setattr("anthropic.Anthropic", refuse("create a real Claude API client"))
+    monkeypatch.setattr("app.extraction.ollama.new_client", refuse("connect to a real Ollama"))
 
 
 @pytest.fixture

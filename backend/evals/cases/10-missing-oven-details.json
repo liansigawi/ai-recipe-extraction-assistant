@@ -1,9 +1,48 @@
 {
   "about": "Invented. No oven temperature or baking time is given: it must be flagged as missing, never filled in.",
   "expect": {
-    "issue_kinds": ["missing_information"],
-    "ingredient_count": 5,
-    "ingredients": [["2 כוסות תרד קצוץ", "2 כוסות"], ["3 ביצים", "3"], ["קצת שמן"]],
-    "content_excludes": ["מעלות", "דקות"]
+    "title": "פשטידת ירוקים",
+    "category_one_of": [
+      "ארוחות קלילות",
+      "בישולים",
+      null
+    ],
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "2 כוסות תרד קצוץ",
+            "2 כוסות"
+          ],
+          [
+            "1 צרור שמיר",
+            "1 צרור"
+          ],
+          [
+            "3 ביצים",
+            "3"
+          ],
+          [
+            "1 כוס גבינה בולגרית מפוררת",
+            "1 כוס"
+          ],
+          [
+            "קצת שמן",
+            "קצת"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מערבבים הכול, יוצקים לתבנית משומנת ואופים עד שהפשטידה זהובה ויציבה."
+    ],
+    "excluded": [
+      "מעלות",
+      "דקות"
+    ],
+    "warnings": [
+      "missing_information"
+    ]
   }
 }

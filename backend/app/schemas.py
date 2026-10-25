@@ -141,6 +141,8 @@ BackendIssueKind = Literal[
     "not_found_in_source",  # a line that does not appear in the original text: check it
     "classification_unresolved",  # no single existing category clearly fits; left unclassified
     "not_extracted",  # saved without the model: fill in the recipe from the original text
+    "unused_text",  # a passage of the original the model neither used nor marked as not part of the recipe
+    "invalid_reference",  # the model pointed at passages that do not exist, or used one twice
 ]
 IssueKind = ModelIssueKind | BackendIssueKind
 
@@ -244,7 +246,11 @@ class TextImport(ContractModel):
 
 
 class ExtractionInfo(ContractModel):
-    """GET /api/extraction: can the backend send text to Claude right now?"""
+    """GET /api/extraction: can imports use a model right now, and which one?"""
 
-    configured: bool  # an Anthropic API key is set
-    model: str  # the Claude model imports use
+    configured: bool  # ready: an API key is set (Claude), or Ollama runs and has the model (local)
+    provider: Literal["claude", "ollama"]
+    model: str
+    local: bool  # True: the text stays on this computer
+    # Why it is not ready, for the import screen.
+    problem: Literal["no_api_key", "ollama_unreachable", "ollama_model_missing"] | None = None

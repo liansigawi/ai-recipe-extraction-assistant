@@ -63,6 +63,8 @@ export type IssueKind =
   | 'not_found_in_source'
   | 'classification_unresolved'
   | 'not_extracted'
+  | 'unused_text'
+  | 'invalid_reference'
 
 export interface Issue {
   kind: IssueKind
@@ -108,11 +110,16 @@ export interface RecipeInput extends RecipeContent {
   issues: Issue[]
 }
 
-/** GET /api/extraction: can imports use Claude right now? */
+/** GET /api/extraction: can imports use a model right now, and which one? */
 export interface ExtractionInfo {
-  /** An Anthropic API key is set on the backend. */
+  /** Ready: an API key is set (Claude), or Ollama runs and has the model (local). */
   configured: boolean
+  provider: 'claude' | 'ollama'
   model: string
+  /** true: the text stays on this computer. */
+  local: boolean
+  /** Why it is not ready. */
+  problem: 'no_api_key' | 'ollama_unreachable' | 'ollama_model_missing' | null
 }
 
 export interface Subcategory {

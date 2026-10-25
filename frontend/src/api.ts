@@ -62,24 +62,28 @@ export function errorMessage(error: unknown): string {
       return 'המתכון לא נמצא. ייתכן שנמחק בחלון אחר; רעננו את הדף.'
     case 'forbidden_origin':
       return 'השרת דחה את השינוי כי הדף לא נפתח מהכתובת הצפויה. פתחו את המחברת בכתובת http://localhost:5173'
-    // Importing with Claude (backend/app/extraction/claude.py and app/api/imports.py).
+    // Importing (backend/app/extraction/: claude.py for the Claude API, ollama.py for a local model).
     case 'extraction_not_configured':
       return 'לא הוגדר מפתח ל-Claude API בשרת. ההוראות ב-README, בסעיף "Connect the Claude API".'
     case 'extraction_auth_failed':
-      return 'Claude API לא קיבל את המפתח. בדקו את ANTHROPIC_API_KEY בקובץ .env והפעילו את השרת מחדש.'
+      return 'Claude API לא קיבל את המפתח. בדקו את ANTHROPIC_API_KEY בקובץ .env ונסו שוב.'
     case 'extraction_busy':
       return 'Claude עמוס כרגע. נסו שוב בעוד כמה דקות.'
-    case 'extraction_timeout':
-      return 'Claude לא ענה בזמן. נסו שוב.'
     case 'extraction_unreachable':
       return 'אין חיבור ל-Claude API. בדקו את החיבור לאינטרנט ונסו שוב.'
+    case 'extraction_local_unavailable':
+      return 'Ollama לא פועל במחשב הזה. הפעילו את Ollama (מתפריט התחל) ונסו שוב.'
+    case 'extraction_model_missing':
+      return `המודל המקומי עוד לא הורד ל-Ollama (${error.message}).`
+    case 'extraction_timeout':
+      return 'המודל לא ענה בזמן. נסו שוב.'
     case 'extraction_refused':
     case 'extraction_incomplete':
     case 'extraction_invalid_output':
     case 'extraction_failed':
-      return `Claude לא הצליח לקרוא את המתכון הפעם (${error.message}). נסו שוב.`
+      return `המודל לא הצליח לקרוא את המתכון הפעם (${error.message}). נסו שוב.`
     case 'not_a_recipe':
-      return 'Claude לא מצא מתכון בטקסט.'
+      return 'לא נמצא מתכון בטקסט.'
     default:
       return `הפעולה נכשלה: ${error.message}`
   }

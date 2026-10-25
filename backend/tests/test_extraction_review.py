@@ -201,3 +201,58 @@ def test_a_manual_draft_takes_its_title_from_the_first_line_and_says_what_to_do(
 def test_a_stand_in_title_is_cut_to_a_readable_length():
     assert len(first_line("א" * 500)) == 120
     assert first_line(" \n \n") == "מתכון ללא כותרת"
+
+
+# --- Decoration that smaller models copy along -------------------------------------------------
+
+
+def test_bullets_emoji_and_list_numbers_are_left_out_and_headings_lose_their_markers():
+    groups = [
+        {
+            "name": "|לבצק:",
+            "ingredients": [
+                {"text": "• 200 גרם קמח", "quantity": "200 גרם"},
+                {"text": "🥚 2 ביצים L", "quantity": "2"},
+                {"text": "- מלח", "quantity": None},
+            ],
+        }
+    ]
+    steps = [{"name": "אופן ההכנה:", "steps": ["1. מערבבים את כל החומרים.", "2) אופים 30-35 דקות ב-180 מעלות."]}]
+    draft = build_draft(answer(ingredient_groups=groups, step_groups=steps), SOURCE, CATEGORIES)
+    assert draft.issues == []  # nothing invented: the clean lines are all in the text
+    assert draft.ingredient_groups[0].name == "לבצק"
+    assert [i.text for i in draft.ingredient_groups[0].ingredients] == ["200 גרם קמח", "2 ביצים L", "מלח"]
+    assert draft.step_groups[0].name is None  # a single group titled like the section
+    assert draft.step_groups[0].steps == ["מערבבים את כל החומרים.", "אופים 30-35 דקות ב-180 מעלות."]
+
+
+def test_a_list_split_into_unnamed_pieces_is_put_back_together():
+    steps = [
+        {"name": None, "steps": ["מערבבים את כל החומרים."]},
+        {"name": None, "steps": ["אופים 30-35 דקות ב-180 מעלות."]},
+    ]
+    draft = build_draft(answer(step_groups=steps), SOURCE, CATEGORIES)
+    assert [g.steps for g in draft.step_groups] == [["מערבבים את כל החומרים.", "אופים 30-35 דקות ב-180 מעלות."]]
+
+
+def test_named_groups_stay_apart_even_when_one_is_a_generic_title():
+    steps = [
+        {"name": "אופן ההכנה", "steps": ["מערבבים את כל החומרים."]},
+        {"name": None, "steps": ["אופים 30-35 דקות ב-180 מעלות."]},
+    ]
+    draft = build_draft(answer(step_groups=steps), SOURCE.replace("אופן ההכנה:", "אופן ההכנה"), CATEGORIES)
+    assert [g.name for g in draft.step_groups] == ["אופן ההכנה", None]
+
+
+def test_repeated_notes_are_kept_once_and_promotion_is_flagged_not_deleted():
+    draft = build_draft(answer(notes=["אפשר להקפיא.", "אפשר להקפיא.", "#עוגה @someone"]), SOURCE, CATEGORIES)
+    assert draft.notes == ["אפשר להקפיא.", "#עוגה @someone"]
+    assert kinds(draft) == ["other"]
+    assert "#עוגה @someone" in draft.issues[0].message
+
+
+def test_a_point_reported_twice_is_shown_once_in_its_first_place():
+    twice = {"kind": "missing_information", "message": "לא כתוב כמה זמן לצנן.", "quote": None}
+    other = {"kind": "unclear_text", "message": "לא ברור.", "quote": None}
+    draft = build_draft(answer(issues=[twice, other, twice]), SOURCE, CATEGORIES)
+    assert [issue.message for issue in draft.issues] == ["לא כתוב כמה זמן לצנן.", "לא ברור."]

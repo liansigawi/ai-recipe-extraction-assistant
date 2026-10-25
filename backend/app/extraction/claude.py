@@ -13,8 +13,8 @@ from pydantic import ValidationError
 
 from app import schemas
 from app.errors import ApiError
-from app.extraction.output import ExtractionOutput, output_schema
-from app.extraction.prompt import SYSTEM_PROMPT, build_user_message
+from app.extraction.output import ExtractionOutput, ReferenceOutput
+from app.extraction.prompt import build_request
 
 log = logging.getLogger("uvicorn.error")
 
@@ -28,26 +28,32 @@ class Extractor(Protocol):
 
     model: str
 
-    def extract(self, text: str, categories: list[schemas.Category]) -> ExtractionOutput: ...
+    def extract(self, text: str, categories: list[schemas.Category]) -> ExtractionOutput | ReferenceOutput: ...
 
 
 class ClaudeExtractor:
-    def __init__(self, *, api_key: str, model: str, timeout: float, client: Any = None) -> None:
+    def __init__(self, *, api_key: str, model: str, timeout: float, mode: str = "references", client: Any = None) -> None:
         self.model = model
+        self.mode = mode  # "references" (labeled passages) or "text" (copied wording)
         # max_retries: the SDK retries connection errors, rate limits and server errors twice,
         # waiting a little longer each time.
         self._client = client or anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=2)
+        self.last_usage: dict[str, int] = {}  # tokens of the latest request, for the quality check
+        self.last_raw: str | None = None  # the model's answer exactly as received, for tracing
 
-    def extract(self, text: str, categories: list[schemas.Category]) -> ExtractionOutput:
+    def extract(self, text: str, categories: list[schemas.Category]) -> ExtractionOutput | ReferenceOutput:
+        self.last_usage = {}
+        self.last_raw = None
+        request = build_request(text, categories, self.mode)
         started = time.monotonic()
         try:
             response = self._client.messages.create(
                 model=self.model,
                 max_tokens=MAX_OUTPUT_TOKENS,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": build_user_message(text, categories)}],
+                system=request.system,
+                messages=[{"role": "user", "content": request.user}],
                 # Structured output: the answer must follow this JSON schema.
-                output_config={"format": {"type": "json_schema", "schema": output_schema(categories)}},
+                output_config={"format": {"type": "json_schema", "schema": request.schema}},
             )
         except anthropic.AuthenticationError:
             raise ApiError(
@@ -71,6 +77,7 @@ class ClaudeExtractor:
             raise ApiError(502, "extraction_failed", f"The Claude API answered with an error (HTTP {error.status_code}).") from None
 
         usage = response.usage
+        self.last_usage = {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}
         log.info(
             "Extraction with %s: %d characters in, %s input and %s output tokens, %.1f s, stop: %s",
             self.model, len(text), usage.input_tokens, usage.output_tokens, time.monotonic() - started, response.stop_reason,
@@ -80,8 +87,9 @@ class ClaudeExtractor:
         if response.stop_reason in ("max_tokens", "model_context_window_exceeded"):
             raise ApiError(502, "extraction_incomplete", "Claude's answer was cut off before the end.")
 
-        answer = "".join(block.text for block in response.content if block.type == "text")
+        self.last_raw = "".join(block.text for block in response.content if block.type == "text")
+        answer_type = ReferenceOutput if request.mode == "references" else ExtractionOutput
         try:
-            return ExtractionOutput.model_validate_json(answer)
+            return answer_type.model_validate_json(self.last_raw)
         except ValidationError:
             raise ApiError(502, "extraction_invalid_output", "Claude's answer did not have the expected shape.") from None
