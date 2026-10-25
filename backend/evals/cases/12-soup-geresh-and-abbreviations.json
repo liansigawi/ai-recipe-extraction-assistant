@@ -2,7 +2,7 @@
   "about": "Invented. Many words with ׳ and ״ (ג׳ינג׳ר, צ׳ילי, ס״מ, מ״ל) in ingredients and steps; parentheses inside lines; a storage note.",
   "expect": {
     "title": "מרק עדשים כתומות עם ג׳ינג׳ר וצ׳ילי",
-    "category": "בישולים",
+    "category": null,
     "ingredient_groups": [
       {
         "name": null,
@@ -49,6 +49,9 @@
     ],
     "tips": [
       "נשמר במקרר עד 4 ימים."
+    ],
+    "warnings": [
+      "classification_unresolved"
     ]
   }
 }

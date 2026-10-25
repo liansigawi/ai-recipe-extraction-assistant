@@ -1,0 +1,6 @@
+{
+ "about": "A Hebrew market-haul post whose shopping list has several lines starting with amounts and prices, but no recipe. Written independently as a held-out case.",
+ "expect": {
+  "is_recipe": false
+ }
+}

@@ -1,0 +1,6 @@
+{
+ "about": "A Hebrew cooking-workshop announcement that names dishes, sauces, dates, times and a price, but gives no ingredient amounts or method, so it is not a recipe. Written independently as a held-out case.",
+ "expect": {
+  "is_recipe": false
+ }
+}

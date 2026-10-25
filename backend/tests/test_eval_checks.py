@@ -15,7 +15,7 @@ from app.extraction.review import normalize
 from app.schemas import Issue, RecipeInput
 from evals.checks import AREAS, KNOWN_EXPECTATIONS, check, review_warnings
 from evals.run_extraction import CASES_DIR, CATEGORIES
-from evals.scoring import score_case, verdict
+from evals.scoring import score_case, totals, verdict
 
 CASES = sorted(CASES_DIR.glob("*.json"))
 WARNING_KINDS = {"ingredient_only_in_steps", "missing_information", "missing_title", "classification_unresolved",
@@ -87,7 +87,7 @@ def test_a_faithful_draft_passes_every_check_and_says_what_was_checked():
     assert result.findings == [] and result.all_passed
     assert result.checked == {
         "wording": 5, "ingredient lines": 2, "quantities": 2, "groups": 1, "preparation": 1, "tips": 1,
-        "not recipe content": 1, "title": 1, "category": 1,
+        "facts": 1, "not recipe content": 1, "title": 1, "category": 1,
     }
     assert set(result.checked) <= set(AREAS)
 
@@ -125,6 +125,12 @@ def test_text_that_is_not_recipe_content_counts_once_per_place_it_was_kept():
 def test_preparation_tips_and_facts_must_be_kept():
     assert kinds(step_groups=[]) == ["missing_step"]
     assert kinds(step_groups=[], notes=["אפשר להקפיא.", "אופים 30 דקות."]) == ["misplaced_step"]
+    # Kept as a group heading: still in the draft, so misplaced, not missing.
+    as_heading = check(EXPECT, draft=draft(step_groups=[{"name": "אופים 30 דקות.", "steps": ["מגישים."]}]),
+                       error_code=None, categories=CATEGORIES, source=SOURCE + "\nמגישים.")
+    assert [(f.kind, f.message) for f in as_heading.findings if f.area == "preparation"] == [
+        ("misplaced_step", 'preparation kept as a group heading: "אופים 30 דקות."')
+    ]
     assert kinds(notes=[]) == ["missing_tip"]
     expect = EXPECT | {"facts": ["מוכן ב-10 דקות"], "yield": {"text": "8 פרוסות", "number": "8"}}
     assert kinds(expect) == ["missing_fact", "missing_fact"]
@@ -145,10 +151,11 @@ def test_groups_must_keep_their_names_and_stay_apart():
     assert kinds(expect, source, ingredient_groups=merged) == ["group"]
 
 
-def test_a_wrong_category_is_an_error_an_unresolved_one_is_minor():
+def test_a_wrong_category_is_an_error_an_unresolved_one_is_minor_but_still_a_failed_check():
     assert kinds(category_id=2) == ["category_wrong"]
     result = check(EXPECT, draft=draft(category_id=None), error_code=None, categories=CATEGORIES, source=SOURCE)
-    assert [f.kind for f in result.findings] == ["category_unresolved"] and result.all_passed
+    assert [(f.kind, f.minor) for f in result.findings] == [("category_unresolved", True)]
+    assert not result.all_passed  # "all checks passed" means every check, minor ones too
 
 
 def test_a_finding_records_whether_the_app_showed_a_review_point_about_it():
@@ -190,6 +197,74 @@ def test_not_a_recipe_is_expected_or_reported():
 
 def test_the_verdict_says_how_many_checks_passed_never_more():
     passed = score_case(EXPECT, SOURCE, draft(), None, CATEGORIES)
-    assert verdict(passed) == "all 15 checks passed"
+    assert verdict(passed) == "all 16 checks passed"
     failed = score_case(EXPECT, SOURCE, draft(category_id=2, notes=[]), None, CATEGORIES)
-    assert verdict(failed) == "2 of 14 checks failed (2 problems)"  # one note fewer to check for wording
+    assert verdict(failed) == "2 of 15 checks failed (2 problems)"  # one note fewer to check for wording
+    minor = score_case(EXPECT, SOURCE, draft(category_id=None), None, CATEGORIES)
+    assert verdict(minor) == "1 of 16 checks failed (1 minor)"
+    refused = score_case(EXPECT, SOURCE, None, "not_a_recipe", CATEGORIES)
+    assert verdict(refused) == "no draft: the extraction failed: not_a_recipe"
+
+
+GAP_SOURCE = "מאפינס\n2 כוסות קמח\nמקפלים פנימה את התותים החתוכים.\nאופים 20 דקות."
+GAP_EXPECT = {
+    "title": "מאפינס", "category": "קינוחים",
+    "ingredient_groups": [{"name": None, "items": [["2 כוסות קמח", "2 כוסות"]]}],
+    "preparation": ["מקפלים פנימה את התותים החתוכים.", "אופים 20 דקות."],
+    "source_gaps": [{"ingredient": "התותים"}],
+}
+
+
+def gap_kinds(**changes) -> list[str]:
+    base = {"title": "מאפינס", "ingredient_groups": lines(("2 כוסות קמח", "2 כוסות")),
+            "step_groups": [{"name": None, "steps": ["מקפלים פנימה את התותים החתוכים.", "אופים 20 דקות."]}], "notes": []}
+    result = check(GAP_EXPECT, draft=draft(**(base | changes)), error_code=None, categories=CATEGORIES, source=GAP_SOURCE)
+    return [f.kind for f in result.findings]
+
+
+def test_an_ingredient_the_source_itself_omits_is_a_source_gap_not_an_extraction_mistake():
+    flagged = Issue(kind="ingredient_only_in_steps", message='המצרך "התותים" מופיע באופן ההכנה אבל לא ברשימת המצרכים.')
+    assert gap_kinds(issues=[flagged]) == []  # kept faithfully and pointed out
+    assert gap_kinds() == ["source_gap_unflagged"]  # faithful, but the app did not point it out (minor)
+    added = lines(("2 כוסות קמח", "2 כוסות"), ("תותים", None))
+    assert "invented_ingredient" in gap_kinds(ingredient_groups=added, issues=[flagged])
+
+
+def test_a_fact_or_tip_split_over_adjacent_notes_is_reported_apart_from_a_missing_one():
+    source = SOURCE + "\nזמן הכנה: 50 דקות"
+    expect = EXPECT | {"facts": ["זמן הכנה: 50 דקות"]}
+    assert kinds(expect, source, notes=["אפשר להקפיא.", "זמן הכנה", "50 דקות"]) == ["split_fact"]
+    assert kinds(expect, source, notes=["אפשר להקפיא.", "זמן הכנה"]) == ["missing_fact"]  # the time is lost
+    assert kinds(EXPECT, SOURCE, notes=["אפשר", "להקפיא."]) == ["split_tip"]
+
+
+def test_servings_need_a_yield_in_the_text():
+    assert kinds(servings="100 גרם") == ["unsupported_servings"]  # the text gives no yield
+    expect = EXPECT | {"yield": {"text": "8 פרוסות", "number": "8"}}
+    with_yield = SOURCE + "\n8 פרוסות"
+    assert kinds(expect, with_yield, servings="8 פרוסות") == []
+    assert kinds(expect, with_yield, servings="100 גרם") == ["wrong_servings"]
+
+
+def test_import_success_is_counted_apart_from_accuracy_within_drafts():
+    cases = {
+        "a-cake": score_case(EXPECT, SOURCE, draft(), None, CATEGORIES),
+        "b-refused-cake": score_case(EXPECT, SOURCE, None, "not_a_recipe", CATEGORIES),
+        "c-review": score_case({"is_recipe": False}, "ביקרנו במסעדה.", None, "not_a_recipe", CATEGORIES),
+    }
+    t = totals(cases)
+    assert (t["recipes_imported"], t["recipe_texts"], t["recipes_refused"]) == (1, 2, ["b-refused-cake"])
+    assert (t["non_recipes_refused"], t["non_recipe_texts"]) == (1, 1)
+    # The refused recipe has no lines to check, but it is still a failed case, never silently left out.
+    assert not cases["b-refused-cake"]["all_checks_passed"] and t["cases_all_passed"] == 2
+    assert t["checked"]["ingredient lines"] == 2  # only the draft that was made
+
+
+def test_a_line_written_in_two_groups_is_matched_once_in_each():
+    source = "עוגה\nלבצק:\n2 ביצים\nכוס סוכר\nלקרם:\nכוס סוכר\nמערבבים."
+    expect = {"ingredient_groups": [{"name": "לבצק", "items": [["2 ביצים", "2"], ["כוס סוכר", "כוס"]]},
+                                    {"name": "לקרם", "items": [["כוס סוכר", "כוס"]]}]}
+    groups = [{"name": "לבצק", "ingredients": [{"text": "2 ביצים", "quantity": "2"}, {"text": "כוס סוכר", "quantity": "כוס"}]},
+              {"name": "לקרם", "ingredients": [{"text": "כוס סוכר", "quantity": "כוס"}]}]
+    result = check(expect, draft=draft(ingredient_groups=groups, notes=[]), error_code=None, categories=CATEGORIES, source=source)
+    assert [f.kind for f in result.findings if f.area in ("ingredient lines", "groups")] == []

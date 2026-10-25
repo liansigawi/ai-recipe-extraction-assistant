@@ -39,7 +39,7 @@ from app.sample_data import STARTER_CATEGORIES
 from evals.scoring import score_case, totals, verdict
 
 CASES_DIR = Path(__file__).parent / "cases"
-MAX_CASES = 30
+MAX_CASES = 40  # bounded: with Claude each case is one paid request
 
 # The categories of a new notebook, with the ids a new database gives them.
 CATEGORIES = [
@@ -215,17 +215,24 @@ def main() -> int:
 
 def case_summary(record: dict) -> dict:
     """What a run's summary.json keeps of one case."""
-    keys = ("seconds", "usage", "error", "checked", "failed", "problems", "minor_problems", "all_checks_passed", "warnings")
+    keys = (
+        "seconds", "usage", "error", "recipe_expected", "imported", "checked", "failed", "problems", "minor_problems",
+        "all_checks_passed", "warnings",
+    )
     return {key: record[key] for key in keys}
 
 
 def summary_lines(summary: dict, case_count: int) -> list[str]:
     t = summary["totals"]
     coverage = ", ".join(f"{area} {n - t['failed'].get(area, 0)}/{n}" for area, n in t["checked"].items())
+    refused = f" (refused: {', '.join(t['recipes_refused'])})" if t["recipes_refused"] else ""
     return [
-        f"**Checks passed, by area:** {coverage}.",
-        f"**Problems:** {t['problems']} (and {t['minor_problems']} minor: unresolved categories, missing review "
-        f"points). **Cases where every check passed:** {t['cases_all_passed']} of {case_count}.",
+        f"**Imports:** recipes imported {t['recipes_imported']} of {t['recipe_texts']}{refused}; texts that are not "
+        f"recipes refused {t['non_recipes_refused']} of {t['non_recipe_texts']}.",
+        f"**Checks passed within the drafts made, by area:** {coverage}.",
+        f"**Problems:** {t['problems']} (and {t['minor_problems']} minor: a category left for you, a review point "
+        f"missing, a source gap not pointed out, a fact or tip split over adjacent entries). "
+        f"**Cases where every check passed (minor ones included):** {t['cases_all_passed']} of {case_count}.",
         f"**Review points shown:** {t['warnings_shown']}, of which unnecessary {t['unnecessary_warnings']}, duplicates "
         f"{t['duplicate_warnings']}. **Total time:** {t['seconds']:.0f} s.",
         f"**GPU:** {summary['gpu']}" if summary.get("gpu") else "**GPU:** not reported",

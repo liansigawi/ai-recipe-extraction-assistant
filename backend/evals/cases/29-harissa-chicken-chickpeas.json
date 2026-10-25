@@ -1,0 +1,93 @@
+{
+ "about": "An English poultry main with two named ingredient groups, a yield line, labeled prep and cook times, a short oven sentence opening the method, a tips section, a call to action and hashtags. Written independently as a held-out case.",
+ "expect": {
+  "title": "One-Pan Harissa Chicken with Chickpeas",
+  "category": "בישולים",
+  "ingredient_groups": [
+   {
+    "name": "For the chicken",
+    "items": [
+     [
+      "8 bone-in chicken thighs, skin on",
+      "8"
+     ],
+     [
+      "2 tbsp harissa paste",
+      "2 tbsp"
+     ],
+     [
+      "3 tbsp olive oil",
+      "3 tbsp"
+     ],
+     [
+      "1 tsp ground cumin",
+      "1 tsp"
+     ],
+     [
+      "2 cans chickpeas, drained",
+      "2 cans"
+     ],
+     [
+      "1 red onion, cut into wedges",
+      "1"
+     ],
+     [
+      "a handful of cherry tomatoes",
+      "a handful"
+     ],
+     [
+      "Salt and pepper",
+      null
+     ]
+    ]
+   },
+   {
+    "name": "For the herb salsa",
+    "items": [
+     [
+      "1 bunch parsley, chopped",
+      "1 bunch"
+     ],
+     [
+      "1/2 bunch mint, chopped",
+      "1/2 bunch"
+     ],
+     [
+      "Zest and juice of 1 lemon",
+      "1"
+     ],
+     [
+      "4 tbsp olive oil",
+      "4 tbsp"
+     ]
+    ]
+   }
+  ],
+  "preparation": [
+   "Heat the oven to 200°C.",
+   "Mix the harissa, olive oil and cumin, and rub it all over the chicken thighs.",
+   "Spread the chickpeas, onion and tomatoes in a large roasting pan and season with salt and pepper.",
+   "Lay the chicken on top, skin side up, and roast for 45-50 minutes until the skin is crisp.",
+   "While it roasts, stir together all the salsa ingredients with a pinch of salt.",
+   "Spoon the salsa over the chicken just before serving."
+  ],
+  "tips": [
+   "If the skin isn't crisp enough, slide the pan under the grill for the last 3 minutes.",
+   "You can swap the chickpeas for white beans."
+  ],
+  "facts": [
+   "Prep: 15 min",
+   "Cook: 50 min"
+  ],
+  "yield": {
+   "text": "Feeds 6",
+   "number": "6"
+  },
+  "excluded": [
+   "This has been on repeat at our place since the clocks went back.",
+   "Everything goes in one pan, and the chickpeas soak up all the juices.",
+   "Save this one for a busy weeknight, and tag me if you make it!",
+   "#onepandinner #harissa #chickenthighs"
+  ]
+ }
+}

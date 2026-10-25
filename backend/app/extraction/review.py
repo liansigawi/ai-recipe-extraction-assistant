@@ -18,7 +18,9 @@ Nothing the model says is taken on trust:
 - the model's issue messages may not talk about categories (they are dropped), so nothing
   ever suggests a new category; classification messages are written here, from the
   database's own category names;
-- quotes must be words from the original text; others are removed.
+- quotes must be words from the original text; others are removed;
+- servings need evidence: a passage that says it is the yield. A passage the model rejected as
+  not part of the recipe (an instruction inside the text) never supplies a value.
 """
 
 import re
@@ -28,7 +30,8 @@ from pydantic import ValidationError
 
 from app import schemas
 from app.errors import ApiError
-from app.extraction.output import Classification, ExtractionOutput, ReferenceOutput
+from app.extraction import ingredient_words
+from app.extraction.output import Classification, ExtractionOutput, ReferenceLabels, ReferenceOutput
 from app.extraction.quantity import find_quantity
 from app.extraction.segments import Segment, ends_with_colon, passage_key, passage_text, segment_text
 
@@ -47,7 +50,7 @@ _JOINERS = {"️", "‍"}  # parts of emoji such as 🌶️ and 🙋‍♀️
 # "1." "2)" "(3)", or a keycap emoji "1️⃣" (a digit, an optional emoji selector, the keycap mark)
 _LIST_NUMBER = re.compile(r"^(?:\(?\d{1,2}[.)]\s+|\d\N{VARIATION SELECTOR-16}?\N{COMBINING ENCLOSING KEYCAP}\s*)")
 _HEADING_EDGES = " :：-–—|•*"
-# Section titles that are not groups when a recipe has only one group of that kind.
+# Section titles, never group names.
 _GENERIC_HEADINGS = {
     "מצרכים", "רכיבים", "מה צריך", "מה צריך?", "ingredients",
     "הכנה", "אופן הכנה", "אופן ההכנה", "מה עושים", "מה עושים?", "איך מכינים", "איך מכינים?",
@@ -66,7 +69,31 @@ _TIME = re.compile(
     r"|חצי שעה|רבע שעה|שעה|שעתיים|an hour|half an hour",
     re.IGNORECASE,
 )
+# A label that says what a time is for ("זמן הכנה:", "Prep time:", "Cook:"): with a duration after it on its
+# line, the line is a time for the whole recipe, kept as a note with its label.
+_TIME_LABEL = re.compile(r"זמן|(?<!\w)(?:time|prep|cook|cooking|bake|baking|ready|total)(?!\w)", re.IGNORECASE)
 _WATER = {"מים", "water"}  # rarely listed as an ingredient: no point about it
+# A line that says what an ingredient is for: "לציפוי - מלח מאלדון", "קרח להגשה", "To garnish: basil",
+# "Lemon wedges, for serving". At the end of an ingredient list the model labeled such lines as tips
+# (measured: the same line in the middle of the list, or without its purpose word, was an ingredient).
+_PURPOSES = "לציפוי|לקישוט|להגשה|לפיזור|לזילוף|למריחה|לגלגול|לבזיקה|לטבילה|לצד|לליווי"
+_PURPOSES_EN = (
+    r"for (?:the )?(?:serving|garnish(?:ing)?|topping|decoration|decorating|sprinkling|dusting|dipping|drizzling)"
+    r"|to (?:serve|garnish|top|decorate|sprinkle|dust)"
+)
+_PURPOSE_LINE = re.compile(
+    rf"^\W*(?:{_PURPOSES}|{_PURPOSES_EN})(?![\w])[^.!?]{{0,40}}[-–—:]\s*\S"  # the purpose first
+    rf"|^[^.!?:]{{1,60}}\s(?:{_PURPOSES})(?:\s[^\s.!?]+)?[\s\W]*$"  # the purpose last
+    rf"|^[^.!?:]{{1,60}},?\s(?:{_PURPOSES_EN})[\s\W]*$",
+    re.IGNORECASE,
+)
+_PURPOSE_LABEL = re.compile(rf"^\W*(?:{_PURPOSES}|{_PURPOSES_EN})(?:\s\S+)?\s*:\s*$", re.IGNORECASE)  # "להגשה:"
+# Words that say a line is the recipe's yield.
+_YIELD = re.compile(
+    r"מנות|מנה|יחידות|יחידה|סועדים|אנשים|יוצא|יוצאת|יוצאות|יוצאים|מספיק"
+    r"|(?<!\w)(?:serves?|servings?|makes|yields?|portions?)(?!\w)",
+    re.IGNORECASE,
+)
 # The fixed message for each kind of passage the model points at.
 # The review points whose message is fixed (the passage they quote is their evidence).
 _POINT_MESSAGES = {
@@ -253,11 +280,11 @@ def first_line(text: str) -> str:
     return "מתכון ללא כותרת"
 
 
-def _missing_title(title: str) -> schemas.Issue:
-    return schemas.Issue(
-        kind="missing_title",
-        message=f'בטקסט אין כותרת ברורה. הכותרת "{title}" נלקחה ממילים בטקסט; שנו אותה אם צריך.',
-    )
+def _missing_title(title: str, from_text: bool = True) -> schemas.Issue:
+    """A composed title: from the text's own words, or (as the model sometimes does) with words that
+    are not in the text, which the message then says."""
+    where = "נלקחה ממילים בטקסט" if from_text else "הוצעה על ידי המודל, ולא כל המילים בה מופיעות בטקסט"
+    return schemas.Issue(kind="missing_title", message=f'בטקסט אין כותרת ברורה. הכותרת "{title}" {where}; שנו אותה אם צריך.')
 
 
 def _model_issues(output: ExtractionOutput, original: _Original) -> list[schemas.Issue]:
@@ -293,16 +320,17 @@ def _heading(name: str | None) -> str | None:
 
 
 def _tidy_groups(groups: list[dict], items: str) -> list[dict]:
-    """Merge groups without a name that follow each other (one list split in pieces), and drop the
-    name of a single group when it is only the section's title ("מצרכים", "אופן ההכנה")."""
+    """Drop a group's name when it is only the section's title ("מצרכים", "Ingredients", "אופן
+    ההכנה"), with one group or several, then merge groups without a name that follow each other
+    (one list split in pieces)."""
     merged: list[dict] = []
     for group in groups:
+        if (group["name"] or "").lower() in _GENERIC_HEADINGS:
+            group["name"] = None
         if merged and group["name"] is None and merged[-1]["name"] is None:
             merged[-1][items].extend(group[items])
         else:
             merged.append(group)
-    if len(merged) == 1 and (merged[0]["name"] or "").lower() in _GENERIC_HEADINGS:
-        merged[0]["name"] = None
     return merged
 
 
@@ -319,14 +347,14 @@ def _flag_promo(text: str, what: str, issues: list[schemas.Issue]) -> None:
 # --- Drafts from passage labels ----------------------------------------------------------------
 
 
-def is_recipe(output: ExtractionOutput | ReferenceOutput) -> bool:
-    """Whether the answer found a recipe. With passage labels, the labels decide: a text with a
-    passage labeled as an ingredient or a step is a recipe, whatever the answer's first field says
-    (measured: the model once labeled five ingredients and a step, but had already written
-    is_recipe = false before labeling them)."""
-    if isinstance(output, ReferenceOutput):
+def is_recipe(output: ExtractionOutput | ReferenceLabels) -> bool:
+    """Whether the answer found a recipe. With passage labels, the labels can overrule the answer's
+    first field: a text with passages labeled as ingredients and as steps is a recipe even if the
+    model wrote is_recipe = false (measured: it once labeled five ingredients and a step after
+    writing false). Ingredients alone do not overrule it: a shopping list is not a recipe."""
+    if isinstance(output, ReferenceLabels):
         roles = set(output.passages.values())
-        return output.is_recipe or bool(roles & {"ingredient", "step"})
+        return output.is_recipe or {"ingredient", "step"} <= roles
     return output.is_recipe
 
 
@@ -359,19 +387,21 @@ def build_draft_from_references(
     category_id, subcategory_id, classification_issue = resolve_classification(output.classification, categories)
     if classification_issue is not None:
         issues.append(classification_issue)
-    title_line = next(
-        (
-            _without_end_decoration(_line(passage_text(source_text, segments, number, number)))[:MAX_TITLE_LENGTH]
-            for number, role in sorted(labels.items())
-            if role == "title"
-        ),
-        None,
-    )
-    title = _title(output.title, output.title_written_in_text, source_text, original, issues, title_line)
+    title_number = next((number for number, role in sorted(labels.items()) if role == "title"), None)
+    title_line, title_is_label = None, False
+    if title_number is not None:
+        last = _title_line_end(source_text, segments, labels, title_number)
+        title_is_label = last != title_number
+        title_line = _without_end_decoration(_line(passage_text(source_text, segments, title_number, last)))[:MAX_TITLE_LENGTH]
+    # Passages the model rejected as not part of the recipe (introductions, calls to action, and
+    # instructions inside the text): they can never supply a value to the recipe.
+    rejected = {normalize(s.text(source_text)) for s in segments if labels.get(s.id) == "not_recipe"}
+    if title_is_label:  # "ארוחת בוקר של שישי:" alone is a framing, not the dish: its line as written is the title
+        title = title_line or ""
+    else:
+        title = _title(output.title, output.title_written_in_text, source_text, original, issues, title_line, rejected)
     issues.extend(_referenced_issues(output, source_text, segments, labels))
-    servings = _clean(output.servings or "") or None
-    if servings and not original.contains(servings):
-        issues.append(_not_found("כמות המנות", servings))
+    servings = _servings(output.servings, labels, source_text, segments)
 
     # The passage that is exactly the title the model gave (as on a title line): the title, never
     # an ingredient or a step, even if the answer labels it so.
@@ -392,10 +422,17 @@ def build_draft_from_references(
     step_groups: list[dict] = []
     notes: list[list] = []
     info_starts: set[int] = set()  # the first passage of each note that is a yield or time line
+    last_note: list | None = None  # the note that the passage before belongs to
+    purpose_items: set[int] = set()  # ingredients that start with their purpose label ("להגשה: גלידה")
+    joined: int | None = None  # a passage already copied as the rest of the item before it
     unlabeled: list[int] = []
     current: list | None = None  # [first, last]: the item that a "continues" passage extends
     previous: str | None = None  # the role of the passage before
+    # Lines that hold the recipe's own ingredient list, for telling a list inside an introduction apart.
+    ingredient_lines = {s.line for s in segments if labels.get(s.id) in ("ingredient", "ingredient_heading")}
     for segment in segments:
+        if segment.id == joined:
+            continue
         role = labels.get(segment.id)
         if role == "continues":
             if current is not None:
@@ -416,13 +453,58 @@ def build_draft_from_references(
             unlabeled.append(segment.id)
             previous = None
             continue
+        if role in ("ingredient", "step") and _in_rejected_list(source_text, segments, labels, segment, ingredient_lines):
+            role = "not_recipe"  # "...the secret is simple: salt, garlic": the introduction's words, not its list
         if segment.id == title_passage or role in ("title", "not_recipe") or _PROMO_ONLY.fullmatch(segment.text(source_text)):
             previous = "not_recipe"
             continue
-        if role == "tip" and ingredient_groups and not step_groups:  # after the list started, before the steps
+        if role in ("ingredient_heading", "step_heading") and _is_sentence(source_text, segment):
+            role = "ingredient" if role == "ingredient_heading" else "step"  # "מחממים תנור מראש." is a step
+        in_list = bool(ingredient_groups) and not step_groups  # after the list started, before the steps
+        rest = _rest_of_line(source_text, segments, segment)
+        if (
+            rest is not None
+            and labels.get(rest.id) not in (None, "title", "not_recipe")
+            and _TIME_LABEL.search(segment.text(source_text))
+            and _TIME.match(rest.text(source_text).strip())
+        ):
+            # "זמן הכנה: 25 דקות": a time for the whole recipe, whatever the labels say (not a step heading)
+            current = [segment.id, rest.id]
+            notes.append(current)
+            info_starts.add(segment.id)
+            joined, previous, last_note = rest.id, "info", current
+            continue
+        if (
+            rest is not None
+            and labels.get(rest.id) not in (None, "title", "not_recipe")
+            and not step_groups
+            and (in_list or role == "ingredient_heading")
+            and _PURPOSE_LABEL.match(segment.text(source_text))
+        ):
+            # "להגשה: גלידת וניל", "To garnish: fresh basil": one line, one ingredient, its purpose kept
+            if not ingredient_groups:
+                ingredient_groups.append({"heading": None, "items": []})
+            current = [segment.id, rest.id]
+            ingredient_groups[-1]["items"].append(current)
+            purpose_items.add(segment.id)
+            joined, previous, last_note = rest.id, "ingredient", None
+            continue
+        if role in ("tip", "info") and in_list:
+            text = segment.text(source_text)
+            after_heading = previous == "ingredient_heading" and segments[segment.id - 2].line == segment.line
+            heading = ingredient_groups[-1]["heading"]
+            for_purpose = heading is not None and bool(_PURPOSE_LABEL.match(segments[heading - 1].text(source_text)))
+            short = len(text.split()) <= 8 and not re.search(r"[.!?]", text)  # not a sentence
+            if ends_with_colon(source_text, segment) and _PURPOSE_LABEL.match(text):
+                role = "ingredient_heading"  # "להגשה:" before its ingredients
+            elif role == "tip" and (after_heading or short and (for_purpose or _PURPOSE_LINE.match(text))):
+                role = "ingredient"  # "לציפוי - מלח מאלדון", or under "להגשה:": an ingredient, as written
+        if role == "tip" and in_list:
             issues.append(_tip_in_ingredient_list(segment.text(source_text)))
         if ends_with_colon(source_text, segment):  # a label: a heading, whatever the answer says
             role = {"ingredient": "ingredient_heading", "step": "step_heading"}.get(role, role)
+        if role in ("ingredient_heading", "step_heading"):
+            role = _heading_of_what_follows(role, segments, labels, segment)  # "הגרסה שלי:" before ingredients
         if role == "ingredient_heading":
             ingredient_groups.append({"heading": segment.id, "items": []})
         elif role == "step_heading":
@@ -434,10 +516,17 @@ def build_draft_from_references(
             current = [segment.id, segment.id]
             groups[-1]["items"].append(current)
         elif role in ("tip", "info"):  # a note
-            current = [segment.id, segment.id]
-            notes.append(current)
-            if role == "info":
-                info_starts.add(segment.id)
+            if last_note is not None and last_note[1] == segment.id - 1 and _note_goes_on(source_text, segments, segment):
+                last_note[1] = segment.id  # "זמן הכנה:" and "50 דקות", or a tip that goes on to the next line
+                current = last_note
+                if role == "info":
+                    info_starts.add(last_note[0])  # the label says what the time or yield is for
+            else:
+                current = [segment.id, segment.id]
+                notes.append(current)
+                if role == "info":
+                    info_starts.add(segment.id)
+        last_note = current if role in ("tip", "info") else None
         previous = role
 
     def text_of(first: int, last: int, keep_labels: bool = False) -> str:
@@ -458,7 +547,7 @@ def build_draft_from_references(
     for group in ingredient_groups:
         ingredients = []
         for first, last in group["items"]:
-            text = _line(_without_final_period(text_of(first, last)))
+            text = _line(_without_final_period(text_of(first, last, keep_labels=first in purpose_items)))
             if text:
                 ingredients.append({"text": text, "quantity": find_quantity(text)})
         if ingredients:
@@ -501,6 +590,87 @@ def build_draft_from_references(
     if not ingredient_list and not step_list:
         issues.append(schemas.Issue(kind="missing_information", message="לא נמצאו בטקסט מצרכים או שלבי הכנה."))
     return _draft(title, servings, ingredient_list, step_list, note_list, category_id, subcategory_id, issues)
+
+
+def _heading_of_what_follows(role: str, segments: list[Segment], labels: dict[int, str], segment: Segment) -> str:
+    """A heading heads the section that follows it: labeled a step heading but followed by ingredients
+    ("הגרסה שלי:" before the list), it is the ingredients' heading, and the other way round."""
+    for after in segments[segment.id :]:
+        following = labels.get(after.id)
+        if following in (None, "continues", "not_recipe"):
+            continue
+        if role == "step_heading" and following == "ingredient":
+            return "ingredient_heading"
+        if role == "ingredient_heading" and following == "step":
+            return "step_heading"
+        return role
+    return role
+
+
+def _title_line_end(source_text: str, segments: list[Segment], labels: dict[int, str], number: int) -> int:
+    """The last passage of the title: the labeled one, or, when it is only a label ("ארוחת בוקר של
+    שישי:"), the rest of its line too, unless that is an ingredient list or a step."""
+    segment = segments[number - 1]
+    if not ends_with_colon(source_text, segment):
+        return number
+    rest = [s for s in segments[number:] if s.line == segment.line]
+    if not rest or any(labels.get(s.id) in ("ingredient", "ingredient_heading", "step", "step_heading") for s in rest):
+        return number
+    return rest[-1].id
+
+
+def _in_rejected_list(
+    source_text: str, segments: list[Segment], labels: dict[int, str], segment: Segment, ingredient_lines: set[int]
+) -> bool:
+    """Is this an item of a list that a rejected passage introduces on the same line ("הסוד: X, Y"
+    after an introduction), while the recipe's own ingredients are on other lines?"""
+    before = [s for s in segments[: segment.id - 1] if s.line == segment.line]
+    label = next((s for s in reversed(before) if ends_with_colon(source_text, s)), None)
+    if label is None or labels.get(label.id) not in ("not_recipe", "title"):
+        return False
+    return bool(ingredient_lines - {segment.line})
+
+
+def _is_sentence(source_text: str, segment: Segment) -> bool:
+    """A passage that ends a sentence ("מחממים תנור מראש."), not a label: never a heading."""
+    if ends_with_colon(source_text, segment):
+        return False
+    return bool(re.search(r"[.!?]\W*$", _without_end_decoration(segment.text(source_text))))
+
+
+def _rest_of_line(source_text: str, segments: list[Segment], segment: Segment) -> Segment | None:
+    """For a label ("להגשה:"), the one passage after it on its line, if that is all the line holds."""
+    if not ends_with_colon(source_text, segment) or segment.id >= len(segments):
+        return None
+    rest = segments[segment.id]  # passages are numbered from 1: this is the next one
+    if rest.line != segment.line or (rest.id < len(segments) and segments[rest.id].line == segment.line):
+        return None
+    return rest
+
+
+def _note_goes_on(source_text: str, segments: list[Segment], segment: Segment) -> bool:
+    """Does this passage continue the note before it? On the same line, unless a sentence ended
+    between them: after a label ("זמן הכנה:" then "50 דקות"), or where a tip after "טיפ:" was cut at
+    its comma like a list. On the next line, after a line that ends in the middle of a sentence."""
+    before = segments[segment.id - 2]
+    if before.line == segment.line:
+        return not source_text[before.start:segment.start].rstrip().endswith((".", "!", "?"))
+    return before.text(source_text).rstrip().endswith((",", "-", "–", "—"))
+
+
+def _servings(value: str | None, labels: dict[int, str], source_text: str, segments: list[Segment]) -> str | None:
+    """The servings the model gave, only with evidence: written in a passage that says it is a yield
+    ("12 יחידות", "Serves 2", "מצרכים (4 מנות):") and that the model did not reject as not part of
+    the recipe. Appearing somewhere in the text is not enough ("100 גרם" from an instruction in the
+    text, a pan size, an ingredient line): without evidence the field stays empty."""
+    wanted = normalize(_clean(value or ""))
+    if not wanted:
+        return None
+    for segment in segments:
+        text = segment.text(source_text)
+        if labels.get(segment.id) not in (None, "not_recipe") and wanted in normalize(text) and _YIELD.search(text):
+            return _clean(value or "")
+    return None
 
 
 def _labels(output: ReferenceOutput, source_text: str, segments: list[Segment]) -> dict[int, str]:
@@ -549,23 +719,34 @@ def _title(
     original: _Original,
     issues: list[schemas.Issue],
     title_line: str | None = None,
+    rejected: set[str] | None = None,
 ) -> str:
     """The model writes the title itself (it may be composed); a title it says is written in the
     text must be found there. If it is not, but the answer labeled a passage as the title line,
     that passage's own words are the title: the label says which words are meant, so nothing is
     guessed. Decoration at its end (emoji) is left out, as at the start of lines."""
     title = _without_end_decoration(title)[:MAX_TITLE_LENGTH]
+    if rejected and normalize(title) in rejected:
+        title, written = title_line or "", bool(title_line)  # never a passage rejected as not part of the recipe
     if written and title and _starts_a_line(title, source_text):
         return title
     if written and title_line:
         return title_line
     if not title:
         title = first_line(source_text)
-    if written and not original.contains(title):
+    if written and not original.contains(title) and not _words_in_text(title, source_text):
         issues.append(_not_found("הכותרת", title))
     else:  # composed, or words from inside a sentence: the text has no title line with them
-        issues.append(_missing_title(title))
+        issues.append(_missing_title(title, from_text=_words_in_text(title, source_text)))
     return title
+
+
+def _words_in_text(title: str, source_text: str) -> bool:
+    """Is every word of the title written somewhere in the text (a title composed from the text's own
+    words, as the model was asked), even if not in that order?"""
+    text = normalize(source_text).lower()
+    words = [w for w in re.findall(r"\w+", normalize(title).lower()) if len(w) > 1]
+    return bool(words) and all(w in text for w in words)
 
 
 def _starts_a_line(title: str, source_text: str) -> bool:
@@ -602,13 +783,27 @@ def _referenced_issues(
     return issues
 
 
+def _only_in_step_point(words: str, step: str) -> schemas.Issue:
+    return schemas.Issue(
+        kind="ingredient_only_in_steps",
+        message=f'המצרך "{words}" מופיע באופן ההכנה אבל לא ברשימת המצרכים. ייתכן שהמתכון המקורי לא מפרט אותו; '
+        "הוא לא נוסף לרשימה ולא נקבעה לו כמות. הוסיפו אותו אם צריך.",
+        quote=_short(step, 300),
+    )
+
+
 def _only_in_steps(
     output: ReferenceOutput, source_text: str, segments: list[Segment], steps: list[str], lines: list[str]
 ) -> list[schemas.Issue]:
-    """An ingredient the model says only the steps use: shown if that step writes those words and
-    no ingredient line has them (in any of their usual forms: "התותים", "בתותים", "תות")."""
+    """Ingredients that a step uses and no ingredient line has: a recipe whose source leaves one out of
+    its list ("מקשטים בתותים", no strawberries listed) is kept as written, with this review point.
+    Found by the notebook itself (common ingredient words, app/extraction/ingredient_words.py), and
+    from the model's claims, each shown only if that step writes those words and no ingredient line
+    has them (in any of their usual forms: "התותים", "בתותים", "תות"). One point per ingredient."""
     listed = normalize(" | ".join(lines)).lower()
-    issues = []
+    found = ingredient_words.only_in_steps(lines, steps)
+    issues = [_only_in_step_point(words, step) for words, step in found]
+    shown = normalize(" | ".join(words for words, _ in found)).lower()
     for item in output.only_in_steps[:MAX_MODEL_ISSUES]:
         words = _clean(item.words)
         if not words or len(words.split()) > 4 or not 1 <= item.passage <= len(segments):
@@ -618,15 +813,10 @@ def _only_in_steps(
             continue  # not what that passage writes
         if not any(normalize(passage) in normalize(step) for step in steps):
             continue  # not a step
-        if _listed(words, listed):
-            continue
-        issues.append(
-            schemas.Issue(
-                kind="ingredient_only_in_steps",
-                message=f'המצרך "{words}" מופיע באופן ההכנה אבל לא ברשימת המצרכים. הוסיפו אותו אם צריך.',
-                quote=_short(passage, 300),
-            )
-        )
+        if _listed(words, listed) or shown and _listed(words, shown):
+            continue  # in the list, or already pointed out
+        issues.append(_only_in_step_point(words, passage))
+        shown = f"{shown} | {normalize(words).lower()}"
     return issues
 
 

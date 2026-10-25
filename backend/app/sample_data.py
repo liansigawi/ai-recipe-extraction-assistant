@@ -13,10 +13,25 @@ labels them as examples. You can edit or delete them like any other recipe.
 from app.schemas import Ingredient, IngredientGroup, RecipeInput, Source, StepGroup
 
 # The three starter categories from the brief: (name, description). After this, only you manage categories.
+# The model chooses a category by these descriptions, which say what you mean by each: sweet desserts;
+# generally savory dairy-based meals ("light" is your own label, not about calories); generally meat-
+# or poultry-based main dishes. A dish without a clear fit stays unclassified. Migrations 0003 and 0004
+# brought older databases up to these.
 STARTER_CATEGORIES: list[tuple[str, str]] = [
-    ("קינוחים", "עוגות, עוגיות, מאפים מתוקים וקינוחים"),
-    ("בישולים", "מנות עיקריות ותבשילים"),
-    ("ארוחות קלילות", "ארוחות קלות ומהירות, למשל פיצה מבצק יוגורט; לא בהכרח דל קלוריות"),
+    (
+        "קינוחים",
+        "קינוחים מתוקים, כולל קינוחי חלב: עוגות, עוגיות, מאפים מתוקים, פאי וטארטים מתוקים וקינוחים קרים. "
+        "מתוק גם כשיש בו קצת מלח או גבינה. לא משקאות.",
+    ),
+    (
+        "בישולים",
+        "בדרך כלל מנות עיקריות על בסיס בשר או עוף.",
+    ),
+    (
+        "ארוחות קלילות",
+        "בדרך כלל ארוחות מלוחות על בסיס חלבי (גבינות, יוגורט, שמנת), למשל טורטיות במילוי גבינה או פיצה "
+        "מבצק יוגורט. \"קלילות\" הוא שם אישי, לא עניין של קלוריות או גודל מנה.",
+    ),
 ]
 
 

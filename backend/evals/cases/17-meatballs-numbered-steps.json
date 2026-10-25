@@ -53,8 +53,6 @@
    "@savta.rachel.kitchen",
    "#קציצות #בישולים_של_סבתא #אוכל_ביתי #מתכונים"
   ],
-  "warnings": [
-   "ingredient_only_in_steps"
-  ]
+  "source_gaps": [{"ingredient": "כמון"}]
  }
 }

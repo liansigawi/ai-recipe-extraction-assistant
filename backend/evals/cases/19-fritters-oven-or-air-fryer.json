@@ -2,7 +2,7 @@
  "about": "English chickpea and zucchini fritters: a size in parentheses ('1 (15 oz) can'), a range, 'a pinch' and 'a handful', no-amount lines and a 'for serving' line inside the list, a sauce group, yield and time on one line, shared steps followed by separate Oven and Air fryer passages with different times, and a substitution tip. Written independently as a held-out case.",
  "expect": {
   "title": "Crispy Chickpea & Zucchini Fritters",
-  "category": "ארוחות קלילות",
+  "category_one_of": ["ארוחות קלילות", null],
   "ingredient_groups": [
    {
     "name": null,
@@ -53,7 +53,6 @@
    "Recipe inspired by @greenplate.daily",
    "Save this for your next meal prep and tag me if you make it",
    "#fritters #airfryer #vegetarian #mealprep"
-  ],
-  "warnings": []
+  ]
  }
 }

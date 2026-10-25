@@ -14,8 +14,13 @@ after normalizing only spacing, Unicode form and invisible marks (review.normali
     "preparation": ["..."]                    every preparation sentence: must be in the steps
     "tips": ["..."]                           every tip: in the notes or the steps
     "step_groups": ["בסיר לחץ"]               these step groups must exist
-    "facts": ["Ready in 10 minutes"]          must be kept somewhere in the recipe
-    "yield": {"text": "12 יחידות", "number": "12"}   in the servings, or the text anywhere in the recipe
+    "facts": ["Ready in 10 minutes"]          must be kept somewhere in the recipe (split over two adjacent
+                                              notes or steps is reported apart, as minor)
+    "yield": {"text": "12 יחידות", "number": "12"}   in the servings, or the text anywhere in the recipe;
+                                              without "yield" the servings must stay empty
+    "source_gaps": [{"ingredient": "בתותים"}]   the source recipe itself omits this ingredient from its list
+                                              (the steps use it): it must not be added, and the app should
+                                              point it out; a problem of the source, not of the extraction
     "excluded": ["..."]                       not recipe content: in no title, ingredient, step, note or heading
     "never_suggested": ["Snacks"]             nowhere at all, review points included (no new categories)
     "warnings": ["ingredient_only_in_steps"]  review points the app must show
@@ -26,6 +31,7 @@ and the report counts problems and failed checks separately. `checked` counts th
 area, so a report can say what was covered and what was not.
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -35,16 +41,17 @@ from app.extraction.review import FIXED_MESSAGES, PROMOTION_FLAG, TIP_IN_LIST_FL
 KNOWN_EXPECTATIONS = {
     "is_recipe", "title", "title_acceptable", "title_composed", "category", "category_one_of",
     "ingredient_groups", "preparation", "tips", "step_groups", "facts", "yield", "excluded",
-    "never_suggested", "warnings",
+    "never_suggested", "warnings", "source_gaps",
 }
 
 # The areas a case can check, in report order.
 AREAS = [
     "wording", "ingredient lines", "quantities", "groups", "preparation", "tips", "facts",
-    "not recipe content", "title", "category", "warnings",
+    "not recipe content", "title", "category", "source gaps", "warnings",
 ]
-# Safe outcomes: worth a look, but the draft is not wrong (the person classifies; a review point is missing).
-MINOR = {"category_unresolved", "missing_warning"}
+# Minor findings: the draft is not wrong, but a check failed (the person classifies; a review point is
+# missing; a fact or tip is kept, but split over two adjacent entries). They still count as failed checks.
+MINOR = {"category_unresolved", "missing_warning", "source_gap_unflagged", "split_fact", "split_tip"}
 # The app's own review points that point at real problems (not remarks the model made up).
 PROBLEM_FLAGS = {"not_found_in_source", "quantity_not_in_line", "invalid_reference", "not_extracted"}
 
@@ -77,7 +84,8 @@ class Result:
 
     @property
     def all_passed(self) -> bool:
-        return not any(not f.minor for f in self.findings)
+        """Every check passed: no finding at all, minor ones included."""
+        return not self.findings
 
 
 def check(
@@ -120,7 +128,7 @@ def check(
         if text in altered:
             fail("altered", "wording", f'{what} not in the original as written: "{text}"', f"wording:{text}", text)
 
-    _check_ingredients(expect, lines, steps, draft.notes, result, fail)
+    _check_ingredients(expect, lines, steps, draft.notes, headings, result, fail)
     _check_text(expect, steps, draft, headings, result, fail)
 
     # Not recipe content: one problem per draft element that holds it, however many phrases match.
@@ -155,6 +163,19 @@ def check(
             else:
                 fail("category_wrong", "category", f"category {actual!r}, expected {allowed}", "category")
 
+    # Source gaps: the source recipe omits an ingredient its steps use. Not an extraction mistake;
+    # the draft must not add it, and the app should point it out.
+    for gap in expect.get("source_gaps", []):
+        word = gap["ingredient"]
+        result.count("source gaps", 2)
+        if any(_mentions(word, text) for _, text, _ in lines):
+            fail("invented_ingredient", "source gaps", f'the source does not list "{word}", but the draft adds it as an ingredient', f"gap:{word}")
+        said = [f"{i.message} {i.quote or ''}" for i in draft.issues if i.kind == "ingredient_only_in_steps"]
+        if not any(_mentions(word, text) for text in said):
+            fail("source_gap_unflagged", "source gaps",
+                 f'the source recipe omits "{word}" from its ingredient list (its steps use it); the app did not point it out',
+                 f"gap:{word}:flag")
+
     # Review points the app must show.
     kinds = {issue.kind for issue in draft.issues}
     for kind in expect.get("warnings", []):
@@ -168,18 +189,21 @@ def check(
     return result
 
 
-def _check_ingredients(expect, lines, steps, notes, result: Result, fail) -> None:
+def _check_ingredients(expect, lines, steps, notes, headings, result: Result, fail) -> None:
     groups = expect.get("ingredient_groups")
     if groups is None:
         return
     expected = [(g.get("name"), text, quantity) for g in groups for text, quantity in g["items"]]
     drafted = [normalize(t) for _, t, _ in lines]
     elsewhere = normalize(" | ".join([*steps, *notes]))
+    heading_text = normalize(" | ".join(headings))
     result.count("ingredient lines", len(expected))
     positions: list[int] = []
+    matched: list[int | None] = []  # for each expected line, the draft line it was found as (each used once)
     for name, text, quantity in expected:
-        if normalize(text) in drafted:
-            index = drafted.index(normalize(text))
+        index = next((i for i, line in enumerate(drafted) if line == normalize(text) and i not in positions), None)
+        matched.append(index)
+        if index is not None:
             positions.append(index)
             result.count("quantities")
             got = lines[index][2]
@@ -189,6 +213,8 @@ def _check_ingredients(expect, lines, steps, notes, result: Result, fail) -> Non
                 )
         elif normalize(text) in elsewhere:
             fail("misplaced_ingredient", "ingredient lines", f'ingredient kept as a step or note: "{text}"', f"ingredient:{text}", text)
+        elif normalize(text) in heading_text:
+            fail("misplaced_ingredient", "ingredient lines", f'ingredient kept as a group heading: "{text}"', f"ingredient:{text}", text)
         else:
             fail("missing_ingredient", "ingredient lines", f'ingredient line missing: "{text}"', f"ingredient:{text}", text)
     wanted = {normalize(text) for _, text, _ in expected}
@@ -201,10 +227,10 @@ def _check_ingredients(expect, lines, steps, notes, result: Result, fail) -> Non
         fail("order", "ingredient lines", "ingredient lines are not in the text's order", "order:ingredients")
 
     # Groups: each expected group's lines in one draft group, with an acceptable name, groups not merged.
-    by_line = {normalize(t): name for name, t, _ in lines}
+    owner = [number for number, group in enumerate(groups) for _ in group["items"]]  # each expected line's group
     used: dict[str | None, str] = {}
-    for group in groups:
-        names = [by_line[normalize(t)] for t, _ in group["items"] if normalize(t) in by_line]
+    for number, group in enumerate(groups):
+        names = [lines[index][0] for k, index in enumerate(matched) if owner[k] == number and index is not None]
         if not names:
             continue
         result.count("groups")
@@ -224,6 +250,7 @@ def _check_text(expect, steps, draft, headings, result: Result, fail) -> None:
     step_text = normalize(" | ".join(steps))
     note_text = normalize(" | ".join(draft.notes))
     ingredient_text = normalize(" | ".join(i.text for g in draft.ingredient_groups for i in g.ingredients))
+    heading_text = normalize(" | ".join(headings))
     all_text = normalize(" | ".join([draft.title, draft.servings or "", *headings, *steps, *draft.notes]))
 
     positions = []
@@ -234,6 +261,8 @@ def _check_text(expect, steps, draft, headings, result: Result, fail) -> None:
             positions.append(step_text.find(target))
         elif target in note_text or target in ingredient_text:
             fail("misplaced_step", "preparation", f'preparation kept as a note or ingredient: "{piece}"', f"preparation:{piece}", piece)
+        elif target in heading_text:
+            fail("misplaced_step", "preparation", f'preparation kept as a group heading: "{piece}"', f"preparation:{piece}", piece)
         else:
             fail("missing_step", "preparation", f'preparation missing: "{piece}"', f"preparation:{piece}", piece)
     if positions != sorted(positions):
@@ -247,6 +276,8 @@ def _check_text(expect, steps, draft, headings, result: Result, fail) -> None:
             continue
         if target in ingredient_text:
             fail("misplaced_tip", "tips", f'tip kept as an ingredient: "{piece}"', f"tip:{piece}", piece)
+        elif _split(piece, [steps, draft.notes]):
+            fail("split_tip", "tips", f'tip kept, but split over adjacent entries: "{piece}"', f"tip:{piece}", piece)
         else:
             fail("missing_tip", "tips", f'tip missing: "{piece}"', f"tip:{piece}", piece)
 
@@ -258,14 +289,58 @@ def _check_text(expect, steps, draft, headings, result: Result, fail) -> None:
 
     for piece in expect.get("facts", []):
         result.count("facts")
-        if normalize(piece) not in all_text:
+        if normalize(piece) in all_text:
+            continue
+        if _split(piece, [steps, draft.notes]):
+            fail("split_fact", "facts", f'kept, but split over adjacent entries: "{piece}"', f"fact:{piece}", piece)
+        else:
             fail("missing_fact", "facts", f'not kept anywhere in the recipe: "{piece}"', f"fact:{piece}", piece)
+    result.count("facts")  # the servings field
     if "yield" in expect:
-        result.count("facts")
         wanted = expect["yield"]
         in_servings = draft.servings is not None and wanted["number"] in draft.servings
-        if not in_servings and normalize(wanted["text"]) not in all_text:
+        if draft.servings and not in_servings:
+            fail("wrong_servings", "facts", f'servings "{draft.servings}", but the yield is "{wanted["text"]}"', "fact:yield", draft.servings)
+        elif not in_servings and normalize(wanted["text"]) not in all_text:
             fail("missing_fact", "facts", f'the yield "{wanted["text"]}" is neither in the servings nor kept anywhere', "fact:yield")
+    elif draft.servings:
+        fail("unsupported_servings", "facts", f'servings "{draft.servings}", but the text gives no yield', "fact:yield", draft.servings)
+
+
+_PREFIXES = "ומבלכשה"
+_PUNCTUATION = re.compile(r"[\s.,;:!?()\-–—|•]+")
+
+
+def _forms(word: str) -> set[str]:
+    """A Hebrew or English word without one or two attached letters, singular or plural ("בתותים" ->
+    "תותים", "תות"), for matching the same ingredient however a sentence writes it."""
+    word = normalize(word).lower().strip(".,;:!?()\"'״׳")
+    bases = {word}
+    for _ in range(2):
+        bases |= {b[1:] for b in bases if b[:1] in _PREFIXES and len(b) > 3}
+    forms = set(bases)
+    forms |= {b[:-2] for b in bases if b.endswith(("ים", "ות", "es")) and len(b) > 4}
+    forms |= {b[:-1] for b in bases if b.endswith("s") and len(b) > 3}
+    return {f for f in forms if len(f) >= 3}
+
+
+def _mentions(word: str, text: str) -> bool:
+    """Does the text mention the ingredient (its first word, in any form)?"""
+    first = word.split()[0] if word.split() else word
+    text = normalize(text).lower()
+    return any(form in text for form in _forms(first))
+
+
+def _split(piece: str, sequences: list[list[str]]) -> bool:
+    """Is the piece kept, but over two or three adjacent entries ("זמן הכנה" and "50 דקות")?"""
+    loose = lambda text: _PUNCTUATION.sub(" ", normalize(text)).strip()  # noqa: E731
+    target = loose(piece)
+    for entries in sequences:
+        for start in range(len(entries)):
+            for end in range(start + 2, min(start + 3, len(entries)) + 1):
+                if target and target in loose(" ".join(entries[start:end])):
+                    return True
+    return False
 
 
 def _flagged(kind: str, about: tuple[str, ...], draft: schemas.RecipeInput) -> bool:
@@ -296,7 +371,8 @@ def review_warnings(expect: dict[str, Any], draft: schemas.RecipeInput | None) -
 
     Necessary: the points the case expects, points about real problems (wording not in the
     original, an unusable quantity, an invalid reference, a line flagged as promotion, recipe
-    text left out), a composed title, an unresolved category where none fits. Unnecessary:
+    text left out), a composed title, an unresolved category (where none fits, or the draft has
+    none: the miss itself is counted under category). Unnecessary:
     everything else, such as model remarks the case does not call for, or "not placed" points
     about text that is not part of the recipe. A point shown twice is also a duplicate.
     """
@@ -320,6 +396,9 @@ def review_warnings(expect: dict[str, Any], draft: schemas.RecipeInput | None) -
         quote = normalize(issue.quote or "")
         if issue.kind in expected or issue.kind in PROBLEM_FLAGS:
             necessary = True
+        elif issue.kind == "ingredient_only_in_steps":
+            said = f"{issue.message} {issue.quote or ''}"
+            necessary = any(_mentions(gap["ingredient"], said) for gap in expect.get("source_gaps", []))
         elif issue.kind == "other" and TIP_IN_LIST_FLAG in issue.message:  # "this tip may be an ingredient"
             necessary = any(quote and quote == normalize(t) for g in expect.get("ingredient_groups", []) for t, _ in g["items"])
         elif issue.kind == "other":
@@ -327,7 +406,9 @@ def review_warnings(expect: dict[str, Any], draft: schemas.RecipeInput | None) -
         elif issue.kind == "missing_title":
             necessary = bool(expect.get("title_composed"))
         elif issue.kind == "classification_unresolved":
-            necessary = None in allowed
+            # It explains an empty category field. Where a category fits, the miss is counted once,
+            # under category (minor); the point that says so is not a second mistake.
+            necessary = None in allowed or draft.category_id is None
         elif issue.kind == "unused_text":
             necessary = any(quote and (quote in normalize(p) or normalize(p) in quote) for p in recipe)
         else:

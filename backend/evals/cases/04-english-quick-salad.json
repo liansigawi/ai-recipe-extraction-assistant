@@ -2,7 +2,7 @@
   "about": "Invented. An English recipe stays in English; 'to taste' is not an amount; a range with an en dash and a can size stay as written. A quick lunch: a light meal.",
   "expect": {
     "title": "Chickpea & Feta Lunch Salad",
-    "category": "ארוחות קלילות",
+    "category_one_of": ["ארוחות קלילות", null],
     "ingredient_groups": [
       {
         "name": null,

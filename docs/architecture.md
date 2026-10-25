@@ -169,8 +169,9 @@ ImportPanel ── POST /api/imports/text {text, use_model} ──► app/api/im
      claude.py (or ollama.py): one request, with structured output (the JSON schema of
      extraction/output.py: one required role per passage, category ids limited to the existing
      ones), a 16,000-token answer limit, a timeout (120 s; 600 s locally) and, for Claude, two
-     automatic retries for temporary errors. The local model then gets a second, short request:
-     the category of the finished draft (one retry on a server error).
+     automatic retries for temporary errors. The local model's first request has no categories
+     in it (roles and "is this a recipe" only); a second, short request then asks the category
+     of the finished draft (one retry on a server error; if it fails, the draft is unclassified).
   3. review.py: copies each labeled passage from the original, checks every other part of the
      answer and builds a draft with issues (below).
   4. crud.create_import: checks the category ids against the database again, then saves the
@@ -206,9 +207,18 @@ schema's fields, and is checked like any other answer. Evaluation case 08 tests 
   model writes no messages: it points at a passage and names the kind (`unclear_text`,
   `ambiguous_alternative`, `multiple_recipes`, or a request inside the text, shown as `other`),
   and the passage is quoted; a point without its passage is not shown. "Used in the steps but not
-  listed" is shown only if the step writes those words and no ingredient line has them. Missing
-  information (an oven temperature, a baking time) is decided here, from the text. A tip labeled
-  inside the ingredient list gets a point: it may be an ingredient. The same point is never shown twice;
+  listed" (a source that leaves an ingredient out of its list) is found by the backend itself, from
+  a general list of ingredient words (`ingredient_words.py`), and from the model's claims, each
+  shown only if the step writes those words and no ingredient line has them; nothing is added to
+  the list and no amount is guessed. Missing information (an oven temperature, a baking time) is
+  decided here, from the text. A tip labeled inside the ingredient list gets a point: it may be an
+  ingredient. The same point is never shown twice;
+- the surrounding structure corrects a label: a short line inside the ingredient list that says
+  what it is for ("לציפוי - מלח מאלדון", "קרח להגשה", "Lemon wedges, for serving"), or a line
+  under a "להגשה:" heading, is an ingredient, as written, even when the model labeled it a tip. A
+  time label and its value on one line, or a tip cut at a comma, are one note;
+- servings are kept only from a passage that says it is the yield ("12 יחידות", "Serves 2"), and
+  a passage labeled "not part of the recipe" never supplies the servings or the title;
 - in text mode, issue messages from the model that mention categories are dropped, so no text in
   the draft can suggest a new category; quotes that are not in the original are removed; the
   model's own issues are kept, at most 20.
@@ -245,7 +255,8 @@ outcome for links (milestone 5).
 **Migrations.** Schema changes are Alembic scripts in `backend/migrations/versions/`: `0001`
 creates the milestone-3 tables statement for statement (a test compares it with
 `tests/fixtures/milestone3_schema.sql`); `0002` adds `status`, `issues` and `recipe_imports`
-with `ALTER TABLE ... ADD COLUMN`, which keeps the existing rows in place. At start-up,
+with `ALTER TABLE ... ADD COLUMN`, which keeps the existing rows in place; `0003` replaces the
+three starter categories' descriptions, only where a description is still the starter text. At start-up,
 `app/migrate.py`:
 - creates a new database with every migration, then seeds it;
 - recognizes a milestone-3 database (tables but no `alembic_version`) and marks it as `0001`;
@@ -325,9 +336,11 @@ redirect; a redirect would send the browser past the Vite proxy.
 │   │   ├── sample_data.py    the starter categories and the four invented sample recipes
 │   │   ├── api/              recipes.py, categories.py, imports.py: the routes
 │   │   ├── extraction/       output.py (answer schema), prompt.py, claude.py / ollama.py (the model call),
-│   │   │                     choose.py (which one), segments.py (numbered passages), review.py (checks)
+│   │   │                     choose.py (which one), segments.py (numbered passages), review.py (checks),
+│   │   │                     quantity.py (quantities), ingredient_words.py (ingredients only in the steps)
 │   │   └── importers/        instagram.py (milestone 1); website.py, screenshots.py (milestone 5)
-│   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py, 0002_imports_and_review.py
+│   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py, 0002_imports_and_review.py,
+│   │                         0003_clearer_category_descriptions.py
 │   ├── scripts/              probe_instagram.py: live checks, run by hand
 │   ├── tests/                pytest: offline, fixtures and in-process API calls only; never calls Claude
 │   └── evals/                the extraction quality check, run by hand; cases/ (invented texts), compare.py
@@ -402,6 +415,19 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-21 | Review points: the model points, the backend writes fixed messages and checks the evidence; missing information is decided from the text | The model's own messages were sometimes nonsense ("אין מידע על טמפרטורה של הכביסה…", shown twice, on a recipe that gives its times) and missed real ones (strawberries only in the steps). |
 | 2026-10-21 | The local model is asked for the category in a second, short request about the finished draft; if it fails, the first answer's category stays. Ollama server errors on a chat request are retried once | Measured on the same 25 drafts: 2 wrong categories instead of 6 (more left unresolved, which the person settles). About 1 s more per import. The retry: Ollama's GPU runner crashed twice in about 350 requests and worked again on the next one. |
 | 2026-10-21 | No example in the instructions or the answer schema may appear in an evaluation case (a test enforces it) | Several examples had come from the cases themselves, including the user's caption, which flatters the measurement. |
+| 2026-10-25 | The surrounding structure corrects a label: inside the ingredient list (after an ingredient, before any step), a short line that says what it is for ("לציפוי - …", "… להגשה", "For the topping - …", "להגשה: גלידת וניל") is an ingredient, as written; lines under a "להגשה:" heading too | The model labeled such a line a tip when it ended the list right before the preparation heading (measured: the same line in the middle of the list, or without its purpose word, was an ingredient). A warning to move it by hand was not the fix the user wanted. A sentence, or such a line after the steps, stays a note. |
+| 2026-10-25 | Servings only from a passage that says it is the yield; a passage labeled "not part of the recipe" never supplies the servings or the title | Appearing in the text was not evidence: "100 גרם" came from an instruction inside the text, "20×20" from a pan size, "4 טורטיות" from an ingredient line. |
+| 2026-10-25 | Notes cut within one line (a label and its value, a tip cut at its comma like a list) or ending mid-sentence are joined | "זמן הכנה:" and "50 דקות" were two notes; the evaluation now reports such splits apart from missing information. |
+| 2026-10-25 | "Used only in the steps" is found by the backend from a general list of ingredient words (`ingredient_words.py`, written without looking at the cases), as well as from the model's claims; what the dish is served with ("מגישים עם אורז") is left out | The model noticed 3 of 6 source gaps. On all 469 saved drafts the word list pointed out no ingredient that the draft listed; the 6 it raised beyond the known gaps were all ingredients the model's draft had dropped. |
+| 2026-10-25 | A source recipe that omits an ingredient is a *source gap* in the evaluation, apart from extraction mistakes; "all checks passed" counts minor findings and required review points | The vanilla torte's strawberries were counted as a missed ingredient although the source never lists them; "all checks passed" had ignored minor failures. |
+| 2026-10-25 | Clearer category descriptions (migration 0003 replaces a description only while it is still the starter text) | Measured on the same 50 drafts: 43 right and 7 wrong instead of 38–40 and 8–9, no dessert left unresolved, and the salted honey tart under desserts. A description the person changed is never overwritten; the migration's backup runs first. |
+| 2026-10-25 | A section title ("מצרכים", "Ingredients") is never a group name, also beside other groups | It named the main group in two cases with a second, real group. |
+| 2026-10-25 (2) | **Recognition apart from classification**: the local model's first request labels the passages and says whether the text is a recipe with no categories in view (`REFERENCE_LABELING_PROMPT`, `ReferenceLabels`); the category comes only from the second request, and a failed category request leaves the recipe unclassified | The user's drink caption was refused twice as "not a recipe". Its first decision, `is_recipe`, was close to a coin flip with the categories in the request: false in 8 of 12 imports (P(true) 0.10–0.80); without them true in 12 of 12 (P(true) at least 0.995). Other drinks and the restaurant review were unaffected (1.00 either way). No second check was added: with this cause removed, none was needed for that caption. |
+| 2026-10-25 (2) | "Not a recipe" from the model is overruled only by both ingredients and steps in its labels | Ingredients alone (a shopping list) must not become a recipe; the case that motivated the rule had five ingredients and a step. |
+| 2026-10-25 (2) | A colon cuts a line only after a label of at most five words; a sentence that ends in a colon keeps its list | An introduction ("…the secret turned out simple: salt, a lot of garlic and no vinegar") became two ingredient lines beside the real list (case 26). A list after a rejected introduction label is also kept out when the recipe has its own list. |
+| 2026-10-25 (2) | A passage labeled a heading that ends a sentence is a step (or an ingredient); a title passage that is only a label takes the rest of its line; the prompt says a title names the dish and an introduction that mentions it is not one | "מחממים תנור מראש." was a heading (case 18); the title was "ארוחת בוקר של שישי" without the dish (case 14), or an introduction sentence (case 24). |
+| 2026-10-25 (2) | Categories by the user's meaning (migration 0004): sweet desserts, dairy desserts included; generally savory dairy-based meals; generally meat- or poultry-based main dishes; no clear fit stays unclassified. The classification prompt says a category's description decides over its name, and the dish summary names what it is mainly made of | Measured on the same 60 drafts against the re-annotated expectations: 54 right, 5 wrong, 1 unresolved; the user's descriptions with the previous wording 46–49 right; the previous descriptions 44. The name "בישולים" (cooked dishes) had drawn vegetarian dishes. |
+| 2026-10-25 (2) | The evaluation reports import success apart from accuracy within drafts, and a line or step kept as a group heading as misplaced | A refused recipe has no lines to check: without its own count it would vanish from the per-area numbers. |
 | 2026-10-20 | Ollama requests send `"shift": false` | Without it, an answer that fills the working memory makes Ollama drop the oldest half (the instructions and the text) and continue: one runaway answer ran 28,000 tokens until the 10-minute timeout. Now it stops at the limit and the import reports it. |
 | 2026-10-20 | No compact-JSON request, although it is about 30% faster | Measured on the 20 cases: more wrong quantities in both modes (references 16 instead of 11) and fewer drafts without corrections (8 instead of 10). Quality first. |
 
@@ -429,8 +455,8 @@ redirect; a redirect would send the browser past the Vite proxy.
 - **One import at a time per page**, and the import screen has a single text box (no multiple
   recipes in one paste: the model takes the main one and flags `multiple_recipes`).
 - **A local model's wrong category is not caught.** The backend can check that a category exists,
-  not that it fits: Qwen3 8B put a lemonade under desserts and a honey tart under main dishes. The
-  review screen shows the chosen category, and the person decides.
+  not that it fits: Qwen3 8B sometimes puts a vegetarian main dish under "בישולים". The review
+  screen shows the chosen category, and the person decides; an unclassified recipe can be saved.
 - **Quantities follow fixed rules, not judgment.** `quantity.py` knows the common Hebrew and
   English amounts and units; an unusual unit or wording gives no quantity (never a wrong one
   invented), and the line itself is always complete. Words that look like amounts in an
@@ -439,8 +465,11 @@ redirect; a redirect would send the browser past the Vite proxy.
   in the notes (calls to action are flagged); a sentence that goes on to the next line may become
   two steps. Nothing is lost or reworded, but the draft can need moving or deleting. Run to run the
   labels vary (the same model, temperature 0, on a GPU).
-- **"Used only in the steps" depends on the model noticing it**; the backend only confirms it.
-  Missing information is checked for baking only (temperature, time).
+- **"Used only in the steps" knows only common ingredient words** (about 300 ingredients, in
+  Hebrew and English, with their usual forms) and the model's claims. An ingredient outside the list,
+  named differently in the steps, or used in a clause that serves the dish with something else
+  ("מגישים עם אורז") is not pointed out. Missing information is checked for baking only
+  (temperature, time).
 - **Reference mode with Claude is untested here.** Its schema has one property per passage, named
   by the passage's opening words; no API key was available to check it against the Claude API.
   If it fails, `RECIPES_EXTRACTION_MODE=text` restores the earlier request.

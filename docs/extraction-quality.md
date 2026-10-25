@@ -20,18 +20,22 @@ expectations written by hand, in these **areas**:
 | groups | each group's lines together, with the text's own heading as its name; method groups (oven, pan…) |
 | preparation | **every** preparation sentence is in the steps, in order |
 | tips | every tip is in the notes or the steps |
-| facts | yield and times ("Ready in 10 minutes"): kept somewhere in the recipe |
+| facts | yield and times ("Ready in 10 minutes"): kept somewhere in the recipe; kept but split over two adjacent notes is *split* (minor), apart from *missing*; servings filled when the text gives no yield fail |
 | not recipe content | introductions, calls to action, hashtags, mentions: in no title, ingredient, step, note or heading |
 | title | the title, or one of the acceptable ones |
 | category | the category, or one of the acceptable ones; no new category suggested anywhere |
-| warnings | the review points the case requires (an ingredient only in the steps, missing oven details, a composed title, an unresolved category) |
+| source gaps | an ingredient the source recipe's steps use but its own list leaves out: the draft must not add it, and the app should point it out. A problem of the source, reported apart from extraction mistakes |
+| warnings | the review points the case requires (missing oven details, a composed title, an unresolved category) |
+| imports | apart from the areas above: was a recipe imported, was a text that is not a recipe refused. A refused recipe has no lines to check, so it would vanish from the per-area counts; it is counted here, and its case fails |
 
 **Problems and failed checks.** Several checks can see the same problem: an introduction kept as
 a note can contain two excluded phrases; a wrong category also hides the "unresolved" review
 point. Every failed check names its underlying problem, and the report counts problems apart from
-failed checks. An unresolved category (the person classifies; never wrong) and a missing review
-point are **minor**. A case's verdict says what was checked: "all 47 checks passed", or "2 of 47
-checks failed (2 problems)", never "no correction needed".
+failed checks. **Minor** findings are failed checks where the draft is not wrong: an unresolved
+category (the person classifies), a missing review point, a source gap not pointed out, a fact or
+tip kept but split over adjacent notes. They are reported apart, never hidden: a case's verdict
+says "all 47 checks passed" only when every applicable check passed, minor ones and required
+review points included; otherwise "3 of 47 checks failed (2 problems, 1 minor)".
 
 **What the app showed.** The evaluation's findings come from comparing with the expectations; the
 app does not know them. For each finding the report says whether the draft had a review point
@@ -39,7 +43,7 @@ about it. Separately, every review point the app showed is sorted: *necessary* (
 real problem, or the case requires it), *unnecessary* (a remark the case does not call for, or a
 point about text that is not recipe content), and *duplicate* (the same point twice).
 
-At most 30 requests per run, one at a time. Each case's raw answer, the draft, the findings and the
+At most 40 cases per run, one at a time (with the local model a recipe takes two requests: the labels, then the category). Each case's raw answer, the draft, the findings and the
 review points are saved in `data/evals/extraction/<run>/`, with a `report.md` and a
 `summary.json`. Two commands score saved runs again without calling a model:
 `evals.rescore` (the run's own drafts, today's expectations and checks) and `evals.rebuild` (the
@@ -48,14 +52,14 @@ alone). `evals.compare` puts two runs side by side.
 
 ## The cases
 
-Twenty-one invented texts in `backend/evals/cases/` (each `<name>.txt` + `<name>.json`) and four
+Thirty-three invented texts in `backend/evals/cases/` (each `<name>.txt` + `<name>.json`) and four
 real captions in `data/evals/local-cases/` (git-ignored: other people's content and the user's).
 
 | Case | What it checks |
 |---|---|
 | 01 yeast cake with groups | two ingredient groups, fractions, a time range, pan size and substitution as notes; intro, hashtags and a mention left out |
 | 02 stew, pressure cooker or pot | alternative methods in separate passages become separate step groups with their own times; no-quantity line; reused cooking liquid |
-| 03 ingredient only in steps | strawberries used in the steps but not listed: flagged, not added; an "or" inside a line kept; a yield line |
+| 03 ingredient only in steps | strawberries used in the steps but not listed (a source gap): pointed out, not added; an "or" inside a line kept; a yield line |
 | 04 English quick salad | English kept as written; "to taste" is not an amount; an en-dash range; a can size; "Ready in 10 minutes" kept |
 | 05 energy balls | a sweet snack between two categories: unresolved or desserts; no new category |
 | 06 lemonade | a drink fits no category: must stay unresolved; ice for serving is an ingredient |
@@ -69,9 +73,11 @@ real captions in `data/evals/local-cases/` (git-ignored: other people's content 
 | 14 shakshuka with an inline list | the title shares a line with an introduction; "מצרכים:" with a list on one line; a step continuing on the next line |
 | 15 cookies with emoji bullets | emoji bullets, two groups (one for decoration), keycap-emoji step numbers (1️⃣), a tip and a call to action with hashtags |
 | 16 chicken, one paragraph | a personal introduction, the ingredients after a label that also gives the servings, "סילאן או דבש", the method as one paragraph |
-| 17–21 **held out** | written for this round by a separate agent that saw only the quantity conventions and a format description, never the prompts, the code or the other cases, and never used for tuning: meatballs with numbered steps and number words; an orange cake with no oven temperature and "1 כוס + 2 כפות"; English fritters with oven and air-fryer methods; tortillas with no title and a purpose-first serving line; a frozen lemonade that fits no category |
+| 17–21 | held out in the 2026-10-21 round (their failures were examined in the 2026-10-25 round, so they are no longer held out): written by a separate agent that saw only the quantity conventions and a format description, never the prompts, the code or the other cases, and never used for tuning: meatballs with numbered steps and number words; an orange cake with no oven temperature and "1 כוס + 2 כפות"; English fritters with oven and air-fryer methods; tortillas with no title and a purpose-first serving line; a frozen lemonade that fits no category |
 | real-1 to real-3 | the milestone-1 Instagram captions: a vanilla torte with three groups and strawberries only in the steps; beef and ptitim with no title line and the cooking method across lines; a salted honey tart with `|` headings, two apostrophes (`גר’`, `גר׳`) and a topping line inside the list |
 | real-4 | the user's date, banana and coffee drink caption: an introduction, "הגירסה שלי:", five ingredient lines and one step; no category fits |
+| 22–26 | fresh in the morning round of 2026-10-25 (written by a separate agent, kept unread until measured), then used for fixes: a chicken and rice pot, salted caramel brownies, avocado and egg toast, a roasted tomato soup, brined pickles |
+| 27–33 **fresh** | written for the afternoon round of 2026-10-25 by a separate agent with the same restrictions, kept unread until measured: a watermelon drink with a personal introduction, ricotta-stuffed shells, harissa chicken (English), a no-bake cheesecake with no title line, a fish chraime, and two texts that are **not recipes** (a market haul whose lines start with amounts, a workshop announcement) |
 
 **How the expectations were written (2026-10-21).** Every passage of the 20 earlier cases was
 annotated by hand (title, ingredient, heading, preparation, tip, fact, not recipe content), and the
@@ -83,7 +89,13 @@ listed strawberries and water that only the steps use, which the app should flag
 and split "לציפוי - מלח מאלדון" into a group, while a passage is copied whole). The held-out cases'
 expectations were written by their author and checked only mechanically (every string is in its text).
 
-Run all twenty-five with:
+**Expected categories (2026-10-25, afternoon)** follow the person's own meanings: "קינוחים" sweet
+desserts, dairy desserts included; "ארוחות קלילות" generally savory dairy-based meals; "בישולים"
+generally meat- or poultry-based main dishes; egg, vegetable, fish and other dishes without a clear
+fit unclassified. A savory dish with cheese or yogurt as one part (a feta salad, fritters with a
+yogurt sauce) accepts "ארוחות קלילות" or unclassified.
+
+Run all thirty-seven with:
 
 ```bash
 cd backend
@@ -96,6 +108,111 @@ uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/eva
 
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
+
+### 2026-10-25 (afternoon): recognition apart from categories, your category meanings, passage context
+
+Local `qwen3:8b`, two live runs of all 37 cases (`20261025-162540`, `20261025-163351`), 100% on the
+GPU (6.19 GB, context 8,192), about 490 s per run. Everything is scored by today's checks and
+today's expected categories; the earlier runs were re-scored, not rerun. **Imports are counted apart
+from accuracy within the drafts**: a refused recipe stays a failed case.
+
+**The 30 cases used while developing** (run 1 / run 2):
+
+| | previous round (morning) | this round |
+|---|---|---|
+| recipe texts imported | 29/29, **28/29** (your drink caption refused) | 29/29, 29/29 |
+| texts that are not recipes refused | 1/1 | 1/1 |
+| problems (not minor) | 27 / 27 | 7 / 9 |
+| failed checks, all (minor) | 36 / 36 (9 / 9) | 11 / 15 (4 / 6) |
+| cases where every check passed | 15 / 14 | 24 / 21 |
+| ingredient lines (within drafts) | 249/255, 244/250 | 251/251 each |
+| groups | 43/47, 42/46 | 46/47 each |
+| category | 26/36, 26/35 | 34/36, 32/36 |
+| warnings | 9/16, 7/14 | 14/16, 13/16 |
+
+**The 7 fresh cases** (27–33, independent: written for this round, kept unread until these runs).
+As measured: every recipe imported (5/5) and both texts that are not recipes refused (2/2) in both
+runs; 5 problems per run; every check passed in 4 of 7. With one evaluator correction (a line written
+in two groups was scored as out of order; the drafts are the same) 3 problems per run. What they
+missed: ricotta-stuffed shells and a fish chraime both went to "בישולים" (the first is a dairy meal,
+the second has no clear fit; having a category, it also lacks the "unclassified" review point, a minor
+finding). The sugar that the chraime's list leaves out was pointed out. After the measurement one fix came from case 27 (a heading before
+the ingredients labeled as a preparation heading now heads the ingredients): 2 problems per run, 5 of
+7 passing; those numbers are no longer independent.
+
+**Repeated imports** through the app's own path, each after a different one: your drink caption
+imported 10 of 10 times, unclassified, every check passing; cases 14, 18 and 24 passed every check
+4 of 4 times; case 26 imported 4 of 4 (the vine leaf it leaves out of its list is never pointed out,
+and once in 4 it got a category); the fresh drink 3 of 3; the restaurant review, the market haul and
+the workshop announcement were refused 3 of 3 times each.
+
+**Recognition.** With the categories in the same request, the model's first decision about your
+caption, `is_recipe`, was false in 8 of 12 imports (P(true) 0.10–0.80). Recognizing and labeling
+without the categories: true 12 of 12 (P(true) at least 0.995); other drinks and the restaurant review
+were unaffected. No second check for suspicious rejections was needed.
+
+**Categories, measured alone** on the same 60 drafts against the re-annotated expectations: your
+descriptions with the "description decides" instruction and a dish summary that names the main
+ingredient, 54 right, 5 wrong, 1 unresolved; your descriptions with the earlier instructions 46–49
+right; the morning's descriptions 44. Still wrong in the final runs: majadra (both runs) and once a
+spinach-cheese pie under "בישולים", the frozen lemonade under desserts (both runs), and in the fresh set
+the stuffed shells and the chraime under "בישולים".
+
+**Other remaining failures**: "בתיאבון!", a call to action or an introduction sentence kept as a note
+(11, 13, 21, real-2); "תיבול: מלח, פלפל שחור, אורגנו יבש" as its own group (20); once the short title
+"בראוניז" (13); source gaps the word list cannot see ("cream", "עלה גפן"). A composed title can contain
+a word that is not in the text ("טוסט avocado" for case 24); its review point now says so.
+
+### 2026-10-25: source gaps, purpose lines, servings evidence, notes, categories
+
+Local `qwen3:8b`, two live runs of all 30 cases (`20261025-133235`, `20261025-133925`), 100% on the
+GPU (6.19 GB, context 8,192), about 400 s per run. Every column is scored by the corrected checks
+(see "How the check works"); the baseline and the previous round were re-scored, not rerun. "App
+fixes offline" turns the previous round's saved model answers into drafts with today's backend:
+the application fixes alone, without the category change or the model's run-to-run variation.
+
+**The 25 cases used while developing** (run 1 / run 2):
+
+| | baseline | previous round | app fixes offline | final, live |
+|---|---|---|---|---|
+| problems (not minor) | 69 / 74 | 17 / 18 | 12 / 13 | 12 / 12 |
+| failed checks, all (of them minor) | 83 / 87 (14 / 13) | 25 / 26 (8 / 8) | 14 / 14 (2 / 1) | 12 / 12 (0 / 0) |
+| cases where every check passed | 5 / 5 | 10 / 11 | 15 / 16 | 16 / 15 |
+| source gaps pointed out, nothing added | 3/6 | 3/6 | 6/6 | 6/6 |
+| tips kept whole | 16/18 | 17/18, 16/18 | 18/18 | 18/18 |
+| facts and servings | 27/32 | 27/32 | 32/32 | 32/32, 31/31 |
+| category | 23/30, 24/30 | 24/30, 25/30 | 24/30, 25/30 | 26/30, 26/29 |
+| unnecessary / duplicate review points | 12 / 8 each | 1, 0 / 0 | 1, 0 / 0 | 0 / 0 |
+| no draft for a recipe | 0 | 0 | 0 | 0 / 1 |
+
+**The 5 fresh cases** (22–26, written independently for this round and kept unread until the live
+runs): 10 problems and 4 minor findings in each run, every check passed in 1 of 5. What they
+showed: a purpose label and its one item on a line ("להגשה: גלידת וניל", "To garnish: fresh basil
+leaves") became a one-item group instead of one ingredient line; "Ingredients" stayed a group name
+beside a second group; "נבטי חמניות" in the list did not count as listing "נבטים" (a needless review
+point); the model took an introduction sentence as the title (24), labeled the list inside an
+introduction as ingredients (26) and gave pickles a category (26). The first three were fixed in
+the backend after this measurement; offline on the same answers the fresh cases then have 4
+problems in each run and 2 of 5 pass every check. Those numbers are no longer independent.
+
+**Category descriptions, measured alone.** The same 50 drafts (2 runs × 25 cases) classified once
+with the old and once with the new descriptions: old 38–40 right, 8–9 wrong, 2–5 unresolved where
+a category fits (the model varies between runs even at temperature 0); new 43 right, 7 wrong, none
+unresolved. Every dessert was classified, including the salted honey tart (before: "בישולים"), and
+no drink or savory dish went to desserts. Four other wordings were tried and rejected: one put
+lemonade under desserts, one a savory tortilla dish, and adding "a full meal or a small one" to the
+dish summary made both worse. What remains: light savory meals (shakshuka, fritters, tortillas)
+still go to "בישולים" in 7 of 50.
+
+**Still wrong in the final runs** (both runs unless noted): introductions or sign-offs kept as notes
+(11 "בתיאבון!", 13, 21, real-2, 24); light meals under "בישולים" (07, 19, 20, 14 in run 1, 26);
+"תיבול: מלח, פלפל שחור, אורגנו יבש" made its own group (20); "מחממים תנור מראש." labeled a heading,
+so it is missing from the steps (18); the title "ארוחת בוקר של שישי" instead of the dish (14);
+source gaps not pointed out where the word is not in the ingredient list ("cream", "עלה גפן");
+"זית" pointed out from the color "ירוק זית" (26); and in run 2 the user's own caption (real-4) was
+refused as not a recipe, the model having labeled every passage "not part of the recipe". That
+happened in 2 of the 24 saved runs that include it; the page shows "לא נמצא מתכון בטקסט." and
+keeps the text, which can be imported again or saved with "שמירה בלי עיבוד".
 
 ### 2026-10-21: complete checks, quantities, roles, review points
 

@@ -17,8 +17,10 @@ from fastapi.testclient import TestClient
 from app.db import Base
 from app.main import app
 from app.migrate import alembic_config, head_revision, migration_engine, upgrade_database
+from app.sample_data import STARTER_CATEGORIES
 
 FIXTURE = Path(__file__).parent / "fixtures" / "milestone3_schema.sql"
+STARTER = dict(STARTER_CATEGORIES)
 
 
 def table_definitions(path: Path) -> list[str]:
@@ -96,7 +98,7 @@ def test_a_milestone_3_database_is_upgraded_and_keeps_every_recipe(data_dir):
     # The new fields: existing recipes are saved recipes with nothing to review and no imported original.
     assert all(recipe["status"] == "saved" and recipe["issues"] == [] and recipe["original"] is None for recipe in recipes)
 
-    backups = list(data_dir.glob("recipes.backup-*-before-0002.db"))
+    backups = list(data_dir.glob(f"recipes.backup-*-before-{head_revision()}.db"))
     assert len(backups) == 1
     assert table_definitions(backups[0]) == milestone3_definitions()  # the copy is from before the upgrade
     with closing(sqlite3.connect(backups[0])) as copy:
@@ -166,3 +168,70 @@ def test_deleting_a_recipe_deletes_its_imported_original(client, data_dir):
     assert client.delete(f"/api/recipes/{recipe.id}").status_code == 204
     with closing(sqlite3.connect(data_dir / "recipes.db")) as db:
         assert db.execute("SELECT count(*) FROM recipe_imports").fetchone() == (0,)
+
+
+OLD_DESCRIPTIONS = [
+    ("קינוחים", "עוגות, עוגיות, מאפים מתוקים וקינוחים"),
+    ("בישולים", "מנות עיקריות ותבשילים"),
+    ("ארוחות קלילות", "ארוחות קלות ומהירות, למשל פיצה מבצק יוגורט; לא בהכרח דל קלוריות"),
+]
+
+
+def categories_of(path: Path) -> list[tuple[str, str | None]]:
+    with closing(sqlite3.connect(path)) as db:
+        return db.execute("SELECT name, description FROM categories ORDER BY id").fetchall()
+
+
+def test_the_starter_descriptions_are_made_clearer_but_a_description_you_changed_is_kept(tmp_path):
+    path = tmp_path / "recipes.db"
+    make_milestone3_database(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.executemany("UPDATE categories SET description = ? WHERE name = ?", [(d, n) for n, d in OLD_DESCRIPTIONS])
+        db.execute("UPDATE categories SET description = 'שלי' WHERE name = 'בישולים'")  # changed by you
+        db.execute("INSERT INTO categories (id, name, description, parent_id) VALUES (4, 'מרקים', 'קערות חמות', NULL)")
+        db.commit()
+    upgrade_database(path)
+
+    after = dict(categories_of(path))
+    assert after["בישולים"] == "שלי" and after["מרקים"] == "קערות חמות"  # yours, untouched
+    assert after["קינוחים"] == STARTER["קינוחים"] and "לא משקאות" in after["קינוחים"]
+    assert after["ארוחות קלילות"] == STARTER["ארוחות קלילות"] and "על בסיס חלבי" in after["ארוחות קלילות"]
+    with closing(sqlite3.connect(path)) as db:
+        assert db.execute("SELECT count(*) FROM recipes").fetchone() == (2,)
+
+
+def test_the_clearer_descriptions_are_the_ones_a_new_database_starts_with_and_downgrade_restores(tmp_path):
+    path = tmp_path / "recipes.db"
+    make_milestone3_database(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.executemany("UPDATE categories SET description = ? WHERE name = ?", [(d, n) for n, d in OLD_DESCRIPTIONS])
+        db.commit()
+    upgrade_database(path)
+    assert categories_of(path) == list(STARTER.items())
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.downgrade(alembic_config(connection), "0002")
+    engine.dispose()
+    assert categories_of(path) == OLD_DESCRIPTIONS
+
+
+
+def test_descriptions_from_0003_take_your_meaning_and_one_you_changed_since_is_kept(tmp_path):
+    path = tmp_path / "recipes.db"
+    make_milestone3_database(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.executemany("UPDATE categories SET description = ? WHERE name = ?", [(d, n) for n, d in OLD_DESCRIPTIONS])
+        db.commit()
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.stamp(alembic_config(connection), "0001")  # the milestone-3 tables are there already
+        command.upgrade(alembic_config(connection), "0003")
+    engine.dispose()
+    with closing(sqlite3.connect(path)) as db:  # after 0003, you edited one description
+        db.execute("UPDATE categories SET description = 'מה שאני רוצה' WHERE name = 'קינוחים'")
+        db.commit()
+    upgrade_database(path)
+    after = dict(categories_of(path))
+    assert after["קינוחים"] == "מה שאני רוצה"  # yours, untouched
+    assert after["בישולים"] == STARTER["בישולים"] and "בשר או עוף" in after["בישולים"]
+    assert after["ארוחות קלילות"] == STARTER["ארוחות קלילות"]

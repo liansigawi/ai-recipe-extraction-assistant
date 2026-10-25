@@ -2,10 +2,7 @@
   "about": "Invented. Ingredients as one comma-separated list after 'מה צריך:', steps as one paragraph of sentences ending with a call to action, an introduction on the title line. Words with ׳ (מג׳דרה).",
   "expect": {
     "title": "מג׳דרה של סבתא",
-    "category_one_of": [
-      "בישולים",
-      null
-    ],
+    "category": null,
     "ingredient_groups": [
       {
         "name": null,
@@ -50,6 +47,7 @@
       "מג׳דרה של סבתא, המנה שהכי מזכירה לי בית 🧡 הכנתי אותה השבוע אחרי הרבה זמן.",
       "בתיאבון!",
       "תייגו מישהו שאוהב מג׳דרה"
-    ]
-  }
+    ],
+    "warnings": ["classification_unresolved"]
+}
 }

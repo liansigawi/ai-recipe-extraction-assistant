@@ -202,3 +202,16 @@ def test_imports_are_refused_from_other_sites(client, use):
     response = client.post("/api/imports/text", json={"text": SOURCE}, headers={"Origin": "https://evil.example"})
     assert response.status_code == 403
     assert extractor.calls == []  # refused before any paid call
+
+
+def test_a_recipe_that_fits_no_category_is_imported_and_saved_unclassified(client, use):
+    no_fit = {"fit": "no_fit", "category_id": None, "subcategory_id": None, "candidate_category_ids": []}
+    use(StandIn(answer(classification=no_fit)))
+    response = client.post("/api/imports/text", json={"text": SOURCE})
+    assert response.status_code == 201  # a recipe is a recipe, whether or not a category fits
+    draft = response.json()
+    assert draft["category"] is None and "classification_unresolved" in [i["kind"] for i in draft["issues"]]
+    body = {key: draft[key] for key in ("title", "servings", "ingredient_groups", "step_groups", "notes", "sources")}
+    saved = client.put(f"/api/recipes/{draft['id']}", json=body | {"status": "saved", "issues": [], "category_id": None}).json()
+    assert saved["status"] == "saved" and saved["category"] is None  # unclassified for as long as you like
+    assert client.get(f"/api/recipes/{draft['id']}").json()["category"] is None

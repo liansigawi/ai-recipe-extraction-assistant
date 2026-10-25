@@ -1,0 +1,46 @@
+{
+ "about": "A short Hebrew drink caption with a personal introduction, a 'הגרסה שלי:' ingredient heading, five ingredient lines and two preparation sentences; a drink has no category. Written independently as a held-out case.",
+ "expect": {
+  "title": "משקה אבטיח, לימון ונענע",
+  "category": null,
+  "ingredient_groups": [
+   {
+    "name": "הגרסה שלי",
+    "items": [
+     [
+      "3 כוסות קוביות אבטיח בלי גרעינים",
+      "3 כוסות"
+     ],
+     [
+      "מיץ של לימון אחד",
+      "אחד"
+     ],
+     [
+      "6-8 עלי נענע",
+      "6-8"
+     ],
+     [
+      "1 כפית סילאן",
+      "1 כפית"
+     ],
+     [
+      "חופן קוביות קרח",
+      "חופן"
+     ]
+    ]
+   }
+  ],
+  "preparation": [
+   "טוחנים הכל בבלנדר עד שלא נשארות חתיכות.",
+   "מסננים לכוס גבוהה ושותים מיד, לפני שהוא נפרד."
+  ],
+  "excluded": [
+   "מי שעוקב כאן יודע שאני לא שורדת את אוגוסט בלי משהו קר ביד.",
+   "השבוע השכנה השאירה לי חצי אבטיח ענק על המדרגות, אז זה מה שאני מוזגת לעצמי כל צהריים.",
+   "#משקאות_קיץ #אבטיח #קיץ_ישראלי"
+  ],
+  "warnings": [
+   "classification_unresolved"
+  ]
+ }
+}

@@ -7,7 +7,9 @@ copies the exact text.
 
 Passages are lines, cut further where a line holds several sentences or a list:
 - after a sentence end (". ", "! ", "? ", "… "), which stays with its sentence;
-- after a label with a colon ("מצרכים: ...", "איך מכינים: ..."), the colon staying with the label;
+- after a label with a colon ("מצרכים: ...", "איך מכינים: ..."), the colon staying with the label.
+  A label is short (at most five words since the line's start or the last cut): a longer sentence
+  that ends in a colon goes on, so a list inside an introduction stays in the introduction's passage;
 - at the commas of a list that follows such a label ("מה צריך: כוס עדשים, כוס אורז, 3 בצלים").
 Other commas and dashes do not cut: an ingredient line such as "1 (15 oz) can chickpeas,
 drained and rinsed" or a step with " - " stays one passage (measured: cutting them led the model
@@ -24,6 +26,7 @@ from dataclasses import dataclass
 _CUT = re.compile(r"(?P<end>[.!?…]+[)\"'״”’]*|:)\s+")
 _LIST_COMMA = re.compile(r"\s*[,;،]\s+")
 _HAS_LETTER = re.compile(r"[^\W\d_]")  # a letter, in any script
+MAX_LABEL_WORDS = 5  # "For the yogurt sauce:" is a label; "...and in the end the secret was simple:" is not
 _HAS_WORD = re.compile(r"[^\W_]")  # a letter or a digit
 # List punctuation at the end of a copied item: separates items, is not part of the wording.
 _TRAILING_SEPARATOR = re.compile(r"(?:\s*[,;:،]|\s+[-–—])+\s*$")
@@ -61,6 +64,8 @@ def _cut_line(line: str) -> list[tuple[int, int]]:
     after_label = False  # the piece follows "label:", so its commas separate list items
     for cut in _CUT.finditer(line):
         end = cut.start() + len(cut.group("end"))
+        if cut.group("end") == ":" and len(line[position:end].split()) > MAX_LABEL_WORDS:
+            continue  # a sentence that ends in a colon, not a label: it goes on in the same passage
         bounds += _list_items(line, position, end) if after_label else [(position, end)]
         after_label = cut.group("end") == ":"
         position = cut.end()

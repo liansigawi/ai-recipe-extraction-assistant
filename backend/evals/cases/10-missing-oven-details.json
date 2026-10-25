@@ -2,11 +2,7 @@
   "about": "Invented. No oven temperature or baking time is given: it must be flagged as missing, never filled in.",
   "expect": {
     "title": "פשטידת ירוקים",
-    "category_one_of": [
-      "ארוחות קלילות",
-      "בישולים",
-      null
-    ],
+    "category_one_of": ["ארוחות קלילות", null],
     "ingredient_groups": [
       {
         "name": null,
@@ -41,8 +37,6 @@
       "מעלות",
       "דקות"
     ],
-    "warnings": [
-      "missing_information"
-    ]
+    "warnings": ["missing_information"]
   }
 }

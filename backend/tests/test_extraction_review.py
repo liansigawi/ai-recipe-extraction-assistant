@@ -235,13 +235,13 @@ def test_a_list_split_into_unnamed_pieces_is_put_back_together():
     assert [g.steps for g in draft.step_groups] == [["מערבבים את כל החומרים.", "אופים 30-35 דקות ב-180 מעלות."]]
 
 
-def test_named_groups_stay_apart_even_when_one_is_a_generic_title():
+def test_a_section_title_is_not_a_group_name_so_the_pieces_of_one_list_join():
     steps = [
         {"name": "אופן ההכנה", "steps": ["מערבבים את כל החומרים."]},
         {"name": None, "steps": ["אופים 30-35 דקות ב-180 מעלות."]},
     ]
     draft = build_draft(answer(step_groups=steps), SOURCE.replace("אופן ההכנה:", "אופן ההכנה"), CATEGORIES)
-    assert [g.name for g in draft.step_groups] == ["אופן ההכנה", None]
+    assert [(g.name, g.steps) for g in draft.step_groups] == [(None, ["מערבבים את כל החומרים.", "אופים 30-35 דקות ב-180 מעלות."])]
 
 
 def test_repeated_notes_are_kept_once_and_promotion_is_flagged_not_deleted():

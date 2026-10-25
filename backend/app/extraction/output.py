@@ -32,7 +32,7 @@ class ExtractedIngredient(BaseModel):
 
 class ExtractedIngredientGroup(BaseModel):
     name: str | None = Field(
-        description="The text's own heading for this group (e.g. 'לבסיס', 'For the sauce'), without ':', '-', "
+        description="The text's own heading for this group (e.g. 'לבלילה', 'For the sauce'), without ':', '-', "
         "'|' or other decoration. null when the text does not group its ingredients."
     )
     ingredients: list[ExtractedIngredient]
@@ -135,8 +135,14 @@ class OnlyInSteps(BaseModel):
     words: str = Field(description="The ingredient's words, exactly as that step writes them.")
 
 
-class ReferenceOutput(BaseModel):
-    is_recipe: bool = Field(description="false if the text does not contain a recipe; then label every passage 'not_recipe'.")
+class ReferenceLabels(BaseModel):
+    """What the text holds: a role for each passage, and whether it is a recipe at all. The local
+    model's first request asks only this, with no categories in view (prompt.REFERENCE_LABELING_PROMPT)."""
+
+    is_recipe: bool = Field(
+        description="true if the text says what to use and how to make a food or a drink, whatever kind of dish "
+        "it is; false if it contains no recipe (then label every passage 'not_recipe')."
+    )
     title: str = Field(
         description="The recipe's title as written in the text. If the text has no title, a short title made "
         "from the text's own words."
@@ -150,6 +156,12 @@ class ReferenceOutput(BaseModel):
         description="Each ingredient that a step uses but the ingredient list does not mention."
     )
     issues: list[ReferencedIssue] = Field(description="Passages the person should check. The notebook writes the messages.")
+
+
+class ReferenceOutput(ReferenceLabels):
+    """The labels with a category (one request with Claude; with the local model, the category comes
+    from a second request about the finished draft)."""
+
     # Not used by the backend: a moment to sum up the recipe before choosing a category (measured:
     # without it, labeling every passage left the model with no summary of the dish, and it chose
     # main dishes for muffins and a tart).
@@ -160,11 +172,12 @@ class ReferenceOutput(BaseModel):
     classification: Classification
 
 
-def reference_schema(categories: list[schemas.Category], keys: list[str]) -> dict[str, Any]:
+def reference_schema(categories: list[schemas.Category], keys: list[str], classify: bool = True) -> dict[str, Any]:
     """The JSON schema for the reference answer: one required role per passage, in the text's
     order, each under its key (segments.passage_key); passage numbers limited to the passages that
-    exist, and category ids limited to the categories that exist."""
-    schema = deepcopy(ReferenceOutput.model_json_schema())
+    exist, and category ids limited to the categories that exist. Without `classify`, the labels
+    alone (ReferenceLabels): no dish, no category."""
+    schema = deepcopy((ReferenceOutput if classify else ReferenceLabels).model_json_schema())
     roles = schema["properties"]["passages"]["additionalProperties"]
     schema["$defs"]["PassageRole"] = {"type": "string", "enum": roles["enum"]}
     schema["properties"]["passages"] = {
@@ -183,15 +196,21 @@ def reference_schema(categories: list[schemas.Category], keys: list[str]) -> dic
     schema["$defs"]["OnlyInSteps"]["properties"]["passage"] = {
         "type": "integer", "enum": numbers, "description": step_passage["description"]
     }
-    _limit_categories(schema, categories)
+    if classify:
+        _limit_categories(schema, categories)
     return transform_schema(schema)
 
+
+NO_CATEGORY = Classification(fit="no_fit", category_id=None, subcategory_id=None, candidate_category_ids=[])
 
 
 class ClassificationAnswer(BaseModel):
     """The answer to the separate classification request (prompt.build_classification_request)."""
 
-    dish: str = Field(description="In a few words, what kind of dish this is: sweet or savory, and what it is.")
+    dish: str = Field(
+        description="In a few words, what kind of dish this is: sweet or savory, what it is, and what it is mainly "
+        "made of (meat, poultry, fish, eggs, dairy, vegetables, grains...)."
+    )
     classification: Classification
 
 

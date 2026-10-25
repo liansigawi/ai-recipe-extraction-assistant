@@ -20,7 +20,7 @@ from pydantic import ValidationError
 
 from app import schemas
 from app.errors import ApiError
-from app.extraction.output import ClassificationAnswer, ExtractionOutput, ReferenceOutput
+from app.extraction.output import NO_CATEGORY, ClassificationAnswer, ExtractionOutput, ReferenceLabels, ReferenceOutput
 from app.extraction.prompt import ModelRequest, build_classification_request, build_request
 from app.extraction.review import is_recipe, make_draft
 
@@ -60,25 +60,29 @@ class OllamaExtractor:
     def extract(self, text: str, categories: list[schemas.Category]) -> ExtractionOutput | ReferenceOutput:
         self.last_usage = {}
         self.last_raw = None
-        request = build_request(text, categories, self.mode)
+        # In references mode the first request labels the passages and recognizes a recipe without
+        # seeing the categories (prompt.REFERENCE_LABELING_PROMPT); the category is asked afterwards.
+        request = build_request(text, categories, self.mode, classify=False)
         self.last_raw = self._chat(request, len(text))
-        answer_type = ReferenceOutput if request.mode == "references" else ExtractionOutput
+        answer_type = ReferenceLabels if request.mode == "references" else ExtractionOutput
         try:
             output = answer_type.model_validate_json(self.last_raw)
         except ValidationError:
             raise ApiError(502, "extraction_invalid_output", "The local model's answer did not have the expected shape.") from None
-        if isinstance(output, ReferenceOutput) and is_recipe(output):
-            output = self._classify(output, text, categories)
+        if isinstance(output, ReferenceLabels):
+            output = ReferenceOutput(**output.model_dump(), dish="", classification=NO_CATEGORY)
+            if is_recipe(output):
+                output = self._classify(output, text, categories)
         return output
 
     def _classify(self, output: ReferenceOutput, text: str, categories: list[schemas.Category]) -> ReferenceOutput:
-        """Ask for the category again, from the finished draft alone (a separate, short request).
-        If that request fails, the first answer's classification stays."""
+        """Ask for the category from the finished draft alone (a separate, short request). If that
+        request fails, the recipe stays unclassified, for the person to classify."""
         request = build_classification_request(make_draft(output, text, categories), categories)
         try:
             answer = ClassificationAnswer.model_validate_json(self._chat(request, len(text)))
         except (ApiError, ValidationError) as error:
-            log.warning("Classification request failed (%s); keeping the first answer's category.", error)
+            log.warning("Classification request failed (%s); the recipe stays unclassified.", error)
             return output
         return output.model_copy(update={"classification": answer.classification, "dish": answer.dish})
 

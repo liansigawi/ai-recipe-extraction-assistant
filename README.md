@@ -268,19 +268,33 @@ recipe at all:
    amount. The quantity is always a piece of the line, never a converted or invented amount.
 
 The model still decides a few things, and the backend checks each:
-- a **title**: a title it says is written must start a line of the text; if the model retyped
-  it wrongly but labeled the title line, that line's own words are used; otherwise it counts as
-  composed and is flagged;
-- the **servings** (must be in the text, otherwise flagged), and the **category**: only one of
-  your existing categories, and when unsure the recipe stays unclassified. With the local model the
-  category is asked in a second, short request about the finished draft (its copied lines), which
-  chose wrong categories less often than asking in the same answer;
+- a **title**: the line that names the dish. A title it says is written must start a line of the
+  text; if the model retyped it wrongly but labeled the title line, that line's own words are used;
+  a title line that is only a framing label ("ארוחת בוקר של שישי:") keeps the rest of its line;
+  an introduction sentence that only mentions the dish is not a title; a composed title is flagged;
+- the **servings**: kept only from a line that says it is the yield ("12 יחידות", "Serves 2");
+  otherwise the field stays empty. A passage the model labeled "not part of the recipe" (such as
+  an instruction written inside the text) never supplies the servings or the title;
+- **whether the text is a recipe at all**: with the local model this is decided in the first
+  request, together with the roles, **without your categories in view**. Whether a category fits
+  is a separate question: a recipe that fits none is imported normally, unclassified (measured:
+  with the categories in the same request, your drink caption was called "not a recipe" in 8 of
+  12 tries);
+- the **category**: only one of your existing categories, chosen by their descriptions (a
+  category's name can be a personal label; its description decides), and when unsure the recipe
+  stays unclassified, which never prevents saving it. With the local model the category is asked
+  in a second, short request about the finished draft (its copied lines);
+- **roles, corrected by the surrounding structure**: a short line in the ingredient list that says
+  what it is for ("לציפוי - מלח מאלדון", "להגשה: גלידת וניל", "Lemon wedges, for serving") is an
+  ingredient, as written, with no invented quantity, even if the model called it a tip;
 - **which passages to point out**: the model can point at a passage that looks cut off or
   unclear, an "or" whose scope is unclear, or a request inside the text, and at an ingredient a
   step uses that the list does not have. The **messages are written by the backend**, quote the
-  passage, and appear once. "Used only in the steps" is shown only if the step really writes
-  those words and no ingredient line has them. Missing information (an oven temperature, a
-  baking time) is checked by the backend from the text itself.
+  passage, and appear once. An ingredient a step uses that the list leaves out ("מקשטים בתותים"
+  with no strawberries listed) is also found by the backend itself, from a general list of
+  ingredient words: the recipe is kept as your source wrote it, nothing is added, no amount is
+  guessed, and a review point tells you. Missing information (an oven temperature, a baking time)
+  is checked by the backend from the text itself.
 
 Anything the backend cannot place is flagged, never guessed: a passage without a role, or one
 that "continues" nothing, becomes a review point that quotes it ("קטע שלא שובץ", "הפניה לא
@@ -293,8 +307,8 @@ Backend, from `backend/`:
 | Command | What it does |
 |---|---|
 | `uv run pytest` | Backend tests. No network: the API is called in-process, each test gets its own temporary database, and HTTP, Claude and Ollama are replaced by stand-ins. Your `data/` folder, `.env` and API key are never used. |
-| `uv run python -m evals.run_extraction` | **Paid with Claude.** The extraction quality check: one real request per case (at most 30). See [Three kinds of checks](#three-kinds-of-checks). |
-| `uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/evals/local-cases` | The same check with the local model: free, about 5 minutes for all 25 cases on an 8 GB GPU. |
+| `uv run python -m evals.run_extraction` | **Paid with Claude.** The extraction quality check: one real request per case (at most 40). See [Three kinds of checks](#three-kinds-of-checks). |
+| `uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/evals/local-cases` | The same check with the local model: free, about 7 minutes for all 30 cases on an 8 GB GPU. |
 | `uv run python -m evals.compare <run folder> <run folder>` | Two quality-check runs side by side, case by case. |
 | `uv run python -m evals.rescore <run folder> …` | Scores saved runs again with today's expectations and checks, from their saved drafts. No model calls. |
 | `uv run python -m evals.rebuild <label> <run folder> …` | Rebuilds saved runs' drafts from their saved model answers with today's backend code, and scores them: measures a backend change alone. No model calls. |
@@ -373,7 +387,7 @@ The project keeps these separate and reports which one was run:
    model requests (paid with Claude, free with the local model) on representative recipe texts,
    compared with expectations written by hand (changed wording, missing or invented lines,
    quantities, timings, grouping, classification, missing flags, unnecessary warnings). Run
-   explicitly; at most 30 cases per run. Cases: `backend/evals/cases/` (invented
+   explicitly; at most 40 cases per run. Cases: `backend/evals/cases/` (invented
    texts, in git) and, with `--cases-dir ../data/evals/local-cases`, your own (for example real
    captions; git-ignored). The report is saved in `data/evals/extraction/`; findings are recorded in
    [docs/extraction-quality.md](docs/extraction-quality.md). Milestone 7 extends it.

@@ -44,8 +44,10 @@
       "text": "12 יחידות",
       "number": "12"
     },
-    "warnings": [
-      "ingredient_only_in_steps"
+    "source_gaps": [
+      {
+        "ingredient": "התותים"
+      }
     ]
   }
 }

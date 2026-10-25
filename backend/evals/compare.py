@@ -29,10 +29,14 @@ def cell(case: dict | None) -> str:
     if case is None:
         return "–"
     checks = sum(case["checked"].values())
-    failed = sum(case["failed"].values()) - case["minor_problems"]
+    failed = sum(case["failed"].values())  # every failed check, minor ones included
     warnings = case["warnings"]
     extra = len(warnings["unnecessary"]) + len(warnings["duplicates"])
-    return f"{checks - failed}/{checks}, {case['problems']} problems{f', {extra} needless points' if extra else ''}, {case.get('seconds', 0):.0f} s"
+    minor = f" (+{case['minor_problems']} minor)" if case["minor_problems"] else ""
+    return (
+        f"{checks - failed}/{checks}, {case['problems']} problems{minor}"
+        f"{f', {extra} needless points' if extra else ''}, {case.get('seconds', 0):.0f} s"
+    )
 
 
 def main() -> int:
@@ -47,7 +51,10 @@ def main() -> int:
     for run, label in ((a, "A"), (b, "B")):
         t = run["totals"]
         passed = ", ".join(f"{area} {n - t['failed'].get(area, 0)}/{n}" for area, n in t["checked"].items())
-        print(f"\n{label}: {passed}. Problems {t['problems']} (minor {t['minor_problems']}); every check passed in "
+        print(f"\n{label}: recipes imported {t['recipes_imported']} of {t['recipe_texts']}"
+              f"{' (refused: ' + ', '.join(t['recipes_refused']) + ')' if t['recipes_refused'] else ''}; non-recipes refused "
+              f"{t['non_recipes_refused']} of {t['non_recipe_texts']}.")
+        print(f"{label}, within the drafts made: {passed}. Problems {t['problems']} (minor {t['minor_problems']}); every check passed in "
               f"{t['cases_all_passed']} of {len(run['cases'])}; review points {t['warnings_shown']} "
               f"(unnecessary {t['unnecessary_warnings']}, duplicates {t['duplicate_warnings']}); {t['seconds']:.0f} s.")
     return 0
