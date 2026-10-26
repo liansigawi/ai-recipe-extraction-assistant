@@ -22,7 +22,7 @@ Fidelity rules this shape encodes (docs/brief.md, section 6):
 """
 
 import re
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -96,6 +96,33 @@ class StepGroup(ContractModel):
 SourceKind = Literal["instagram", "website", "screenshot", "text", "manual"]
 
 
+INSTAGRAM_USERNAME = r"^[A-Za-z0-9._]{1,30}$"
+
+
+class Creator(ContractModel):
+    """Who is credited for a recipe: a display name, an Instagram username (without "@"), or both."""
+
+    name: Annotated[NonEmptyStr, Field(max_length=200)] | None = None
+    username: Annotated[str, Field(pattern=INSTAGRAM_USERNAME)] | None = None
+
+    @model_validator(mode="after")
+    def _name_or_username(self) -> "Creator":
+        if self.name is None and self.username is None:
+            raise ValueError("a creator needs a name or a username")
+        return self
+
+
+def creator_from_text(text: str, kind: str | None) -> dict[str, str | None]:
+    """A credit written as one string (as stored before 2026-10-26, or typed): "@user", and on an
+    Instagram source a bare username too, is a username; anything else is a name. Migration 0008
+    applies the same rule to stored credits."""
+    text = text.strip()
+    bare = text.removeprefix("@")
+    if (text.startswith("@") or kind == "instagram") and re.fullmatch(INSTAGRAM_USERNAME, bare):
+        return {"name": None, "username": bare}
+    return {"name": text, "username": None}
+
+
 class Source(ContractModel):
     """Where the recipe came from: editable attribution, part of the recipe.
 
@@ -106,7 +133,17 @@ class Source(ContractModel):
     kind: SourceKind  # how the recipe got here; "manual": typed in the editor
     # The post or page address, when there is one. Only web links: no "javascript:" or "file:" addresses.
     url: Annotated[NonEmptyStr, Field(pattern=r"^https?://\S+$")] | None = None
-    creators: list[NonEmptyStr] = []  # attribution as given by the source; the first is the main author
+    # The credit, editable: as given by the source, the first is the main author.
+    creators: list[Creator] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _credits_written_as_text(cls, data: Any) -> Any:
+        """Older clients and stored rows send a credit as one string: read it with creator_from_text."""
+        if isinstance(data, dict) and isinstance(data.get("creators"), list):
+            kind = data.get("kind")
+            data = {**data, "creators": [creator_from_text(c, kind) if isinstance(c, str) else c for c in data["creators"]]}
+        return data
 
 
 class RecipeContent(ContractModel):
@@ -172,6 +209,10 @@ class ImportedOriginal(ContractModel):
     imported_at: AwareDatetime
     url: str | None = None  # the post it came from (also for a caption pasted after a failed read)
     retrieved_from: RetrievedFrom | None = None  # only for a caption read automatically
+    # Who posted it, as the post's data said when it was read (never what the model wrote). Your
+    # edits to the credit go to the recipe's sources; these stay as retrieved.
+    author: Creator | None = None
+    coauthors: list[Creator] = []
 
 
 class Recipe(RecipeContent):

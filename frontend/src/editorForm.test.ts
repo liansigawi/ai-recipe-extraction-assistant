@@ -71,8 +71,11 @@ describe('recipeToForm and formToInput', () => {
 
   it('splits creator names on commas', () => {
     const form = filled()
-    form.sources = [{ key: 'k', kind: 'instagram', url: 'https://www.instagram.com/p/Example12345/', creators: 'baker, partner.shop,' }]
-    expect(formToInput(form).input.sources[0].creators).toEqual(['baker', 'partner.shop'])
+    form.sources = [{ key: 'k', kind: 'instagram', url: 'https://www.instagram.com/p/Example12345/', creators: 'אופה @baker, @partner.shop,' }]
+    expect(formToInput(form).input.sources[0].creators).toEqual([
+      { name: 'אופה', username: 'baker' },
+      { name: null, username: 'partner.shop' },
+    ])
   })
 })
 

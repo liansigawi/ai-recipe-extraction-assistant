@@ -1,4 +1,5 @@
 import type { ImportedOriginal } from '../types'
+import { CreatorName } from './RecipeView'
 
 interface OriginalTextProps {
   original: ImportedOriginal
@@ -37,6 +38,17 @@ export default function OriginalText({ original, open = false, sticky = false }:
           </a>
           {original.retrieved_from === 'embed_view' &&
             ' (נקרא מתצוגת ההטמעה הציבורית של הפוסט, שעלולה לפגר אחרי עריכות אחרונות)'}
+          {original.author !== null && (
+            <>
+              {' · פורסם על ידי '}
+              {[original.author, ...original.coauthors].map((person, index) => (
+                <span key={index}>
+                  {index > 0 && ', '}
+                  <CreatorName creator={person} />
+                </span>
+              ))}
+            </>
+          )}
         </p>
       )}
       {/* white-space: pre-wrap (index.css) keeps the line breaks exactly as pasted. */}

@@ -24,7 +24,7 @@ NEW_RECIPE = {
     ],
     "step_groups": [{"name": None, "steps": ["מערבבים.", "אופים 30–35 דקות ב-180 מעלות."]}],
     "notes": ["אפשר להחליף בלימון."],
-    "sources": [{"kind": "manual", "url": "https://www.instagram.com/p/Example12345/", "creators": ["baker"]}],
+    "sources": [{"kind": "manual", "url": "https://www.instagram.com/p/Example12345/", "creators": [{"name": "Baker", "username": "baker"}]}],
 }
 
 

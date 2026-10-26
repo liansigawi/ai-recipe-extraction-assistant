@@ -126,8 +126,9 @@ def test_post_page_picks_requested_post_from_real_nesting():
     analysis = analyze_capture(page(post_page(route_params_doc(), post_data_doc(coauthors=("partner.shop",)))), CODE)
     assert analysis.outcome is FetchOutcome.CAPTION_FOUND
     assert analysis.best.text == CAPTION  # not the longer caption of the other post in the timeline
-    assert analysis.best.username == "baker"
-    assert analysis.best.coauthors == ["partner.shop"]  # from the main object, not the timeline copy
+    assert analysis.best.author.username == "baker"
+    # from the main object, not the timeline copy
+    assert [person.username for person in analysis.best.coauthors] == ["partner.shop"]
     assert [c.source for c in analysis.candidates] == [CaptionSource.MEDIA_JSON_EMBEDDED]  # copy deduplicated
     assert analysis.signals.media_caption_empty is False  # the route parameters were ignored
 
@@ -217,7 +218,7 @@ def test_embed_view_data_and_rendered_block_agree():
     assert analysis.best.source is CaptionSource.MEDIA_JSON_EMBEDDED
     assert analysis.best.text == EMBED_TEXT
     block = next(c for c in analysis.candidates if c.source is CaptionSource.EMBED_PAGE)
-    assert (block.text, block.username) == (EMBED_TEXT, "baker")  # seen live: identical to the data
+    assert (block.text, block.author.username) == (EMBED_TEXT, "baker")  # seen live: identical to the data
 
 
 def test_embed_block_alone_is_unverified_and_keeps_mentions_and_hashtags():
@@ -243,7 +244,7 @@ def test_meta_preview_in_raw_http_source_format():
             f'<meta name="description" content="{content}" /></head><body></body></html>')
     analysis = analyze_capture(page(html, method="http"), CODE)
     assert [c.source for c in analysis.candidates] == [CaptionSource.META_DESCRIPTION]
-    assert (analysis.best.text, analysis.best.username) == (caption, "some.baker_")
+    assert (analysis.best.text, analysis.best.author.username) == (caption, "some.baker_")
     assert analysis.best.truncated is None
     assert analysis.outcome is FetchOutcome.CAPTION_INCOMPLETE  # a preview is never trusted as complete
 

@@ -30,11 +30,17 @@ export interface StepGroup {
 /** How the recipe got here; 'manual' means typed in the editor. */
 export type SourceKind = 'instagram' | 'website' | 'screenshot' | 'text' | 'manual'
 
+/** Who is credited: a display name, an Instagram username (without "@"), or both. */
+export interface Creator {
+  name: string | null
+  username: string | null
+}
+
 export interface Source {
   kind: SourceKind
   url: string | null
-  /** Attribution as given by the source; the first is the main author. Empty when unknown. */
-  creators: string[]
+  /** The credit, editable: as given by the source, the first is the main author. Empty when unknown. */
+  creators: Creator[]
 }
 
 /** The recipe itself: what the editor changes. */
@@ -87,6 +93,9 @@ export interface ImportedOriginal {
   url: string | null
   /** Which public page of the post supplied a caption read automatically. */
   retrieved_from: 'post_page' | 'embed_view' | null
+  /** Who posted it, as read from the post (never edited; the credit you edit is in the sources). */
+  author: Creator | null
+  coauthors: Creator[]
 }
 
 /** A stored recipe, as the API returns it. */

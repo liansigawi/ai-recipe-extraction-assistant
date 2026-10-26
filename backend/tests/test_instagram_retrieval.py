@@ -62,7 +62,7 @@ def test_the_post_page_with_the_posts_own_data_is_enough(pages):
     result = retrieve_caption_blocking(REF)
     assert result.outcome is FetchOutcome.CAPTION_FOUND and result.complete
     assert result.caption == CAPTION and result.retrieved_from == "post_page"
-    assert result.username == "baker" and result.coauthors == ["friend"]
+    assert result.author.username == "baker" and [person.username for person in result.coauthors] == ["friend"]
     assert loaded == [URL]  # one page load, no fallback
     assert [attempt.page for attempt in result.attempts] == ["post_page"]
 

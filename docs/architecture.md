@@ -130,7 +130,11 @@ How it encodes the brief's fidelity rules:
 - **No free-text categories.** `category` is `null` when unclassified. Otherwise it is a stored
   category's id and name, never free text. A subcategory requires a category.
 - **Attribution.** `sources[].creators` lists every creator the source names, main author first
-  (collaboration posts have two).
+  (collaboration posts have two): `{ "name": "ריטה קדוש", "username": "ritakadosh_" }`, a display name,
+  an Instagram username (without "@"), or both. This is the editable credit; an Instagram import fills
+  it from the post's own data. `original.author` and `original.coauthors` keep who posted it as read,
+  and never change. A credit sent as one string (older clients) is still read: "@user", or a bare
+  username on an Instagram source, is a username, anything else a name.
 - **Times with a time zone.** `created_at` and `updated_at` must carry a time zone and are sent with
   `Z` (UTC), so the browser shows the right local time.
 - **Strict input.** Unknown fields are rejected, so a typo or an invented field fails loudly.
@@ -300,7 +304,8 @@ three starter categories' descriptions, only where a description is still the st
 place (same id, so its recipes stay in it) and adds "משקאות" to a notebook that already has categories
 (a new one gets it from the seed); `0006` adds the Instagram address to the originals; `0007` adds the
 two dessert subcategories under the top-level "קינוחים" (ids after the top-level ones, as the seed
-gives them), changing no recipe. At start-up,
+gives them), changing no recipe; `0008` rewrites each credit as `{name, username}` and adds
+`recipe_imports.source_details` (who posted it, as read). At start-up,
 `app/migrate.py`:
 - creates a new database with every migration, then seeds it;
 - recognizes a milestone-3 database (tables but no `alembic_version`) and marks it as `0001`;
@@ -474,6 +479,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-25 (2) | A colon cuts a line only after a label of at most five words; a sentence that ends in a colon keeps its list | An introduction ("…the secret turned out simple: salt, a lot of garlic and no vinegar") became two ingredient lines beside the real list (case 26). A list after a rejected introduction label is also kept out when the recipe has its own list. |
 | 2026-10-25 (2) | A passage labeled a heading that ends a sentence is a step (or an ingredient); a title passage that is only a label takes the rest of its line; the prompt says a title names the dish and an introduction that mentions it is not one | "מחממים תנור מראש." was a heading (case 18); the title was "ארוחת בוקר של שישי" without the dish (case 14), or an introduction sentence (case 24). |
 | 2026-10-25 (2) | Categories by the user's meaning (migration 0004): sweet desserts, dairy desserts included; generally savory dairy-based meals; generally meat- or poultry-based main dishes; no clear fit stays unclassified. The classification prompt says a category's description decides over its name, and the dish summary names what it is mainly made of | Measured on the same 60 drafts against the re-annotated expectations: 54 right, 5 wrong, 1 unresolved; the user's descriptions with the previous wording 46–49 right; the previous descriptions 44. The name "בישולים" (cooked dishes) had drawn vegetarian dishes. |
+| 2026-10-26 (8) | The credit is a list of `{name, username}` (migration 0008); an import fills it from the post's data (`user.full_name`, `user.username`, `coauthor_producers`), and keeps that as read in `recipe_imports.source_details` | The person recognizes creators by name and handle; the handle gives the profile link. Retrieved data, not the model, says who made it. Editing the credit (when a post credits someone else) never changes what was retrieved. |
 | 2026-10-26 (7) | Duplicate Instagram links are checked on the server, before anything is fetched, for links and for pasted text with a link; the same post is the same shortcode; a match stops the import with the list of recipes, and `allow_duplicate` imports another copy | Enforced where the import happens, so no client can skip it and nothing is fetched twice by accident; never an overwrite and never a block. Both places a link can live count: the read-only original and the editable sources. |
 | 2026-10-26 (6) | Search and filters run in the page on the recipes already loaded (`recipeFilters.ts`): title and ingredient lines, every word, after removing niqqud, invisible marks and quote marks; a top-level category includes its subcategories | A personal notebook holds hundreds of recipes, not millions: the list is already in the page, so filtering it there is instant and needs no new endpoint. A server-side search can come if the notebook grows. |
 | 2026-10-26 (5) | Categories are created and edited by the person in the page (`POST`/`PUT /api/categories`): name and description only, the parent fixed once created, names unique among siblings, no delete yet | Recipes point at the pair (category, subcategory), so moving a subcategory or deleting a category would need a decision about its recipes. The descriptions are read at every import, so a new description guides the next classification. |

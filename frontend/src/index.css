@@ -1056,3 +1056,20 @@ h4.category-name {
   gap: 0.5rem;
   align-items: center;
 }
+
+/* Under the title: who made it, with links to the profile and the original post. */
+.credit-line {
+  margin: 0.25rem 0 0;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.credit-line a,
+.original-text-source a {
+  color: var(--color-accent);
+}
+
+.creator-name {
+  color: var(--color-text);
+  font-weight: 600;
+}

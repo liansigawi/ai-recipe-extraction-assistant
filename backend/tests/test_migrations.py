@@ -4,6 +4,7 @@ A "milestone 3 database" here is built from tests/fixtures/milestone3_schema.sql
 tables milestone 3 created before migrations existed, filled with recipes like yours.
 """
 
+import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -93,7 +94,8 @@ def test_a_milestone_3_database_is_upgraded_and_keeps_every_recipe(data_dir):
 
     assert [recipe["title"] for recipe in recipes] == ["בדיקה", "עוגת שוקולד עם גנאש"]
     mine, sample = recipes
-    assert mine["notes"] == ["הערה"] and mine["sources"] == [{"kind": "manual", "url": None, "creators": ["me"]}]
+    assert mine["notes"] == ["הערה"]
+    assert mine["sources"] == [{"kind": "manual", "url": None, "creators": [{"name": "me", "username": None}]}]
     assert mine["updated_at"] == "2026-10-20T06:15:00Z"
     assert sample["ingredient_groups"][0]["ingredients"][0]["text"] == "200 גרם שוקולד מריר"
     assert sample["is_sample"] and not mine["is_sample"]
@@ -287,7 +289,8 @@ def test_0005_renames_in_place_adds_the_drinks_and_keeps_every_recipe(tmp_path):
     assert [description for _, _, description in categories] == list(STARTER.values())
     # 0006 then adds two columns to the originals; their first six are untouched.
     assert rows(path, "recipes") == recipes and [row[:6] for row in rows(path, "recipe_imports")] == originals
-    assert rows(path, "recipe_sources") == sources
+    # 0008 then rewrites each credit as {"name", "username"}: every other column is untouched.
+    assert [row[:5] for row in rows(path, "recipe_sources")] == [row[:5] for row in sources]
     assert len(list(tmp_path.glob(f"recipes.backup-*-before-{head_revision()}.db"))) == 1
 
 
@@ -387,3 +390,30 @@ def test_downgrading_0007_keeps_a_subcategory_that_has_recipes(tmp_path):
 def test_a_new_database_starts_with_the_dessert_subcategories(client):
     categories = client.get("/api/categories").json()
     assert [(sub["id"], sub["name"]) for sub in categories[0]["subcategories"]] == [(5, "קינוחים רגילים"), (6, "קינוחים בריאים")]
+
+
+def test_0008_turns_each_credit_into_a_name_or_a_username_and_downgrade_turns_it_back(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("DELETE FROM recipe_sources")
+        db.executemany(
+            "INSERT INTO recipe_sources (id, recipe_id, position, kind, url, creators) VALUES (?, 2, ?, ?, NULL, ?)",
+            [(1, 0, "instagram", '["ritakadosh_", "Lior Mashiach"]'), (2, 1, "website", '["Example Kitchen", "@baker"]'), (3, 2, "text", "[]")],
+        )
+        db.commit()
+    upgrade_database(path)
+    with closing(sqlite3.connect(path)) as db:
+        credits = [json.loads(c) for (c,) in db.execute("SELECT creators FROM recipe_sources ORDER BY id")]
+    assert credits == [
+        [{"name": None, "username": "ritakadosh_"}, {"name": "Lior Mashiach", "username": None}],
+        [{"name": "Example Kitchen", "username": None}, {"name": None, "username": "baker"}],
+        [],
+    ]
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.downgrade(alembic_config(connection), "0007")
+    engine.dispose()
+    with closing(sqlite3.connect(path)) as db:
+        credits = [json.loads(c) for (c,) in db.execute("SELECT creators FROM recipe_sources ORDER BY id")]
+    assert credits == [["ritakadosh_", "Lior Mashiach"], ["Example Kitchen", "@baker"], []]

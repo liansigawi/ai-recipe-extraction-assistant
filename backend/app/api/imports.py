@@ -33,7 +33,17 @@ from app.importers.instagram import (
     parse_instagram_url,
     retrieve_caption_blocking,
 )
-from app.schemas import ExtractionInfo, InstagramImport, Issue, LinkedRecipe, Recipe, RecipeInput, Source, TextImport
+from app.schemas import (
+    Creator,
+    ExtractionInfo,
+    InstagramImport,
+    Issue,
+    LinkedRecipe,
+    Recipe,
+    RecipeInput,
+    Source,
+    TextImport,
+)
 
 IMPORT_ERRORS = {
     **ERROR_RESPONSES,
@@ -159,11 +169,17 @@ def import_instagram(
     except ApiError as error:
         # The caption was read: hand it back, so the page can keep it for another try or for saving by hand.
         raise ApiError(error.status_code, error.code, error.message, details) from None
-    creators = [name for name in (retrieval.username, *retrieval.coauthors) if name]
+    # The credit comes from the post's data (the account and its display name), never from the model.
+    people = [person for person in (retrieval.author, *retrieval.coauthors) if person is not None]
+    creators = [Creator(name=person.full_name, username=person.username) for person in people]
     draft = draft.model_copy(update={"sources": [Source(kind="instagram", url=url, creators=creators)]})
+    details = {
+        "author": creators[0].model_dump() if retrieval.author is not None else None,
+        "coauthors": [creator.model_dump() for creator in creators[1 if retrieval.author is not None else 0 :]],
+    }
     return crud.create_import(
         session, draft, original_text=retrieval.caption, model=model, kind="instagram", url=url,
-        retrieved_from=retrieval.retrieved_from,
+        retrieved_from=retrieval.retrieved_from, source_details=details,
     )
 
 

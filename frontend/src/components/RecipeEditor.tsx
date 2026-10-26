@@ -333,7 +333,10 @@ function SourcesEditor({ sources, errors, onChange }: SourcesEditorProps) {
   return (
     <fieldset className="editor-section">
       <legend className="section-title">מקורות</legend>
-      <p className="field-hint">מאיפה המתכון הגיע: סוג המקור, קישור אם יש, ושמות היוצרים מופרדים בפסיקים.</p>
+      <p className="field-hint">
+        מאיפה המתכון הגיע: סוג המקור, קישור אם יש, ומי יצר אותו. כל יוצר בשמו ובשם המשתמש שלו באינסטגרם, מופרדים בפסיקים: "ריטה קדוש
+        @ritakadosh_, @alehonline". אפשר לכתוב כאן גם מי שהפוסט מקרדט; מה שנשלף מהפוסט נשמר בנפרד, בטקסט המקורי.
+      </p>
       {sources.length > 0 && (
         <ul className="editor-rows">
           {sources.map((source, s) => {
@@ -368,7 +371,7 @@ function SourcesEditor({ sources, errors, onChange }: SourcesEditorProps) {
                     type="text"
                     dir="auto"
                     aria-label={`יוצרים במקור ${s + 1}`}
-                    placeholder="שמות היוצרים"
+                    placeholder="שם @שם_משתמש"
                     value={source.creators}
                     onChange={(event) => change({ ...source, creators: event.target.value })}
                   />

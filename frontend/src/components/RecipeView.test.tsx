@@ -72,13 +72,26 @@ describe('RecipeView', () => {
     const recipe = {
       ...chocolateCake,
       subcategory: { id: 5, name: 'עוגות' },
-      sources: [{ kind: 'instagram' as const, url: null, creators: ['baker', 'partner.shop'] }],
+      sources: [{ kind: 'instagram' as const, url: null, creators: [{ name: null, username: 'baker' }, { name: null, username: 'partner.shop' }] }],
     }
     render(<RecipeView recipe={recipe} />)
 
     expect(screen.getByText('קינוחים · עוגות')).toBeInTheDocument()
-    expect(screen.getByText('baker').tagName).toBe('BDI')
-    expect(screen.getByText('partner.shop').tagName).toBe('BDI')
+    expect(screen.getByRole('link', { name: '@baker' })).toHaveAttribute('href', 'https://www.instagram.com/baker/')
+    expect(screen.getByRole('link', { name: '@partner.shop' })).toHaveAttribute('href', 'https://www.instagram.com/partner.shop/')
+  })
+
+  it('credits the creator under the title, with the profile and the original post', () => {
+    const post = 'https://www.instagram.com/p/Cm1mCdCpSzJ/'
+    const recipe = {
+      ...chocolateCake,
+      sources: [{ kind: 'instagram' as const, url: post, creators: [{ name: 'ריטה קדוש', username: 'ritakadosh_' }, { name: 'alehonline', username: 'alehonline' }] }],
+    }
+    render(<RecipeView recipe={recipe} />)
+    const credit = document.querySelector('.credit-line')!
+    expect(credit).toHaveTextContent('מאת ריטה קדוש (@ritakadosh_), @alehonline · לפוסט המקורי באינסטגרם')
+    expect(screen.getByText('ריטה קדוש').tagName).toBe('BDI')
+    expect(screen.getByRole('link', { name: 'לפוסט המקורי באינסטגרם' })).toHaveAttribute('href', post)
   })
 
   it('says that a sample was invented, and says nothing of the kind for a saved recipe', () => {
@@ -126,6 +139,8 @@ describe('RecipeView for imported recipes', () => {
     imported_at: '2026-10-20T09:30:00Z',
     url: null,
     retrieved_from: null,
+    author: null,
+    coauthors: [],
   }
 
   it('marks a draft as not reviewed yet, with the number of points to check', () => {

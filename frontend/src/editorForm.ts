@@ -1,6 +1,7 @@
 // The recipe editor's form state, and the pure functions around it: a recipe -> form fields,
 // form fields -> what the API expects, validation, and small list helpers.
 // No React here, so all of it is easy to test (editorForm.test.ts).
+import { creatorsFromText, creatorToText } from './credit'
 import type { Issue, Recipe, RecipeInput, RecipeStatus, SourceKind } from './types'
 
 // --- Form state --------------------------------------------------------------------------
@@ -123,7 +124,7 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
       key: newKey(),
       kind: source.kind,
       url: source.url ?? '',
-      creators: source.creators.join(', '),
+      creators: source.creators.map(creatorToText).join(', '),
     })),
     issues: recipe.issues.map((issue) => ({ ...issue, key: newKey() })),
   }
@@ -190,7 +191,7 @@ export function formToInput(
   const sources: RecipeInput['sources'] = form.sources.map((source) => ({
     kind: source.kind,
     url: orNull(source.url),
-    creators: source.creators.split(',').map((name) => name.trim()).filter((name) => name !== ''),
+    creators: creatorsFromText(source.creators),
   }))
 
   const input: RecipeInput = {

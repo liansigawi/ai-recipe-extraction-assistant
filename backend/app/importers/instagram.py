@@ -154,11 +154,18 @@ class CaptionSource(StrEnum):
     META_DESCRIPTION = "meta_description"  # og:description / description preview
 
 
+class PostPerson(BaseModel):
+    """An account as the post's data names it: the username, and the display name when given."""
+
+    username: str
+    full_name: str | None = None
+
+
 class CaptionCandidate(BaseModel):
     source: CaptionSource
     text: str
-    username: str | None = None
-    coauthors: list[str] = Field(default_factory=list)  # collaboration posts (seen live)
+    author: PostPerson | None = None  # the account that posted it
+    coauthors: list[PostPerson] = Field(default_factory=list)  # collaboration posts (seen live)
     # True: visibly cut off. False: taken from the post's own data, so complete.
     # None: no evidence either way.
     truncated: bool | None = None
@@ -275,7 +282,7 @@ def analyze_capture(page: CapturedPage, shortcode: str) -> CaptionAnalysis:
                     CaptionCandidate(
                         source=source,
                         text=text,
-                        username=media_username(media),
+                        author=media_author(media),
                         coauthors=media_coauthors(media),
                         truncated=False,
                     )
@@ -337,20 +344,29 @@ def media_caption(media: dict[str, Any]) -> tuple[bool, str | None]:
     return False, None
 
 
-def media_username(media: dict[str, Any]) -> str | None:
+def _person(account: Any) -> PostPerson | None:
+    """{"username": ..., "full_name": ...} as seen on post pages ("user") and in the embed view ("owner")."""
+    if not isinstance(account, dict) or not isinstance(account.get("username"), str) or not account["username"]:
+        return None
+    full_name = account.get("full_name")
+    return PostPerson(username=account["username"], full_name=full_name.strip() if isinstance(full_name, str) and full_name.strip() else None)
+
+
+def media_author(media: dict[str, Any]) -> PostPerson | None:
+    """The account that posted it, with its display name (seen live: "ריטה קדוש" for ritakadosh_)."""
     for key in ("user", "owner"):
-        owner = media.get(key)
-        if isinstance(owner, dict) and isinstance(owner.get("username"), str):
-            return owner["username"]
+        person = _person(media.get(key))
+        if person is not None:
+            return person
     return None
 
 
-def media_coauthors(media: dict[str, Any]) -> list[str]:
-    """Usernames of collaborators on a co-authored post (coauthor_producers)."""
+def media_coauthors(media: dict[str, Any]) -> list[PostPerson]:
+    """Collaborators on a co-authored post (coauthor_producers), with their display names."""
     producers = media.get("coauthor_producers")
     if not isinstance(producers, list):
         return []
-    return [p["username"] for p in producers if isinstance(p, dict) and isinstance(p.get("username"), str)]
+    return [person for person in map(_person, producers) if person is not None]
 
 
 def embed_caption(soup: BeautifulSoup) -> CaptionCandidate | None:
@@ -367,7 +383,8 @@ def embed_caption(soup: BeautifulSoup) -> CaptionCandidate | None:
     if not text:
         return None
     return CaptionCandidate(
-        source=CaptionSource.EMBED_PAGE, text=text, username=username, truncated=_ends_with_ellipsis(text) or None
+        source=CaptionSource.EMBED_PAGE, text=text, author=PostPerson(username=username) if username else None,
+        truncated=_ends_with_ellipsis(text) or None,
     )
 
 
@@ -386,7 +403,7 @@ def meta_captions(soup: BeautifulSoup) -> list[CaptionCandidate]:
                 CaptionCandidate(
                     source=CaptionSource.META_DESCRIPTION,
                     text=caption,
-                    username=match.group("username"),
+                    author=PostPerson(username=match.group("username")),
                     truncated=True if _ends_with_ellipsis(caption) else None,
                 )
             )
@@ -797,8 +814,8 @@ class CaptionRetrieval(BaseModel):
     caption: str | None = None  # exactly as Instagram has it, invisible direction marks included
     complete: bool = False  # True only for a caption taken from the post's own data
     retrieved_from: PageName | None = None
-    username: str | None = None
-    coauthors: list[str] = Field(default_factory=list)
+    author: PostPerson | None = None
+    coauthors: list[PostPerson] = Field(default_factory=list)
     attempts: list[RetrievalAttempt] = Field(default_factory=list)
 
 
@@ -862,7 +879,7 @@ def _combine(
                     caption=analysis.best.text,
                     complete=wanted is FetchOutcome.CAPTION_FOUND,
                     retrieved_from=page_name,
-                    username=analysis.best.username,
+                    author=analysis.best.author,
                     coauthors=analysis.best.coauthors,
                     attempts=attempts,
                 )

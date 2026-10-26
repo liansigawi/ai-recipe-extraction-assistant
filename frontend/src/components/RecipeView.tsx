@@ -1,6 +1,7 @@
-import type { ReactNode, Ref } from 'react'
+import { Fragment, type ReactNode, type Ref } from 'react'
+import { creditedSource, postLink, profileUrl, shownName } from '../credit'
 import { SOURCE_LABELS } from '../labels'
-import type { IngredientGroup, Recipe, Source, StepGroup } from '../types'
+import type { Creator, IngredientGroup, Recipe, Source, StepGroup } from '../types'
 import CategoryChip from './CategoryChip'
 import OriginalText from './OriginalText'
 
@@ -25,6 +26,7 @@ export default function RecipeView({ recipe, titleRef, actions }: RecipeViewProp
         </h2>
         {actions}
       </div>
+      <CreditLine sources={recipe.sources} />
       {recipe.is_sample && (
         <p className="sample-note">
           מתכון דוגמה: הומצא כדי להדגים את המחברת. הוא לא מבוסס על מתכון אמיתי, וגם לא על הקישורים מאינסטגרם ששלחתם. אפשר
@@ -45,7 +47,8 @@ export default function RecipeView({ recipe, titleRef, actions }: RecipeViewProp
         {recipe.servings !== null && <li dir="auto">{recipe.servings}</li>}
         {recipe.sources.map((source, index) => (
           <li key={index}>
-            <SourceLabel source={source} />
+            {/* The credited source's creators are already under the title. */}
+            <SourceLabel source={source} withCreators={source !== creditedSource(recipe.sources)} />
           </li>
         ))}
         <li>
@@ -135,7 +138,57 @@ function StepGroups({ groups }: { groups: StepGroup[] }) {
   )
 }
 
-function SourceLabel({ source }: { source: Source }) {
+/** Under the title: "מאת ריטה קדוש (@ritakadosh_) · לפוסט המקורי באינסטגרם", from the editable credit. */
+function CreditLine({ sources }: { sources: Source[] }) {
+  const credited = creditedSource(sources)
+  const post = postLink(sources)
+  if (credited === undefined && post === undefined) return null
+  return (
+    <p className="credit-line">
+      {credited !== undefined && (
+        <>
+          מאת{' '}
+          {credited.creators.map((creator, index) => (
+            <Fragment key={index}>
+              {index > 0 && ', '}
+              <CreatorName creator={creator} />
+            </Fragment>
+          ))}
+        </>
+      )}
+      {post !== undefined && post.url !== null && (
+        <>
+          {credited !== undefined && ' · '}
+          <a href={post.url} target="_blank" rel="noreferrer">
+            {post.kind === 'instagram' ? 'לפוסט המקורי באינסטגרם' : 'למקור'}
+          </a>
+        </>
+      )}
+    </p>
+  )
+}
+
+/** "ריטה קדוש (@ritakadosh_)", with the username linking to the Instagram profile; the username alone
+ * when there is no other name. */
+export function CreatorName({ creator }: { creator: Creator }) {
+  const name = shownName(creator)
+  const handle =
+    creator.username !== null ? (
+      <a href={profileUrl(creator.username)} target="_blank" rel="noreferrer" dir="ltr">
+        @{creator.username}
+      </a>
+    ) : null
+  return (
+    <span className="creator">
+      {/* <bdi> isolates text whose direction is unknown, such as an English name inside Hebrew. */}
+      {name !== null && <bdi className="creator-name">{name}</bdi>}
+      {name !== null && handle !== null && <> ({handle})</>}
+      {name === null && handle}
+    </span>
+  )
+}
+
+function SourceLabel({ source, withCreators }: { source: Source; withCreators: boolean }) {
   const label = SOURCE_LABELS[source.kind]
   return (
     <span>
@@ -148,13 +201,13 @@ function SourceLabel({ source }: { source: Source }) {
       ) : (
         label
       )}
-      {/* <bdi> isolates text whose direction is unknown, such as an English name inside Hebrew. */}
-      {source.creators.map((creator, index) => (
-        <span key={index}>
-          {' · '}
-          <bdi>{creator}</bdi>
-        </span>
-      ))}
+      {withCreators &&
+        source.creators.map((creator, index) => (
+          <span key={index}>
+            {' · '}
+            <CreatorName creator={creator} />
+          </span>
+        ))}
     </span>
   )
 }

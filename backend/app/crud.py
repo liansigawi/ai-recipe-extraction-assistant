@@ -39,6 +39,8 @@ def to_schema(row: models.Recipe) -> schemas.Recipe:
                 imported_at=row.original.imported_at,
                 url=row.original.url,
                 retrieved_from=row.original.retrieved_from,
+                author=(row.original.source_details or {}).get("author"),
+                coauthors=(row.original.source_details or {}).get("coauthors", []),
             )
             if row.original
             else None
@@ -193,7 +195,9 @@ def _apply(row: models.Recipe, data: schemas.RecipeInput) -> None:
     row.notes = list(data.notes)
     # Replacing the list: removed sources are deleted (delete-orphan), new ones inserted.
     row.sources = [
-        models.RecipeSource(position=index, kind=source.kind, url=source.url, creators=list(source.creators))
+        models.RecipeSource(
+            position=index, kind=source.kind, url=source.url, creators=[c.model_dump() for c in source.creators]
+        )
         for index, source in enumerate(data.sources)
     ]
     row.status = data.status
@@ -221,6 +225,7 @@ def create_import(
     kind: schemas.ImportKind = "text",
     url: str | None = None,
     retrieved_from: schemas.RetrievedFrom | None = None,
+    source_details: dict | None = None,
 ) -> schemas.Recipe:
     """Save an imported draft together with the text it came from (and the post's address), in one transaction."""
     check_classification(session, draft.category_id, draft.subcategory_id)
@@ -228,7 +233,8 @@ def create_import(
     row = models.Recipe(created_at=now, updated_at=now)
     _apply(row, draft)
     row.original = models.RecipeImport(
-        kind=kind, original_text=original_text, model=model, imported_at=now, url=url, retrieved_from=retrieved_from
+        kind=kind, original_text=original_text, model=model, imported_at=now, url=url,
+        retrieved_from=retrieved_from, source_details=source_details,
     )
     session.add(row)
     # INSERT INTO recipes ...; INSERT INTO recipe_sources ...; INSERT INTO recipe_imports ...; COMMIT

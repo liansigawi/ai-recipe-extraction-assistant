@@ -197,7 +197,7 @@ export const sampleRecipes: Recipe[] = [
       },
     ],
     notes: ['Keeps for a week in the fridge.'],
-    sources: [{ kind: 'website', url: 'https://example.com/granola-bars', creators: ['Example Kitchen'] }],
+    sources: [{ kind: 'website', url: 'https://example.com/granola-bars', creators: [{ name: 'Example Kitchen', username: null }] }],
     created_at: created,
     updated_at: created,
     is_sample: true,

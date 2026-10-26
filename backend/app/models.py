@@ -92,7 +92,7 @@ class RecipeSource(Base):
     position: Mapped[int]  # keeps the sources in order
     kind: Mapped[str]  # instagram, website, screenshot, text or manual
     url: Mapped[str | None]
-    creators: Mapped[list[str]] = mapped_column(JSON)
+    creators: Mapped[list[dict]] = mapped_column(JSON)  # [{"name": ..., "username": ...}] (migration 0008)
 
 
 class RecipeImport(Base):
@@ -108,3 +108,5 @@ class RecipeImport(Base):
     imported_at: Mapped[datetime] = mapped_column(UTCDateTime)
     url: Mapped[str | None]  # the post it came from, also for a caption pasted after a failed read
     retrieved_from: Mapped[str | None]  # "post_page" or "embed_view" for a caption read automatically
+    # Who posted it, as read from the post: {"author": {"name", "username"}, "coauthors": [...]}.
+    source_details: Mapped[dict | None] = mapped_column(JSON)

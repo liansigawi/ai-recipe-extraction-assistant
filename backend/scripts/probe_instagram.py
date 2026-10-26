@@ -190,9 +190,9 @@ def analyze_run(run_dir: Path) -> None:
             )
             details.append(f"**{strategy}** → `{analysis.outcome.value}`")
             for candidate in analysis.candidates:
-                author = candidate.username or "unknown author"
+                author = candidate.author.username if candidate.author else "unknown author"
                 if candidate.coauthors:
-                    author += f" with {', '.join(candidate.coauthors)}"
+                    author += f" with {', '.join(person.username for person in candidate.coauthors)}"
                 details.append(
                     f"- `{candidate.source}` ({author}): {len(candidate.text)} chars, truncated={candidate.truncated}, "
                     f"vs reference: {compare(candidate, reference)} — {preview(candidate.text)}"

@@ -194,9 +194,12 @@ once deleted, they are not added again.
    `?igsh=...` work too), and press **"ייבוא מהקישור"**. It usually takes under a minute: a few
    seconds to read the post, then the same extraction as for pasted text (with Ollama, on this computer).
 2. The draft opens for review exactly like a pasted one. "הטקסט המקורי" says it is the post's
-   caption, links to the post, and shows the full caption exactly as read. The recipe's source is the
-   post with its author (and co-authors), which you can edit; the caption and the address stored with
-   the original never change.
+   caption, links to the post, and shows the full caption exactly as read. Under the title, the
+   **credit**: the creator's display name and Instagram username as the post's data gives them ("מאת
+   ריטה קדוש (@ritakadosh_) · לפוסט המקורי באינסטגרם"), the username linking to the profile. The credit
+   comes from the post, never from the model. You can edit it in the recipe's sources ("שם @שם_משתמש",
+   separated by commas), for example when the posting account credits someone else; who posted it, as
+   read, stays with the original text and never changes.
 
 How the caption is read: as a logged-out visitor. A fresh browser loads the post page and reads the
 post's own data, which holds the complete caption. Only if that gives no caption (and Instagram did not

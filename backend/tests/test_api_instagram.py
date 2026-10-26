@@ -7,7 +7,7 @@ or a model.
 import pytest
 
 from app.api.imports import get_caption_retriever
-from app.importers.instagram import CaptionRetrieval, FetchOutcome, RetrievalAttempt
+from app.importers.instagram import CaptionRetrieval, FetchOutcome, PostPerson, RetrievalAttempt
 from tests.test_api_imports import StandIn, answer, recipe_count, use  # noqa: F401  (use is a fixture)
 from tests.test_extraction_review import SOURCE
 
@@ -43,12 +43,15 @@ def reads(client):
 
 
 def found(**extra) -> Reader:
-    return Reader(FetchOutcome.CAPTION_FOUND, SOURCE, retrieved_from="post_page", username="baker", **extra)
+    return Reader(
+        FetchOutcome.CAPTION_FOUND, SOURCE, retrieved_from="post_page",
+        author=PostPerson(username="baker", full_name="אופה ביתית"), **extra,
+    )
 
 
 def test_a_post_becomes_a_draft_with_its_caption_and_address_kept(client, use, reads):
     extractor = use(StandIn(answer()))
-    reader = reads(found(coauthors=["friend"]))
+    reader = reads(found(coauthors=[PostPerson(username="friend")]))
     response = client.post("/api/imports/instagram", json={"url": POST})
 
     assert response.status_code == 201
@@ -57,9 +60,13 @@ def test_a_post_becomes_a_draft_with_its_caption_and_address_kept(client, use, r
     assert draft["original"] | {"imported_at": None} == {
         "kind": "instagram", "text": SOURCE, "model": "claude-test-model", "imported_at": None,
         "url": POST, "retrieved_from": "post_page",
+        "author": {"name": "אופה ביתית", "username": "baker"}, "coauthors": [{"name": None, "username": "friend"}],
     }
     # The editable source: the post, its author and co-author.
-    assert draft["sources"] == [{"kind": "instagram", "url": POST, "creators": ["baker", "friend"]}]
+    credit = [{"name": "אופה ביתית", "username": "baker"}, {"name": None, "username": "friend"}]
+    assert draft["sources"] == [{"kind": "instagram", "url": POST, "creators": credit}]
+    # Who posted it, as read: kept with the original, apart from the credit you can edit.
+    assert (draft["original"]["author"], draft["original"]["coauthors"]) == (credit[0], credit[1:])
     assert reader.calls == [POST] and [text for text, _ in extractor.calls] == [SOURCE]
     # Kept after a reload of the page.
     assert client.get(f"/api/recipes/{draft['id']}").json()["original"]["url"] == POST

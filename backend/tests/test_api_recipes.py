@@ -138,7 +138,10 @@ def test_a_source_keeps_every_creator(client):
     # Seen live: a collaboration post has a main author and a co-author.
     data = recipe_by_title(client, GRANOLA)
     data["sources"] = [{"kind": "instagram", "url": "https://www.instagram.com/p/Example12345/", "creators": ["baker", "partner.shop"]}]
-    assert Recipe.model_validate(data).sources[0].creators == ["baker", "partner.shop"]
+    # Written as plain strings (as before 2026-10-26): on an Instagram source, usernames.
+    assert [c.model_dump() for c in Recipe.model_validate(data).sources[0].creators] == [
+        {"name": None, "username": "baker"}, {"name": None, "username": "partner.shop"}
+    ]
 
 
 @pytest.mark.parametrize("url", ["javascript:alert(1)", "file:///C:/Users/me/notes.txt", "www.example.com", "https://exa mple.com"])
