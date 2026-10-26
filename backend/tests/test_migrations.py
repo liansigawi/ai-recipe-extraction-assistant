@@ -276,9 +276,10 @@ def test_0005_renames_in_place_adds_the_drinks_and_keeps_every_recipe(tmp_path):
         (1, "קינוחים"), (2, "ארוחות בשריות"), (3, "ארוחות קלילות"), (4, "משקאות")
     ]
     assert [description for _, _, description in categories] == list(STARTER.values())
-    assert rows(path, "recipes") == recipes and rows(path, "recipe_imports") == originals
+    # 0006 then adds two columns to the originals; their first six are untouched.
+    assert rows(path, "recipes") == recipes and [row[:6] for row in rows(path, "recipe_imports")] == originals
     assert rows(path, "recipe_sources") == sources
-    assert len(list(tmp_path.glob("recipes.backup-*-before-0005.db"))) == 1
+    assert len(list(tmp_path.glob(f"recipes.backup-*-before-{head_revision()}.db"))) == 1
 
 
 def test_0005_leaves_a_category_you_renamed_and_a_drinks_category_you_already_have(tmp_path):
@@ -308,3 +309,17 @@ def test_downgrading_0005_keeps_the_drinks_category_while_a_recipe_is_in_it(tmp_
     assert [name for name, _ in categories_of(path)] == ["קינוחים", "בישולים", "ארוחות קלילות", "משקאות"]
     with closing(sqlite3.connect(path)) as db:
         assert db.execute("SELECT category_id FROM recipes ORDER BY id").fetchall() == [(4,), (2,)]
+
+
+def test_0006_gives_existing_originals_no_address_and_downgrade_keeps_them(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    upgrade_database(path)
+    with closing(sqlite3.connect(path)) as db:
+        assert db.execute("SELECT kind, url, retrieved_from FROM recipe_imports").fetchall() == [("text", None, None)]
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.downgrade(alembic_config(connection), "0005")
+    engine.dispose()
+    with closing(sqlite3.connect(path)) as db:
+        assert db.execute("SELECT recipe_id, kind, original_text FROM recipe_imports").fetchall() == [(2, "text", "בדיקה\nמערבבים.")]

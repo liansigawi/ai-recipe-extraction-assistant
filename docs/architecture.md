@@ -19,8 +19,8 @@ FastAPI backend (uvicorn, bound to 127.0.0.1:8000)
    │                   with review issues (milestone 4). Classification is part of the same answer:
    │                   only ids of existing categories; the backend checks them. Never creates categories.
    │                   The model is the Claude API or a local model through Ollama (RECIPES_EXTRACTOR).
-   ├─ importers/       FETCH source content only: instagram (milestone 1); website, screenshots
-   │                   (planned, milestone 5). No AI.
+   ├─ importers/       FETCH source content only: instagram (milestone 1, used by the app since
+   │                   milestone 5); website, screenshots (planned, milestone 5). No AI.
    └─ files            (planned, milestone 5) Uploaded screenshots under data/uploads/, paths in the database.
           │
           ├─► Anthropic API (external, from milestone 4): only the pasted text and the category list.
@@ -232,8 +232,47 @@ default action) keeps `status: "draft"` and the open issues. A draft may stay un
 `not_extracted` issue and the first line as a stand-in title, for the person to fill in. It works
 with no API key.
 
-**Not yet:** websites, screenshots and Instagram links (milestone 5) will fetch a source first and
-then use the same extraction and checks.
+## Import flow (milestone 5: an Instagram link)
+
+```text
+ImportPanel ── POST /api/imports/instagram {url, use_model} ──► app/api/imports.py
+  1. parse_instagram_url: /p/, /reel/, /reels/, /tv/, with a username first, with ?igsh=...; the
+     canonical address. Anything else (another site, stories, share links): 422 invalid_instagram_url.
+  2. retrieve_caption (importers/instagram.py), run in its own event loop (a Proactor loop on
+     Windows: the server's own loop cannot start the browser), at most two bounded page loads:
+       a. the post page in a fresh logged-out Chromium; analyze_capture reads the post's own data
+          (the complete caption, its author and co-authors);
+       b. only if that gave no complete caption and Instagram did not say "unavailable", "no
+          caption" or "wait": the public embed view over plain HTTP, once;
+       c. neither complete: a preview from either page -> caption_incomplete; nothing: the reason.
+  3. Read: the caption goes through step 2 onward of the pasted-text flow above (the same
+     extraction, quantities, separate classification and checks).
+  4. create_import: the draft with kind "instagram", the caption exactly as read, the canonical
+     address and which page supplied it (recipe_imports); the recipe's source is the post with
+     its creators (editable).
+```
+
+Failures save nothing, and their `details` carry the address, the caption if one was read, and the
+page loads (`attempts`), so the page can offer pasting the caption with the link kept:
+
+| Code | HTTP | When |
+|---|---|---|
+| `invalid_instagram_url` | 422 | not a link to one post or Reel |
+| `instagram_unavailable` / `instagram_login_required` | 502 | Instagram says so (deleted, private, gated) |
+| `instagram_rate_limited` | 429 | Instagram asks to wait (no second page is tried) |
+| `instagram_no_caption` | 422 | the post has no caption |
+| `instagram_caption_not_found` / `instagram_error` | 502 | the page loaded but showed no caption / could not be loaded |
+| `instagram_timeout` | 504 | no answer in time |
+| `instagram_caption_incomplete` | 409 | only a preview, which may be cut off: the page puts it in the text box |
+| extraction errors (`not_a_recipe`, ...) | as for text | the caption was read: it comes back in `details` |
+
+**The pasted fallback.** `POST /api/imports/text` takes an optional `url` (an Instagram address,
+normalized the same way): the original is `kind: "text"` with that address, and the recipe's source is
+the post. With `possibly_incomplete: true` (a preview sent unchanged) the draft starts with a
+`caption_incomplete` point.
+
+**Not yet:** websites and screenshots (milestone 5) will fetch a source first and then use the same
+extraction and checks.
 
 ## Data model (milestones 3 and 4)
 
@@ -247,10 +286,9 @@ recipes (`backend/app/seed.py`), once: deleted samples are not added again.
 | `categories` | `id`, `name`, `description`, `parent_id` (NULL = top level) | Subcategories are rows whose parent is a top-level category (one level deep). `UNIQUE(id, parent_id)` lets recipes reference the pair. The four starter categories (קינוחים, ארוחות בשריות, ארוחות קלילות, משקאות) are created with the database; after that only the user manages categories (milestone 6). |
 | `recipes` | `id`, `title`, `category_id`, `subcategory_id`, `servings`, `ingredient_groups` (JSON), `step_groups` (JSON), `notes` (JSON), `is_sample`, `created_at`, `updated_at`, `status`, `issues` (JSON) | Composite foreign key `(subcategory_id, category_id) → categories(id, parent_id)`, so the database rejects a subcategory under the wrong parent. See the enforcement notes below. Times are stored as UTC. `status` is `'draft'` or `'saved'` (a CHECK constraint). |
 | `recipe_sources` | `id`, `recipe_id`, `position`, `kind`, `url`, `creators` (JSON) | Editable attribution, in order. Deleting a recipe deletes its sources; saving replaces them. |
-| `recipe_imports` | `id`, `recipe_id` (unique), `kind`, `original_text`, `model`, `imported_at` | The imported original, exactly as pasted. Written once, when the import is saved; saving the recipe never touches it; deleting the recipe deletes it. |
+| `recipe_imports` | `id`, `recipe_id` (unique), `kind`, `original_text`, `model`, `imported_at`, `url`, `retrieved_from` | The imported original, exactly as pasted or read. `kind` is `text` (pasted) or `instagram` (the caption, read from the post); `url` is the post's canonical address (also for a caption pasted after a failed read); `retrieved_from` is `post_page` or `embed_view` for a caption read automatically. Written once, when the import is saved; saving the recipe never touches it; deleting the recipe deletes it. |
 
-Planned: `source_files` with ordered screenshots, paths relative to the data folder, and the fetch
-outcome for links (milestone 5).
+Planned: `source_files` with ordered screenshots, paths relative to the data folder (milestone 5).
 
 **Migrations.** Schema changes are Alembic scripts in `backend/migrations/versions/`: `0001`
 creates the milestone-3 tables statement for statement (a test compares it with
@@ -301,7 +339,8 @@ Real relations (categories, sources, files) stay as proper tables with foreign k
 | `POST /api/categories`, `PUT/DELETE /api/categories/{id}` | Manual category management | planned (milestone 6) |
 | `GET /api/extraction` | Is an API key configured, and which model imports use (never the key) | ✅ milestone 4 |
 | `POST /api/imports/text` | Pasted text → a saved draft with review issues and the original (201) | ✅ milestone 4 |
-| `POST /api/imports/link`, `/screenshots` | A URL or ordered images → the same draft flow | planned (milestone 5) |
+| `POST /api/imports/instagram` | An Instagram post's address → its caption, read from the post → the same draft flow (201); failures above | ✅ milestone 5 |
+| `POST /api/imports/link`, `/screenshots` | A website's address or ordered images → the same draft flow | planned (milestone 5) |
 | `GET /api/files/{id}` | Serve a stored source image | planned (milestone 5) |
 
 Error codes the page branches on: `recipe_not_found` (404), `invalid_request` (422, with the invalid
@@ -361,7 +400,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2 | ✅ FastAPI + Vite/React scaffold; recipe contract; sample recipe list and cooking view | React: components, props, lists and keys, `useState`, lifting state up, derived values, a first `useRef`/`useEffect`; RTL basics; API error format |
 | 3 | ✅ SQLite + SQLAlchemy models, recipe CRUD, editor; the page loads recipes from the API | Controlled forms, `useEffect` + `fetch` with cleanup, loading and error states, `key` to reset state, focus management; SQL behind the ORM, transactions, constraints |
 | 4 | ✅ Pasted text → Claude extraction → strict classification → review → save; migrations | Structured output, validating a model's answer, prompt injection, enforcing the category rule in code; migrations and transactions; `localStorage`; work that finishes after the user moved on |
-| 5 | Website (JSON-LD first), screenshots (ordered, multimodal), Instagram importer | Fallback paths, file uploads, bounded timeouts; running a browser from a server |
+| 5 | Instagram importer ✅; website (JSON-LD first), screenshots (ordered, multimodal) | Fallback paths, file uploads, bounded timeouts; running a browser from a server |
 | 6 | Category settings, search and filters, RTL polish, error handling | Composing screens, accessibility, mixed-direction text |
 | 7 | Regression tests, evaluation set, GitHub Actions, docs; then Docker if useful | Tests vs live checks vs model evaluation |
 
@@ -430,6 +469,10 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-25 (2) | A colon cuts a line only after a label of at most five words; a sentence that ends in a colon keeps its list | An introduction ("…the secret turned out simple: salt, a lot of garlic and no vinegar") became two ingredient lines beside the real list (case 26). A list after a rejected introduction label is also kept out when the recipe has its own list. |
 | 2026-10-25 (2) | A passage labeled a heading that ends a sentence is a step (or an ingredient); a title passage that is only a label takes the rest of its line; the prompt says a title names the dish and an introduction that mentions it is not one | "מחממים תנור מראש." was a heading (case 18); the title was "ארוחת בוקר של שישי" without the dish (case 14), or an introduction sentence (case 24). |
 | 2026-10-25 (2) | Categories by the user's meaning (migration 0004): sweet desserts, dairy desserts included; generally savory dairy-based meals; generally meat- or poultry-based main dishes; no clear fit stays unclassified. The classification prompt says a category's description decides over its name, and the dish summary names what it is mainly made of | Measured on the same 60 drafts against the re-annotated expectations: 54 right, 5 wrong, 1 unresolved; the user's descriptions with the previous wording 46–49 right; the previous descriptions 44. The name "בישולים" (cooked dishes) had drawn vegetarian dishes. |
+| 2026-10-26 (2) | Instagram links: the post page in a fresh logged-out browser first; the embed view over HTTP once, only when the post page gave no complete caption and Instagram did not say "unavailable", "no caption" or "wait"; a preview is never imported as complete | milestone 1's recommendation. Instagram's own answers are final (asking another page would not change them, and after "wait" must not). A preview cannot be shown complete, so the person compares it with the post. |
+| 2026-10-26 (2) | One request reads the post and extracts the recipe; failures carry the address and any caption read | The caption saved with the draft is exactly what the server read (the page never sends it back as "Instagram's"); the page can still offer the paste fallback with what was read. |
+| 2026-10-26 (2) | The caption and the post's address are part of the read-only original (`recipe_imports.url`, `retrieved_from`; migration 0006); the editable source also gets the address and the creators | The person may change the source; the original records what was imported and from where. |
+| 2026-10-26 (2) | Playwright runs in `asyncio.run(..., loop_factory=ProactorEventLoop)` inside the import's worker thread | The server's own loop under `uvicorn --reload` on Windows cannot start the browser (milestone 1 finding); verified live in a `--reload` server. |
 | 2026-10-26 | A composed title names the dish itself (what it is, its main ingredients) in the text's own spelling, from the introduction too, never the occasion, story or hype; a title that starts no line of the text is flagged as composed whatever the model claims | Titles such as "משקה טרנדי לכבוד היום האחרון של הקיץ" named the occasion instead of the drink. Measured on 13 cases, two runs each: see docs/extraction-quality.md. |
 | 2026-10-25 (3) | The user's reorganized categories (migration 0005): "בישולים" renamed "ארוחות בשריות" (meat and poultry meals), "ארוחות קלילות" for savory dairy **or egg** meals, "משקאות" added at the user's request (drinks, smoothies, coffee drinks, lemonade; sweet or milk drinks too). The descriptions name concrete dishes and avoid the double meaning of "מלוח" (savory or salty); the no-fit example in the prompt no longer names a drink | Measured on the same 68 drafts with the category request alone: 65 right, 2 wrong, 1 unresolved with the chosen descriptions; 59 to 61 with plainer ones. A yes/no answer per category (59–60) and quoting the matching description words (60, forcing a category onto pickles and soup) were worse. |
 | 2026-10-25 (2) | The evaluation reports import success apart from accuracy within drafts, and a line or step kept as a group heading as misplaced | A refused recipe has no lines to check: without its own count it would vanish from the per-area numbers. |
@@ -482,13 +525,13 @@ redirect; a redirect would send the browser past the Vite proxy.
 ## Notes for upcoming milestones
 
 - **Milestone 5:**
-  - **Reuse the extraction.** A fetched caption or page text goes through the same
-    `ClaudeExtractor`, `build_draft` and `create_import`; `recipe_imports.kind` gains `instagram`,
-    `website` and `screenshots`, plus the URL and fetch outcome (a migration).
+  - **Reuse the extraction** (done for Instagram). A fetched page text goes through the same
+    extractor, `make_draft` and `create_import`; `recipe_imports.kind` gains `website` and
+    `screenshots`.
   - **Screenshots** are sent as image blocks in the same request, in order; the source check in
     `review.py` cannot compare with an image, so their lines need another review signal.
   - **Add evaluation cases** for each new source kind before relying on it.
 - **Milestone 5 (Windows):** `uvicorn --reload` (and `fastapi dev`) runs on an event loop that cannot
-  start subprocesses. Playwright then fails with an empty `NotImplementedError`. The importer must run
-  Playwright in its own thread with `asyncio.run(..., loop_factory=asyncio.ProactorEventLoop)`, or in
-  a child process. Both approaches were verified locally by the tooling research.
+  start subprocesses, and Playwright then fails with an empty `NotImplementedError`. The Instagram
+  import runs Playwright with `asyncio.run(..., loop_factory=asyncio.ProactorEventLoop)` inside the
+  import's worker thread (`retrieve_caption_blocking`), verified in a live `--reload` server.

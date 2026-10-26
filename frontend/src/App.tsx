@@ -252,7 +252,7 @@ export default function App() {
               </h2>
               <div className="button-row">
                 <button type="button" className="button-primary" onClick={handleImport}>
-                  ייבוא מטקסט
+                  ייבוא מתכון
                 </button>
                 <button type="button" className="button" onClick={handleCreate}>
                   מתכון חדש

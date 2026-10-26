@@ -96,13 +96,15 @@ class RecipeSource(Base):
 
 
 class RecipeImport(Base):
-    """The text a recipe was imported from, exactly as pasted. Kept apart from the editable recipe."""
+    """The text a recipe was imported from, exactly as pasted or read. Kept apart from the editable recipe."""
 
     __tablename__ = "recipe_imports"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     recipe_id: Mapped[int] = mapped_column(ForeignKey("recipes.id", ondelete="CASCADE"), unique=True)
-    kind: Mapped[str]  # "text" (pasted); screenshots and links come in milestone 5
+    kind: Mapped[str]  # "text" (pasted) or "instagram" (the caption, read from the post)
     original_text: Mapped[str] = mapped_column(Text)
-    model: Mapped[str | None]  # the Claude model that read it; None: saved without a model
+    model: Mapped[str | None]  # the model that read it; None: saved without a model
     imported_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    url: Mapped[str | None]  # the post it came from, also for a caption pasted after a failed read
+    retrieved_from: Mapped[str | None]  # "post_page" or "embed_view" for a caption read automatically

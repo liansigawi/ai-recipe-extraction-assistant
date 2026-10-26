@@ -37,6 +37,8 @@ def to_schema(row: models.Recipe) -> schemas.Recipe:
                 text=row.original.original_text,
                 model=row.original.model,
                 imported_at=row.original.imported_at,
+                url=row.original.url,
+                retrieved_from=row.original.retrieved_from,
             )
             if row.original
             else None
@@ -160,14 +162,23 @@ def create_recipe(session: Session, data: schemas.RecipeInput, *, is_sample: boo
 
 
 def create_import(
-    session: Session, draft: schemas.RecipeInput, *, original_text: str, model: str | None
+    session: Session,
+    draft: schemas.RecipeInput,
+    *,
+    original_text: str,
+    model: str | None,
+    kind: schemas.ImportKind = "text",
+    url: str | None = None,
+    retrieved_from: schemas.RetrievedFrom | None = None,
 ) -> schemas.Recipe:
-    """Save an imported draft together with the text it came from, in one transaction."""
+    """Save an imported draft together with the text it came from (and the post's address), in one transaction."""
     check_classification(session, draft.category_id, draft.subcategory_id)
     now = utc_now()
     row = models.Recipe(created_at=now, updated_at=now)
     _apply(row, draft)
-    row.original = models.RecipeImport(kind="text", original_text=original_text, model=model, imported_at=now)
+    row.original = models.RecipeImport(
+        kind=kind, original_text=original_text, model=model, imported_at=now, url=url, retrieved_from=retrieved_from
+    )
     session.add(row)
     # INSERT INTO recipes ...; INSERT INTO recipe_sources ...; INSERT INTO recipe_imports ...; COMMIT
     session.commit()

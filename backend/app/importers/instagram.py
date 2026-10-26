@@ -25,6 +25,7 @@ import contextlib
 import copy
 import json
 import re
+import sys
 import time
 from collections.abc import Iterator
 from enum import StrEnum
@@ -769,3 +770,109 @@ def _first_line(exc: Exception) -> str:
 
 def _elapsed_ms(started: float) -> int:
     return int((time.monotonic() - started) * 1000)
+
+
+# ---------------------------------------------------------------------------
+# Retrieval: what an import uses
+# ---------------------------------------------------------------------------
+
+PageName = Literal["post_page", "embed_view"]
+
+
+class RetrievalAttempt(BaseModel):
+    """One page load and what it showed: kept for the log and to explain a failure."""
+
+    page: PageName
+    outcome: FetchOutcome
+    http_status: int | None = None
+    elapsed_ms: int = 0
+    error: str | None = None
+
+
+class CaptionRetrieval(BaseModel):
+    """What reading one post for an import gave."""
+
+    url: str  # the post's canonical address
+    outcome: FetchOutcome
+    caption: str | None = None  # exactly as Instagram has it, invisible direction marks included
+    complete: bool = False  # True only for a caption taken from the post's own data
+    retrieved_from: PageName | None = None
+    username: str | None = None
+    coauthors: list[str] = Field(default_factory=list)
+    attempts: list[RetrievalAttempt] = Field(default_factory=list)
+
+
+# Instagram's own answers about the post (or about us): another page would not change them.
+_FINAL_OUTCOMES = {FetchOutcome.RATE_LIMITED, FetchOutcome.UNAVAILABLE, FetchOutcome.NO_CAPTION}
+# When no page had the caption, the more telling reason is reported.
+_FAILURE_ORDER = [
+    FetchOutcome.RATE_LIMITED,
+    FetchOutcome.LOGIN_REQUIRED,
+    FetchOutcome.UNAVAILABLE,
+    FetchOutcome.NO_CAPTION,
+    FetchOutcome.CAPTION_NOT_FOUND,
+    FetchOutcome.TIMEOUT,
+    FetchOutcome.ERROR,
+]
+
+
+async def retrieve_caption(
+    ref: InstagramRef, *, browser_timeout_s: float = 20.0, http_timeout_s: float = 10.0
+) -> CaptionRetrieval:
+    """Read one post's caption as milestone 1 recommended (docs/instagram-feasibility.md):
+
+    1. the post page in a fresh, logged-out browser, reading the post's own data (complete);
+    2. only if that gave no complete caption, and Instagram did not say that the post is unavailable
+       or has no caption, or that we should slow down: the public embed view, once, over plain HTTP;
+    3. if neither gave the complete caption, a preview from either page, marked incomplete;
+    4. otherwise the reason.
+    At most two page loads, each bounded (twice its timeout). Never a login, a retry loop or a
+    disguised client.
+    """
+    analyses: list[tuple[PageName, CaptionAnalysis]] = []
+    attempts: list[RetrievalAttempt] = []
+    for page_name, capture in (
+        ("post_page", lambda: capture_with_browser(ref.canonical_url, timeout_s=browser_timeout_s)),
+        ("embed_view", lambda: capture_with_http(ref.embed_url, timeout_s=http_timeout_s)),
+    ):
+        page = await capture()
+        analysis = analyze_capture(page, ref.shortcode)
+        analyses.append((page_name, analysis))
+        attempts.append(
+            RetrievalAttempt(
+                page=page_name, outcome=analysis.outcome, http_status=page.http_status, elapsed_ms=page.elapsed_ms,
+                error=page.error,
+            )
+        )
+        if analysis.outcome is FetchOutcome.CAPTION_FOUND or analysis.outcome in _FINAL_OUTCOMES:
+            break
+    return _combine(ref, analyses, attempts)
+
+
+def _combine(
+    ref: InstagramRef, analyses: list[tuple[PageName, CaptionAnalysis]], attempts: list[RetrievalAttempt]
+) -> CaptionRetrieval:
+    """The complete caption if a page had it; else a preview (the post page's first); else the reason."""
+    for wanted in (FetchOutcome.CAPTION_FOUND, FetchOutcome.CAPTION_INCOMPLETE):
+        for page_name, analysis in analyses:
+            if analysis.outcome is wanted and analysis.best is not None:
+                return CaptionRetrieval(
+                    url=ref.canonical_url,
+                    outcome=wanted,
+                    caption=analysis.best.text,
+                    complete=wanted is FetchOutcome.CAPTION_FOUND,
+                    retrieved_from=page_name,
+                    username=analysis.best.username,
+                    coauthors=analysis.best.coauthors,
+                    attempts=attempts,
+                )
+    outcome = min((analysis.outcome for _, analysis in analyses), key=_FAILURE_ORDER.index)
+    return CaptionRetrieval(url=ref.canonical_url, outcome=outcome, attempts=attempts)
+
+
+def retrieve_caption_blocking(ref: InstagramRef) -> CaptionRetrieval:
+    """retrieve_caption from synchronous code (an API endpoint runs in a worker thread), in an event loop
+    of its own. On Windows that must be a Proactor loop: Playwright starts the browser as a child
+    process, which the Selector loop that `uvicorn --reload` uses cannot do (milestone 1 finding)."""
+    loop_factory = asyncio.ProactorEventLoop if sys.platform == "win32" else None
+    return asyncio.run(retrieve_caption(ref), loop_factory=loop_factory)

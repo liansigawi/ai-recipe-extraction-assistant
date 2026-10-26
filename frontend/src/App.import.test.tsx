@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { AMBIGUOUS, fakeApi, type DraftMaker } from './test/fakeApi'
+import { AMBIGUOUS, INSTAGRAM_CAPTION, fakeApi, type DraftMaker } from './test/fakeApi'
 import { sampleCategories, sampleRecipes } from './test/sampleRecipes'
 import type { ExtractionInfo } from './types'
 
@@ -21,7 +21,7 @@ async function openImport(options: { configured?: boolean; extraction?: Extracti
   const extraction = options.extraction ?? (options.configured === false ? NO_KEY : CLAUDE)
   const api = fakeApi({ recipes: sampleRecipes, categories: sampleCategories, extraction, draftFor: options.draftFor })
   const view = render(<App />)
-  await user.click(await screen.findByRole('button', { name: 'ייבוא מטקסט' }))
+  await user.click(await screen.findByRole('button', { name: 'ייבוא מתכון' }))
   // Wait until the panel knows whether and how the model can be used.
   await screen.findByText(
     !extraction.configured ? /אפשר לשמור את הטקסט בלי עיבוד/ : extraction.local ? /ולא נשלח לשום מקום/ : /נשלחים ל-Anthropic/,
@@ -30,6 +30,7 @@ async function openImport(options: { configured?: boolean; extraction?: Extracti
 }
 
 const textBox = () => screen.getByLabelText('טקסט המתכון')
+const linkBox = () => screen.getByLabelText('קישור לפוסט באינסטגרם')
 
 async function importPasted(user: ReturnType<typeof userEvent.setup>) {
   await user.click(textBox())
@@ -41,7 +42,7 @@ async function importPasted(user: ReturnType<typeof userEvent.setup>) {
 describe('importing pasted text', () => {
   it('sends the text, then opens the draft for review beside the original', async () => {
     const { user, api } = await openImport()
-    expect(textBox()).toHaveFocus()
+    expect(linkBox()).toHaveFocus() // the link comes first; the text box is below it
     await importPasted(user)
 
     expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/text', body: { text: PASTED, use_model: true } }])
@@ -125,7 +126,7 @@ describe('importing pasted text', () => {
 
     view.unmount() // a reload: the page starts again from nothing
     render(<App />)
-    await user.click(await screen.findByRole('button', { name: 'ייבוא מטקסט' }))
+    await user.click(await screen.findByRole('button', { name: 'ייבוא מתכון' }))
     expect(textBox()).toHaveValue(PASTED)
   })
 
@@ -193,5 +194,105 @@ describe('importing with a local model (Ollama)', () => {
   it('says which command downloads a missing model', async () => {
     await openImport({ extraction: { ...LOCAL, configured: false, problem: 'ollama_model_missing' } })
     expect(screen.getByText(/עוד לא הורד ל-Ollama/)).toHaveTextContent('ollama pull qwen3:8b')
+  })
+})
+
+describe('importing an Instagram post', () => {
+  const POST = 'https://www.instagram.com/p/Cm1mCdCpSzJ/'
+
+  async function importLink(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(linkBox())
+    await user.paste(POST)
+    await user.click(screen.getByRole('button', { name: 'ייבוא מהקישור' }))
+  }
+
+  it('reads the post, then opens the draft beside the caption and the link to the post', async () => {
+    const { user, api } = await openImport({ extraction: LOCAL })
+    await importLink(user)
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+
+    expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/instagram', body: { url: POST, use_model: true } }])
+    const original = screen.getByText('הטקסט המקורי').closest('details')!
+    expect(original).toHaveTextContent('כיתוב מהפוסט באינסטגרם')
+    expect(original.querySelector('.original-text-body')?.textContent).toBe(INSTAGRAM_CAPTION)
+    expect(within(original).getByRole('link', { name: POST })).toHaveAttribute('href', POST)
+  })
+
+  it('says what it is doing while the post and the recipe are read', async () => {
+    const { user, api } = await openImport({ extraction: LOCAL })
+    const release = api.holdNext()
+    await importLink(user)
+    expect(await screen.findByText(/קורא את הכיתוב מהפוסט באינסטגרם, ואז המודל המקומי מסדר אותו/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'קורא…' })).toBeInTheDocument()
+    release()
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+  })
+
+  it('when the post cannot be read, says why, keeps the link and offers pasting the caption', async () => {
+    const { user, api } = await openImport()
+    api.answerNextWith(502, {
+      error: { code: 'instagram_unavailable', message: "Instagram says this post isn't available.", details: { url: POST, caption: null } },
+    })
+    await importLink(user)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('אינסטגרם אומר שהפוסט לא זמין')
+    expect(alert).toHaveTextContent('להדביק אותו בתיבה למטה; הקישור יישמר עם המתכון')
+    expect(linkBox()).toHaveValue(POST)
+    expect(textBox()).toHaveFocus()
+    expect(api.recipes()).toHaveLength(sampleRecipes.length) // nothing saved
+
+    await user.paste(PASTED)
+    await user.click(screen.getByRole('button', { name: 'קריאה עם Claude' }))
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+    expect(api.changes()[1].body).toEqual({ text: PASTED, use_model: true, url: POST })
+  })
+
+  it('puts a caption that may be cut off in the box, and flags it if it is sent unchanged', async () => {
+    const preview = 'עוגת לימון של סבתא 🍋\n3 ביצים…'
+    const { user, api } = await openImport()
+    api.answerNextWith(409, {
+      error: { code: 'instagram_caption_incomplete', message: 'Only a preview.', details: { url: POST, caption: preview } },
+    })
+    await importLink(user)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('ייתכן שהיא קטועה')
+    expect(screen.getByRole('alert')).toHaveTextContent('השלימו את החסר')
+    expect(textBox()).toHaveValue(preview)
+    await user.click(screen.getByRole('button', { name: 'קריאה עם Claude' }))
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+    expect(api.changes()[1].body).toEqual({ text: preview, use_model: true, url: POST, possibly_incomplete: true })
+  })
+
+  it('asks before replacing text already in the box with a caption read from the post', async () => {
+    const { user, api } = await openImport()
+    await user.click(textBox())
+    await user.paste(PASTED)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    api.answerNextWith(422, {
+      error: { code: 'not_a_recipe', message: 'No recipe.', details: { url: POST, caption: INSTAGRAM_CAPTION } },
+    })
+    await importLink(user)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('לא נמצא מתכון בטקסט.')
+    expect(confirm).toHaveBeenCalledWith('להחליף את הטקסט שבתיבה בכיתוב שנקרא מהפוסט?')
+    expect(textBox()).toHaveValue(PASTED) // kept: the person said no
+  })
+
+  it('explains an address that is not a post, and leaves the focus on the link', async () => {
+    const { user, api } = await openImport()
+    api.answerNextWith(422, {
+      error: { code: 'invalid_instagram_url', message: 'Only links to a single post or Reel are supported.', details: null },
+    })
+    await importLink(user)
+    expect(await screen.findByRole('alert')).toHaveTextContent('זה לא נראה כמו קישור לפוסט')
+    expect(linkBox()).toHaveFocus()
+  })
+
+  it('asks for a link before sending anything', async () => {
+    const { user, api } = await openImport()
+    await user.click(screen.getByRole('button', { name: 'ייבוא מהקישור' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('הדביקו קודם קישור לפוסט באינסטגרם.')
+    expect(api.changes()).toEqual([])
   })
 })

@@ -84,6 +84,25 @@ export function errorMessage(error: unknown): string {
       return `המודל לא הצליח לקרוא את המתכון הפעם (${error.message}). נסו שוב.`
     case 'not_a_recipe':
       return 'לא נמצא מתכון בטקסט.'
+    // Reading an Instagram post (backend/app/importers/instagram.py).
+    case 'invalid_instagram_url':
+      return 'זה לא נראה כמו קישור לפוסט או ל-Reel באינסטגרם. העתיקו את הכתובת מהפוסט עצמו (למשל https://www.instagram.com/p/...). קישורי שיתוף (instagram.com/share/...) עוד לא נתמכים: פתחו אותם בדפדפן והעתיקו את כתובת הפוסט.'
+    case 'instagram_unavailable':
+      return 'אינסטגרם אומר שהפוסט לא זמין (נמחק, פרטי, או לא זמין כרגע).'
+    case 'instagram_login_required':
+      return 'אינסטגרם מבקש להתחבר כדי לראות את הפוסט הזה. המחברת לא מתחברת לאינסטגרם בשמכם.'
+    case 'instagram_rate_limited':
+      return 'אינסטגרם מבקש להמתין לפני שקוראים פוסטים נוספים. נסו שוב מאוחר יותר.'
+    case 'instagram_no_caption':
+      return 'לפוסט אין כיתוב.'
+    case 'instagram_caption_not_found':
+      return 'דף הפוסט נטען, אבל הכיתוב לא נמצא בו.'
+    case 'instagram_timeout':
+      return 'אינסטגרם לא ענה בזמן.'
+    case 'instagram_error':
+      return 'לא הצלחנו לקרוא את הפוסט.'
+    case 'instagram_caption_incomplete':
+      return 'נקראה רק תצוגה מקדימה של הכיתוב, וייתכן שהיא קטועה.'
     default:
       return `הפעולה נכשלה: ${error.message}`
   }
@@ -117,6 +136,33 @@ export function getExtractionInfo(): Promise<ExtractionInfo> {
  * Pasted text -> a saved draft for review. With useModel = false the text is saved without
  * Claude, to fill in by hand. Can take a minute: Claude reads the whole text.
  */
-export function importText(text: string, useModel: boolean): Promise<Recipe> {
-  return request('/api/imports/text', { method: 'POST', body: JSON.stringify({ text, use_model: useModel }) })
+export function importText(
+  text: string,
+  useModel: boolean,
+  from: { url?: string; possiblyIncomplete?: boolean } = {},
+): Promise<Recipe> {
+  // The post's address and the "preview" flag are sent only when there is one.
+  const body = {
+    text,
+    use_model: useModel,
+    ...(from.url ? { url: from.url } : {}),
+    ...(from.possiblyIncomplete ? { possibly_incomplete: true } : {}),
+  }
+  return request('/api/imports/text', { method: 'POST', body: JSON.stringify(body) })
+}
+
+/**
+ * An Instagram post's address -> its caption, read by the backend from the public post -> a saved
+ * draft for review. Takes a few seconds more than pasted text. When the post cannot be read, the
+ * error's details carry the address and any caption that was read (captionFrom below).
+ */
+export function importInstagram(url: string, useModel: boolean): Promise<Recipe> {
+  return request('/api/imports/instagram', { method: 'POST', body: JSON.stringify({ url, use_model: useModel }) })
+}
+
+/** The caption an Instagram import read before it failed (a preview, or one the model found no recipe in). */
+export function captionFrom(error: unknown): string | null {
+  if (!(error instanceof ApiError)) return null
+  const caption = (error.details as { caption?: unknown } | null)?.caption
+  return typeof caption === 'string' && caption.trim() !== '' ? caption : null
 }

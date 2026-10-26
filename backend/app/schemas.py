@@ -143,6 +143,7 @@ BackendIssueKind = Literal[
     "not_extracted",  # saved without the model: fill in the recipe from the original text
     "unused_text",  # a passage of the original the model neither used nor marked as not part of the recipe
     "invalid_reference",  # the model pointed at passages that do not exist, or used one twice
+    "caption_incomplete",  # the caption came from a preview that may be cut off: compare with the post
 ]
 IssueKind = ModelIssueKind | BackendIssueKind
 
@@ -155,15 +156,22 @@ class Issue(ContractModel):
     quote: NonEmptyStr | None = None  # the exact words of the original text it is about, if any
 
 
+ImportKind = Literal["text", "instagram"]  # websites and screenshots come later in milestone 5
+# Which public page of the post supplied a caption read automatically (app/importers/instagram.py).
+RetrievedFrom = Literal["post_page", "embed_view"]
+
+
 class ImportedOriginal(ContractModel):
-    """The text a recipe was imported from, exactly as pasted. Read-only: saving never changes it."""
+    """The text a recipe was imported from, exactly as pasted or read. Read-only: saving never changes it."""
 
     model_config = ConfigDict(str_strip_whitespace=False)  # returned exactly as stored, edges included
 
-    kind: Literal["text"]  # screenshots and links come in milestone 5
+    kind: ImportKind  # "text": pasted by the person; "instagram": the caption, read from the post
     text: str
-    model: NonEmptyStr | None  # the Claude model that read it; None: saved without a model
+    model: NonEmptyStr | None  # the model that read it; None: saved without a model
     imported_at: AwareDatetime
+    url: str | None = None  # the post it came from (also for a caption pasted after a failed read)
+    retrieved_from: RetrievedFrom | None = None  # only for a caption read automatically
 
 
 class Recipe(RecipeContent):
@@ -228,6 +236,13 @@ class Category(ContractModel):
 MAX_IMPORT_CHARACTERS = 20_000  # a long recipe page is about 10,000; an Instagram caption at most 2,200
 
 
+class InstagramImport(ContractModel):
+    """POST /api/imports/instagram: the address of a public Instagram post or Reel."""
+
+    url: str = Field(min_length=1, max_length=2000)
+    use_model: bool = True  # False: save the caption as a draft to fill in by hand
+
+
 class TextImport(ContractModel):
     """POST /api/imports/text: recipe text the person pasted."""
 
@@ -236,6 +251,11 @@ class TextImport(ContractModel):
 
     text: str = Field(min_length=1, max_length=MAX_IMPORT_CHARACTERS)
     use_model: bool = True  # False: save the text as a draft to fill in by hand, without Claude
+    # The Instagram post the text was copied from, when reading the post itself failed: kept with
+    # the original and as the recipe's source.
+    url: str | None = Field(default=None, max_length=2000)
+    # The text is a caption preview that may be cut off, sent unchanged: the draft says so.
+    possibly_incomplete: bool = False
 
     @field_validator("text")
     @classmethod

@@ -4,11 +4,12 @@ A personal recipe notebook that runs on your own computer. The goal: import reci
 posts, recipe websites, screenshots, or pasted text; review them; and keep them in a searchable
 collection that supports Hebrew and right-to-left text.
 
-> **Status: milestone 4 of 7.** A FastAPI backend with a SQLite database and a React + TypeScript
-> frontend run locally. You can **paste recipe text and have Claude turn it into a draft**, review
-> the draft beside the original text, and save it explicitly; or create, edit and delete recipes by
-> hand. A new database starts with four categories and **four invented sample recipes**, labeled
-> "דוגמה". Importing from websites, screenshots and Instagram links comes in milestone 5.
+> **Status: milestone 5 of 7, in progress.** A FastAPI backend with a SQLite database and a React +
+> TypeScript frontend run locally. You can **paste recipe text or an Instagram post's link** and have
+> a model (a local one through Ollama, or Claude) turn it into a draft, review the draft beside the
+> original text, and save it explicitly; or create, edit and delete recipes by hand. A new database
+> starts with four categories and **four invented sample recipes**, labeled "דוגמה". Importing from
+> websites and screenshots comes later in milestone 5.
 > Milestone 1 (Instagram feasibility) is documented in
 > [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
 > contract are in [docs/architecture.md](docs/architecture.md), and the original requirements are
@@ -29,8 +30,10 @@ collection that supports Hebrew and right-to-left text.
 - **Or nothing at all:** with a local model ([Run extraction on this computer](#run-extraction-on-this-computer-ollama)),
   the text is read on this computer and is not sent anywhere. The import screen says which one is in use.
 - **The API key stays on this computer**, in the backend's settings. The page never receives it.
-- The Instagram probe (and the importer, from milestone 5) contacts Instagram's servers directly from
-  this computer: instagram.com, plus its content hosts (cdninstagram.com, fbcdn.net) when a browser is used.
+- **Importing an Instagram link** (and the probe) contacts Instagram's servers directly from this
+  computer: instagram.com, plus its content hosts (cdninstagram.com, fbcdn.net) when a browser is used.
+  It sends only the post's address, as a logged-out visitor. The caption it reads is then handled like
+  pasted text: read on this computer by a local model, or sent to Anthropic with Claude.
 
 ## Requirements
 
@@ -142,8 +145,9 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
 Needs an API key: see [Connect the Claude API](#connect-the-claude-api). Without one, you can still
 save the text as a draft and fill it in yourself.
 
-1. **"ייבוא מטקסט"** (import from text): paste a recipe, for example an Instagram caption or text
-   copied from a website, and press **"קריאה עם Claude"**. It usually takes less than a minute.
+1. **"ייבוא מתכון"** (import a recipe): paste a recipe into **"טקסט המתכון"**, for example an
+   Instagram caption or text copied from a website, and press **"קריאה עם Claude"** (or **"קריאה עם
+   המודל המקומי"**). It usually takes less than a minute.
 2. The draft opens for **review**. At the top is the original text exactly as you pasted it (it
    stays in view while you scroll), then the points to check, then the editable form:
    - lines that Claude could not copy exactly from the text, quantities that are not written in
@@ -168,6 +172,39 @@ in the recipe yourself.
 The four samples were invented for this project and are not based on real recipes or on the
 Instagram links. They are labeled "דוגמה" in the list and the recipe view. You can edit or delete them;
 once deleted, they are not added again.
+
+### Import a recipe from an Instagram link
+
+1. **"ייבוא מתכון"**, paste the address of a public post or Reel into **"קישור לפוסט באינסטגרם"**
+   (for example `https://www.instagram.com/p/DPbKEn-CnUt/`; `/reel/...` addresses and addresses with
+   `?igsh=...` work too), and press **"ייבוא מהקישור"**. It usually takes under a minute: a few
+   seconds to read the post, then the same extraction as for pasted text (with Ollama, on this computer).
+2. The draft opens for review exactly like a pasted one. "הטקסט המקורי" says it is the post's
+   caption, links to the post, and shows the full caption exactly as read. The recipe's source is the
+   post with its author (and co-authors), which you can edit; the caption and the address stored with
+   the original never change.
+
+How the caption is read: as a logged-out visitor. A fresh browser loads the post page and reads the
+post's own data, which holds the complete caption. Only if that gives no caption (and Instagram did not
+say the post is unavailable or ask to wait) is the post's public embed view fetched once over plain
+HTTP. A preview that may be cut off is never imported as if it were complete.
+
+**When the post cannot be read**, nothing is saved, and the page says why: Instagram says the post
+isn't available (deleted, private, or temporarily), asks to log in, asks to wait before reading more
+posts, the post has no caption, or the page did not answer in time. The link stays in its field: copy
+the caption from the post, paste it into the text box below and import it from there. The link is
+kept with the recipe as its source.
+
+**When only a preview of the caption was read** (it may be cut off), it is put into the text box with
+a warning. Compare it with the post and complete it; if you import it unchanged, the draft carries the
+point "כיתוב חלקי" (partial caption). The same happens with a caption in which the model found no recipe:
+it is put into the text box (the page asks before replacing other text there), so you can try again or
+save it without processing.
+
+What it never does: log in, use your browser's cookies, disguise itself, or retry in loops. It reads
+one post that you paste, at human pace. Private posts and posts Instagram shows only to logged-in
+visitors cannot be read. Share links (`instagram.com/share/...`) are not supported yet: open them and
+copy the post's address. Instagram can change its pages at any time; pasting the caption always works.
 
 ### Check that recipes are kept after a restart
 
@@ -422,10 +459,10 @@ The project keeps these separate and reports which one was run:
 │   │   ├── crud.py                  reading and writing recipes; the category check
 │   │   ├── seed.py                  fills a new database once
 │   │   ├── sample_data.py           the starter categories and the four invented sample recipes
-│   │   ├── api/                     recipes.py, categories.py, imports.py (pasted text -> draft)
+│   │   ├── api/                     recipes.py, categories.py, imports.py (pasted text or an Instagram link -> draft)
 │   │   ├── extraction/              passages (segments.py), answer schema, prompts, Claude / Ollama calls, the checks
-│   │   └── importers/instagram.py   Instagram URL parsing, page capture, caption analysis
-│   ├── migrations/                  database migrations (Alembic): 0001 milestone 3, 0002 imports
+│   │   └── importers/instagram.py   Instagram URL parsing, page capture, caption analysis, reading a post for an import
+│   ├── migrations/                  database migrations (Alembic): 0001 milestone 3, 0002 imports, 0003-0005 categories, 0006 Instagram originals
 │   ├── alembic.ini                  Alembic's settings, for its command line
 │   ├── evals/                       the extraction quality check (paid; run by hand) and its cases
 │   ├── scripts/probe_instagram.py   bounded live probe and offline analysis

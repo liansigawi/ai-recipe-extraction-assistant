@@ -27,4 +27,5 @@ export const ISSUE_LABELS: Record<IssueKind, string> = {
   not_extracted: 'לא עובד',
   unused_text: 'קטע שלא שובץ',
   invalid_reference: 'הפניה לא תקינה',
+  caption_incomplete: 'כיתוב חלקי',
 }

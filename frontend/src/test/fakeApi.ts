@@ -24,6 +24,9 @@ export const AMBIGUOUS: Issue = {
   quote: null,
 }
 
+/** The caption the fake backend "reads" from any Instagram post. */
+export const INSTAGRAM_CAPTION = 'עוגת לימון של סבתא 🍋\n3 ביצים\nמערבבים ואופים 40 דקות.\n#עוגה'
+
 function defaultDraft(text: string, useModel: boolean): Partial<Recipe> {
   const lines = text.split('\n').map((line) => line.trim()).filter((line) => line !== '')
   return {
@@ -113,10 +116,48 @@ export function fakeApi(initial: {
         is_sample: false,
         status: 'draft',
         issues: [],
-        original: { kind: 'text', text, model: useModel ? extraction.model : null, imported_at: SAVED_AT },
+        original: {
+          kind: 'text',
+          text,
+          model: useModel ? extraction.model : null,
+          imported_at: SAVED_AT,
+          url: (body as { url?: string }).url ?? null,
+          retrieved_from: null,
+        },
         created_at: SAVED_AT,
         updated_at: SAVED_AT,
         ...draftFor(text, useModel),
+      }
+      recipes = [draft, ...recipes]
+      return json(201, draft)
+    }
+    if (path === '/api/imports/instagram' && method === 'POST') {
+      // Reads every post as INSTAGRAM_CAPTION, unless a test queued another answer (answerNextWith).
+      const { url, use_model: useModel } = body as { url: string; use_model: boolean }
+      const draft: Recipe = {
+        id: nextId++,
+        title: 'טיוטה',
+        category: null,
+        subcategory: null,
+        servings: null,
+        ingredient_groups: [],
+        step_groups: [],
+        notes: [],
+        sources: [{ kind: 'instagram', url, creators: ['baker'] }],
+        is_sample: false,
+        status: 'draft',
+        issues: [],
+        original: {
+          kind: 'instagram',
+          text: INSTAGRAM_CAPTION,
+          model: useModel ? extraction.model : null,
+          imported_at: SAVED_AT,
+          url,
+          retrieved_from: 'post_page',
+        },
+        created_at: SAVED_AT,
+        updated_at: SAVED_AT,
+        ...draftFor(INSTAGRAM_CAPTION, useModel),
       }
       recipes = [draft, ...recipes]
       return json(201, draft)

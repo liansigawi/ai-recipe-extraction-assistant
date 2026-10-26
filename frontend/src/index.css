@@ -668,8 +668,33 @@ p {
   border-color: var(--color-danger);
 }
 
-.import-panel textarea:read-only {
+.import-panel textarea:read-only,
+.import-panel input:read-only {
   background: var(--color-page);
+}
+
+/* The post's address and its button on one line; on a phone the button moves below. */
+.url-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.url-row input {
+  flex: 1 1 16rem;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #c9b9a9;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+}
+
+.import-divider {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .working-note {
@@ -696,6 +721,14 @@ p {
   color: var(--color-muted);
   font-size: 0.85rem;
   font-weight: 400;
+}
+
+.original-text-source {
+  margin: 0;
+  padding: 0 0.75rem 0.5rem;
+  overflow-wrap: anywhere;
+  color: var(--color-muted);
+  font-size: 0.85rem;
 }
 
 .original-text-body {

@@ -118,7 +118,14 @@ describe('RecipeView', () => {
 })
 
 describe('RecipeView for imported recipes', () => {
-  const original = { kind: 'text' as const, text: 'עוף בסיר\n\nמטגנים את הבצל…', model: 'claude-opus-5-5', imported_at: '2026-10-20T09:30:00Z' }
+  const original = {
+    kind: 'text' as const,
+    text: 'עוף בסיר\n\nמטגנים את הבצל…',
+    model: 'claude-opus-5-5',
+    imported_at: '2026-10-20T09:30:00Z',
+    url: null,
+    retrieved_from: null,
+  }
 
   it('marks a draft as not reviewed yet, with the number of points to check', () => {
     const issue = { kind: 'unclear_text' as const, message: 'לא ברור.', quote: null }

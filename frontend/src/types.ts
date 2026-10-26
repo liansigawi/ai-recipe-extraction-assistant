@@ -65,6 +65,7 @@ export type IssueKind =
   | 'not_extracted'
   | 'unused_text'
   | 'invalid_reference'
+  | 'caption_incomplete'
 
 export interface Issue {
   kind: IssueKind
@@ -76,11 +77,16 @@ export interface Issue {
 
 /** The text a recipe was imported from, exactly as pasted. Read-only. */
 export interface ImportedOriginal {
-  kind: 'text'
+  /** 'text': pasted by the person; 'instagram': the caption, read from the post. */
+  kind: 'text' | 'instagram'
   text: string
-  /** The Claude model that read it; null: saved without a model. */
+  /** The model that read it; null: saved without a model. */
   model: string | null
   imported_at: string
+  /** The post it came from (also for a caption pasted after reading the post failed). */
+  url: string | null
+  /** Which public page of the post supplied a caption read automatically. */
+  retrieved_from: 'post_page' | 'embed_view' | null
 }
 
 /** A stored recipe, as the API returns it. */

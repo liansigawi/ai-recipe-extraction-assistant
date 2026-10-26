@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { errorMessage, getExtractionInfo, importText } from '../api'
+import { ApiError, captionFrom, errorMessage, getExtractionInfo, importInstagram, importText } from '../api'
 import type { ExtractionInfo, Recipe } from '../types'
 
 const MAX_CHARACTERS = 20_000 // the backend's limit (MAX_IMPORT_CHARACTERS)
@@ -26,6 +26,22 @@ function storeText(text: string): void {
   }
 }
 
+/** What to do next after an Instagram import failed, added to the reason. */
+function fallbackHint(error: unknown, captionInBox: boolean): string {
+  if (error instanceof ApiError && error.code === 'instagram_caption_incomplete') {
+    return captionInBox
+      ? 'הכיתוב החלקי הועתק לתיבה למטה: השוו לפוסט באינסטגרם, השלימו את החסר וקראו אותו משם.'
+      : 'אפשר להעתיק את הכיתוב המלא מהפוסט ולהדביק אותו בתיבה למטה.'
+  }
+  if (captionInBox) {
+    return 'הכיתוב שנקרא מהפוסט הועתק לתיבה למטה: אפשר לנסות שוב משם, או לשמור אותו בלי עיבוד.'
+  }
+  if (error instanceof ApiError && error.code.startsWith('instagram_')) {
+    return 'אפשר להעתיק את הכיתוב מהפוסט ולהדביק אותו בתיבה למטה; הקישור יישמר עם המתכון.'
+  }
+  return ''
+}
+
 interface ImportPanelProps {
   /** Called with the saved draft when an import succeeds. */
   onImported: (draft: Recipe) => void
@@ -34,20 +50,27 @@ interface ImportPanelProps {
 
 export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) {
   const id = useId()
+  const [url, setUrl] = useState('')
   // A function given to useState runs once, on the first render: start from the kept text.
   const [text, setText] = useState(readStoredText)
+  // A caption preview that may be cut off, put in the box after a failed read: sent unchanged, the draft says so.
+  const [preview, setPreview] = useState<string | null>(null)
   const [info, setInfo] = useState<ExtractionInfo | null>(null)
   const [infoCheck, setInfoCheck] = useState(0) // changing it asks the backend again ("check again")
-  const [working, setWorking] = useState<'model' | 'manual' | null>(null)
+  const [working, setWorking] = useState<'instagram' | 'model' | 'manual' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Where the message belongs: under the link (reading the post) or under the text box.
+  const [errorAt, setErrorAt] = useState<'link' | 'text'>('text')
+  const urlRef = useRef<HTMLInputElement>(null)
   const textRef = useRef<HTMLTextAreaElement>(null)
 
   // Who reads the text: Claude (sent to Anthropic) or a local model (stays on this computer).
   const local = info?.local ?? false
   const readLabel = local ? 'קריאה עם המודל המקומי' : 'קריאה עם Claude'
+  const modelReady = info === null || info.configured
 
   useEffect(() => {
-    textRef.current?.focus()
+    urlRef.current?.focus()
   }, [])
 
   // Can imports use the model right now? (An API key for Claude; Ollama running, for a local model.)
@@ -72,8 +95,43 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
     setError(null)
   }
 
+  /** Put a caption read from the post in the box; asks before replacing other text there. */
+  function offerCaption(caption: string): boolean {
+    if (text.trim() !== '' && text !== caption && !window.confirm('להחליף את הטקסט שבתיבה בכיתוב שנקרא מהפוסט?')) {
+      return false
+    }
+    setText(caption)
+    storeText(caption)
+    return true
+  }
+
+  async function startInstagram() {
+    if (working !== null) return
+    setErrorAt('link')
+    if (url.trim() === '') {
+      setError('הדביקו קודם קישור לפוסט באינסטגרם.')
+      urlRef.current?.focus()
+      return
+    }
+    setWorking('instagram')
+    setError(null)
+    try {
+      onImported(await importInstagram(url.trim(), modelReady))
+    } catch (failure) {
+      const caption = captionFrom(failure)
+      const inBox = caption !== null && offerCaption(caption)
+      const incomplete = failure instanceof ApiError && failure.code === 'instagram_caption_incomplete'
+      setPreview(inBox && incomplete ? caption : null)
+      setError([errorMessage(failure), fallbackHint(failure, inBox)].filter(Boolean).join(' '))
+      setWorking(null)
+      if (failure instanceof ApiError && failure.code === 'invalid_instagram_url') urlRef.current?.focus()
+      else textRef.current?.focus()
+    }
+  }
+
   async function start(useModel: boolean) {
     if (working !== null) return
+    setErrorAt('text')
     if (text.trim() === '') {
       setError('הדביקו קודם את טקסט המתכון.')
       textRef.current?.focus()
@@ -87,7 +145,7 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
     setWorking(useModel ? 'model' : 'manual')
     setError(null)
     try {
-      const draft = await importText(text, useModel)
+      const draft = await importText(text, useModel, { url: url.trim(), possiblyIncomplete: preview !== null && text === preview })
       storeText('') // imported: the draft and its original are in the database now
       onImported(draft)
     } catch (failure) {
@@ -101,11 +159,59 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
   return (
     <section className="import-panel" aria-labelledby={`${id}-heading`}>
       <h2 id={`${id}-heading`} className="recipe-title">
-        ייבוא מתכון מטקסט
+        ייבוא מתכון
       </h2>
       <p className="field-hint">
-        הדביקו מתכון: כיתוב מאינסטגרם, טקסט מאתר או מהודעה. מודל שפה יסדר אותו לטיוטה, ואתם תבדקו אותה מול הטקסט המקורי ותשמרו.
+        הדביקו קישור לפוסט באינסטגרם, או את טקסט המתכון. מודל שפה יסדר אותו לטיוטה, ואתם תבדקו אותה מול הטקסט המקורי ותשמרו.
       </p>
+
+      <div className="editor-field">
+        <label htmlFor={`${id}-url`} className="field-label">
+          קישור לפוסט באינסטגרם
+        </label>
+        <div className="url-row">
+          <input
+            ref={urlRef}
+            id={`${id}-url`}
+            type="url"
+            dir="ltr"
+            inputMode="url"
+            autoComplete="off"
+            placeholder="https://www.instagram.com/p/…"
+            value={url}
+            readOnly={working !== null}
+            aria-describedby={`${id}-url-hint`}
+            onChange={(event) => {
+              setUrl(event.target.value)
+              setError(null)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void startInstagram()
+            }}
+          />
+          <button type="button" className="button-primary" onClick={() => void startInstagram()}>
+            {working === 'instagram' ? 'קורא…' : modelReady ? 'ייבוא מהקישור' : 'ייבוא מהקישור בלי עיבוד'}
+          </button>
+        </div>
+        <p id={`${id}-url-hint`} className="field-hint">
+          הכיתוב נקרא מהפוסט הציבורי, בלי התחברות לאינסטגרם, ונשמר כפי שהוא לצד הטיוטה, עם הקישור. פוסט פרטי, או כזה שאינסטגרם
+          לא מציג בלי התחברות, אי אפשר לקרוא: אז מדביקים את הכיתוב למטה.
+        </p>
+        {/* <output> is announced by screen readers when its text changes. */}
+        <output className="working-note">
+          {working === 'instagram' &&
+            (modelReady
+              ? `קורא את הכיתוב מהפוסט באינסטגרם, ואז ${local ? 'המודל המקומי' : 'Claude'} מסדר אותו לטיוטה… בדרך כלל עד דקה.`
+              : 'קורא את הכיתוב מהפוסט באינסטגרם…')}
+        </output>
+        {error !== null && errorAt === 'link' && (
+          <p role="alert" className="form-alert">
+            {error}
+          </p>
+        )}
+      </div>
+
+      <p className="import-divider">או הדביקו את הטקסט</p>
 
       <div className="editor-field">
         <label htmlFor={`${id}-text`} className="field-label">
@@ -125,6 +231,7 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
         <p id={`${id}-count`} className={tooLong ? 'field-error' : 'field-hint'}>
           {text.length.toLocaleString('he-IL')} מתוך {MAX_CHARACTERS.toLocaleString('he-IL')} תווים. הטקסט נשמר בדפדפן הזה עד
           שהייבוא מצליח.
+          {url.trim() !== '' && ' הקישור שלמעלה יישמר עם המתכון כמקור.'}
         </p>
       </div>
 
@@ -165,19 +272,14 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
       <output className="working-note">
         {working === 'model' && (local ? 'המודל המקומי קורא את המתכון… בדרך כלל זה לוקח עד דקה.' : 'Claude קורא את המתכון… בדרך כלל זה לוקח פחות מדקה.')}
       </output>
-      {error !== null && (
+      {error !== null && errorAt === 'text' && (
         <p role="alert" className="form-alert">
           {error}
         </p>
       )}
 
       <div className="button-row">
-        <button
-          type="button"
-          className="button-primary"
-          disabled={info !== null && !info.configured}
-          onClick={() => start(true)}
-        >
+        <button type="button" className="button-primary" disabled={!modelReady} onClick={() => start(true)}>
           {working === 'model' ? 'קורא…' : readLabel}
         </button>
         <button type="button" className="button" onClick={() => start(false)}>

@@ -260,6 +260,26 @@ but no usable recipe in it" is decided later by AI extraction, not by the import
 - **It can stop working at any time.** That is why pasting the caption and uploading screenshots
   stay first-class paths.
 
+## In the app (milestone 5, 2026-10-26)
+
+The importer now runs inside the backend (`retrieve_caption` in `backend/app/importers/instagram.py`,
+`POST /api/imports/instagram`), following the recommendation above: the post page in a fresh
+logged-out browser, the embed view once only when that gives no complete caption, a preview never
+taken as complete, Instagram's own "unavailable", "no caption" and "wait" taken as final.
+
+Checked again from this computer on 2026-10-26, 9 page loads in all, at human pace:
+
+| What | Result |
+|---|---|
+| The probe, `browser-post` only, the three posts | 3 of 3 `caption_found`, byte-identical to the 2026-10-18 captions, 4.4–7.7 s |
+| In the app (a `uvicorn --reload` server on Windows), the three posts | 3 of 3 read from the post page, byte-identical, 3.9–5.4 s; `DPbKEn-CnUt` also read twice more in the end-to-end test (6.8 s, 3.5 s) |
+| The `/reel/` form of an address (`/reel/DPbKEn-CnUt/`), not tried in milestone 1 | read, identical |
+| The nonexistent post `AAAAAAAAAAA` | `unavailable` after the post page alone (3.2 s); the embed view was not loaded |
+
+The co-author of `DANUmOOIcRM` (alehonline) came through with its author. The embed fallback was not
+needed in any live load; it is covered by offline tests only. Still untested live: photo and carousel
+posts, private and age-restricted posts, posts with embedding disabled, and a real rate limit.
+
 ## Re-running the probe
 
 From `backend/`:

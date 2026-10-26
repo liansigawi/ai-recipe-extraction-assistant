@@ -114,6 +114,25 @@ uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/eva
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
 
+### 2026-10-26: Instagram links, end to end
+
+Reading the post and extracting the recipe are measured separately. **Reading:** the three supplied
+posts were read 3 of 3 times through the app's API (and `DPbKEn-CnUt` twice more through the page),
+always from the post page and byte-identical to the captions saved in milestone 1; a nonexistent
+post was reported unavailable. **Extraction from what was read** (local `qwen3:8b`, the same as for
+pasted text), scored against the expectations of the local cases these captions already are:
+
+| post | case | category | checks |
+|---|---|---|---|
+| Cm1mCdCpSzJ (vanilla torte) | real-1 | קינוחים | every check passed |
+| DANUmOOIcRM (salted honey tart) | real-3 | קינוחים | every check passed |
+| /reel/DPbKEn-CnUt (shoulder and ptitim) | real-2 | ארוחות בשריות | 3 problems: the sign-off "וזהו😍 נכון קל?" and two calls to action kept as notes |
+
+**Not independent:** these three captions are the real-1, real-2 and real-3 cases used while
+developing the extraction and the categories. What is new here is the reading (the `/reel/` address
+form, the failure path, the server setting), not the extraction quality. No new Instagram posts were
+available to test with.
+
 ### 2026-10-26: composed titles
 
 A small change to the title instruction (name the dish itself, in the text's spelling, from the
