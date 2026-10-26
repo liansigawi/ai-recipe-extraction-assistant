@@ -254,6 +254,12 @@ ImportPanel ── POST /api/imports/instagram {url, use_model} ──► app/ap
   4. create_import: the draft with kind "instagram", the caption exactly as read, the canonical
      address and which page supplied it (recipe_imports); the recipe's source is the post with
      its creators (editable).
+  5. media.attach_post_media: the post's pictures and videos (from the same page load: the
+     post's data lists them, in order, with a poster for each video) downloaded from Instagram's
+     media servers and attached to the draft. Bounded: 20 MB a picture, 150 MB a video (else
+     a smaller version, else its poster only), 400 MB a post, 30 s a request, 180 s the post, 20
+     items. Any failure here leaves the draft saved, with a media_incomplete review point that
+     says what was saved.
 ```
 
 Failures save nothing, and their `details` carry the address, the caption if one was read, and the
@@ -293,7 +299,10 @@ recipes (`backend/app/seed.py`), once: deleted samples are not added again.
 | `recipe_sources` | `id`, `recipe_id`, `position`, `kind`, `url`, `creators` (JSON) | Editable attribution, in order. Deleting a recipe deletes its sources; saving replaces them. |
 | `recipe_imports` | `id`, `recipe_id` (unique), `kind`, `original_text`, `model`, `imported_at`, `url`, `retrieved_from` | The imported original, exactly as pasted or read. `kind` is `text` (pasted) or `instagram` (the caption, read from the post); `url` is the post's canonical address (also for a caption pasted after a failed read); `retrieved_from` is `post_page` or `embed_view` for a caption read automatically. Written once, when the import is saved; saving the recipe never touches it; deleting the recipe deletes it. |
 
-Planned: `source_files` with ordered screenshots, paths relative to the data folder (milestone 5).
+| `media_files` | `id`, `sha256` (unique), `path`, `content_type`, `size_bytes`, `created_at` | A picture or video under `<data folder>/media/`, at `<2 hex>/<sha256>.<ext>`: the same bytes are one file. Its type comes from its first bytes. Deleted (row and file) only when no attachment uses it. |
+| `recipe_media` | `id`, `recipe_id`, `kind` (image/video), `status` (saved/thumbnail_only), `file_id`, `thumbnail_file_id`, `origin` (instagram/upload), `post_url`, `post_shortcode`, `post_index`, `width`, `height`, `is_cover`, `created_at` | A recipe's picture or video: the post's items in the post's order, then uploads. `UNIQUE(recipe_id, post_shortcode, post_index)`: fetching again adds nothing twice. At most one cover per recipe (a partial unique index). A video that could not be saved keeps its poster (`thumbnail_only`). Deleted with its recipe. |
+
+Planned: screenshots for extraction (the next milestone) will add their own table.
 
 **Migrations.** Schema changes are Alembic scripts in `backend/migrations/versions/`: `0001`
 creates the milestone-3 tables statement for statement (a test compares it with
@@ -350,7 +359,12 @@ Real relations (categories, sources, files) stay as proper tables with foreign k
 | `GET /api/extraction` | Is an API key configured, and which model imports use (never the key) | ✅ milestone 4 |
 | `POST /api/imports/text` | Pasted text → a saved draft with review issues and the original (201) | ✅ milestone 4 |
 | `POST /api/imports/instagram` | An Instagram post's address → its caption, read from the post → the same draft flow (201); failures above | ✅ milestone 5 |
-| `POST /api/imports/link`, `/screenshots` | A website's address or ordered images → the same draft flow | planned (milestone 5) |
+| `GET /api/media/{file_id}` | A saved picture or video, with its type; byte ranges for seeking | ✅ milestone 6 |
+| `POST /api/recipes/{id}/media` | Upload a picture (the body is the file; JPEG, PNG, WebP or GIF, up to 20 MB) → the recipe (201); `unsupported_media` (415), `media_too_large` (413) | ✅ milestone 6 |
+| `POST /api/recipes/{id}/media/instagram` | Fetch the media of the recipe's own Instagram post (or `{url}`) → `{recipe, report}`; nothing else about the recipe changes, nothing is added twice | ✅ milestone 6 |
+| `PUT /api/recipes/{id}/cover` | `{media_id}` or `{media_id: null}` (the first picture) → the recipe | ✅ milestone 6 |
+| `DELETE /api/recipes/{id}/media/{media_id}` | Remove an attachment → the recipe; its file stays while another recipe uses it | ✅ milestone 6 |
+| `POST /api/imports/link`, `/screenshots` | A website's address or ordered images → the same draft flow | planned |
 | `GET /api/files/{id}` | Serve a stored source image | planned (milestone 5) |
 
 Error codes the page branches on: `recipe_not_found` (404), `invalid_request` (422, with the invalid
@@ -479,6 +493,8 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-25 (2) | A colon cuts a line only after a label of at most five words; a sentence that ends in a colon keeps its list | An introduction ("…the secret turned out simple: salt, a lot of garlic and no vinegar") became two ingredient lines beside the real list (case 26). A list after a rejected introduction label is also kept out when the recipe has its own list. |
 | 2026-10-25 (2) | A passage labeled a heading that ends a sentence is a step (or an ingredient); a title passage that is only a label takes the rest of its line; the prompt says a title names the dish and an introduction that mentions it is not one | "מחממים תנור מראש." was a heading (case 18); the title was "ארוחת בוקר של שישי" without the dish (case 14), or an introduction sentence (case 24). |
 | 2026-10-25 (2) | Categories by the user's meaning (migration 0004): sweet desserts, dairy desserts included; generally savory dairy-based meals; generally meat- or poultry-based main dishes; no clear fit stays unclassified. The classification prompt says a category's description decides over its name, and the dish summary names what it is mainly made of | Measured on the same 60 drafts against the re-annotated expectations: 54 right, 5 wrong, 1 unresolved; the user's descriptions with the previous wording 46–49 right; the previous descriptions 44. The name "בישולים" (cooked dishes) had drawn vegetarian dishes. |
+| 2026-10-26 (9) | Media files are content-addressed (sha256) and reference-counted by their attachments; downloads happen right after the post's page is read, before the database is written, and never fail an import | Instagram's media addresses expire, so the files are saved at once and shown from here. Recipe copies share files without copying them, and removing one never breaks another. The database is not held during minutes of downloads. |
+| 2026-10-26 (9) | Uploads are the raw request body, not a multipart form | One picture at a time needs no new dependency (python-multipart); the size limit is checked while reading. |
 | 2026-10-26 (8) | The credit is a list of `{name, username}` (migration 0008); an import fills it from the post's data (`user.full_name`, `user.username`, `coauthor_producers`), and keeps that as read in `recipe_imports.source_details` | The person recognizes creators by name and handle; the handle gives the profile link. Retrieved data, not the model, says who made it. Editing the credit (when a post credits someone else) never changes what was retrieved. |
 | 2026-10-26 (7) | Duplicate Instagram links are checked on the server, before anything is fetched, for links and for pasted text with a link; the same post is the same shortcode; a match stops the import with the list of recipes, and `allow_duplicate` imports another copy | Enforced where the import happens, so no client can skip it and nothing is fetched twice by accident; never an overwrite and never a block. Both places a link can live count: the read-only original and the editable sources. |
 | 2026-10-26 (6) | Search and filters run in the page on the recipes already loaded (`recipeFilters.ts`): title and ingredient lines, every word, after removing niqqud, invisible marks and quote marks; a top-level category includes its subcategories | A personal notebook holds hundreds of recipes, not millions: the list is already in the page, so filtering it there is instant and needs no new endpoint. A server-side search can come if the notebook grows. |

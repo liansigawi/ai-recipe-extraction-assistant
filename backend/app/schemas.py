@@ -181,6 +181,7 @@ BackendIssueKind = Literal[
     "unused_text",  # a passage of the original the model neither used nor marked as not part of the recipe
     "invalid_reference",  # the model pointed at passages that do not exist, or used one twice
     "caption_incomplete",  # the caption came from a preview that may be cut off: compare with the post
+    "media_incomplete",  # not every picture or video of the post could be saved here
 ]
 IssueKind = ModelIssueKind | BackendIssueKind
 
@@ -215,6 +216,43 @@ class ImportedOriginal(ContractModel):
     coauthors: list[Creator] = []
 
 
+class MediaFileRef(ContractModel):
+    """A file saved on this computer, served at its url."""
+
+    id: int
+    url: str  # /api/media/{id}
+    content_type: str
+    size_bytes: int
+
+
+class RecipeMediaItem(ContractModel):
+    """One of a recipe's pictures or videos. Changed only through the media endpoints, never by a save."""
+
+    id: int
+    kind: Literal["image", "video"]
+    # "saved": here. "thumbnail_only": a video that could not be saved: its poster is here; post_url plays it.
+    status: Literal["saved", "thumbnail_only"]
+    file: MediaFileRef | None  # the picture or the video
+    thumbnail: MediaFileRef | None  # a video's poster
+    origin: Literal["instagram", "upload"]
+    post_url: str | None
+    post_index: int | None  # its place in the post, from 0
+    width: int | None
+    height: int | None
+    is_cover: bool  # chosen as the cover
+
+
+class MediaReport(ContractModel):
+    """What happened to a post's media: every item counted once."""
+
+    found: int
+    saved: int
+    thumbnails_only: int  # videos saved only as their poster, with the post's link
+    failed: int
+    already_had: int
+    problems: list[str]  # one line per item that was not saved fully, in Hebrew
+
+
 class Recipe(RecipeContent):
     """A stored recipe, as the API returns it."""
 
@@ -225,6 +263,10 @@ class Recipe(RecipeContent):
     status: RecipeStatus = "saved"
     issues: list[Issue] = []  # what to check before saving a draft
     original: ImportedOriginal | None = None  # None: typed in by hand
+    # Its pictures and videos: the post's in their order, then uploads. cover_id: the one shown on the
+    # recipe's card: the chosen cover, else the first with a picture (None: nothing to show).
+    media: list[RecipeMediaItem] = []
+    cover_id: int | None = None
     # With a time zone, so the browser shows the right local time. Sent as e.g. "2026-10-19T08:00:00Z".
     created_at: AwareDatetime
     updated_at: AwareDatetime
@@ -362,3 +404,20 @@ class ExtractionInfo(ContractModel):
     local: bool  # True: the text stays on this computer
     # Why it is not ready, for the import screen.
     problem: Literal["no_api_key", "ollama_unreachable", "ollama_model_missing"] | None = None
+
+
+class CoverChoice(ContractModel):
+    """PUT /api/recipes/{id}/cover: an attachment's id, or None for the default (the first picture)."""
+
+    media_id: int | None
+
+
+class MediaFetch(ContractModel):
+    """POST /api/recipes/{id}/media/instagram: which post to take the media from; by default the recipe's own."""
+
+    url: str | None = Field(default=None, max_length=2000)
+
+
+class MediaFetchResult(ContractModel):
+    recipe: Recipe
+    report: MediaReport

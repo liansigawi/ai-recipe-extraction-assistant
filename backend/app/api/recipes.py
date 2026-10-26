@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Response, status
 from sqlalchemy.orm import Session
 
-from app import crud
+from app import crud, media
 from app.db import get_session
 from app.errors import ERROR_RESPONSES
 from app.schemas import Recipe, RecipeInput
@@ -50,6 +50,8 @@ def update_recipe(recipe_id: RecipeId, data: RecipeInput, session: SessionDep) -
 
 @router.delete("/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_recipe(recipe_id: RecipeId, session: SessionDep) -> Response:
-    """Delete a recipe and its sources."""
+    """Delete a recipe with its sources, original and media. Its media files are deleted unless another
+    recipe uses them."""
     crud.delete_recipe(session, recipe_id)
+    media.collect_garbage(session, media.get_media_root())
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import categories, imports, recipes
+from app.api import media as media_routes
 from app.config import load_settings
 from app.db import make_engine, make_session_factory
 from app.errors import error_response, install_error_handlers
@@ -74,6 +75,7 @@ install_error_handlers(app)
 app.include_router(recipes.router)
 app.include_router(categories.router)
 app.include_router(imports.router)
+app.include_router(media_routes.router)
 
 
 @app.get("/api/health", tags=["health"])

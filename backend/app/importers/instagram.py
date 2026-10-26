@@ -161,11 +161,23 @@ class PostPerson(BaseModel):
     full_name: str | None = None
 
 
+class PostMediaItem(BaseModel):
+    """One picture or video of a post, in the post's order (a carousel has up to 20)."""
+
+    index: int  # its place in the post, from 0
+    kind: Literal["image", "video"]
+    image_url: str | None = None  # the picture; for a video, its poster frame
+    video_urls: list[str] = Field(default_factory=list)  # a video's files, the best first
+    width: int | None = None
+    height: int | None = None
+
+
 class CaptionCandidate(BaseModel):
     source: CaptionSource
     text: str
     author: PostPerson | None = None  # the account that posted it
     coauthors: list[PostPerson] = Field(default_factory=list)  # collaboration posts (seen live)
+    media: list[PostMediaItem] = Field(default_factory=list)  # only from the post's own data
     # True: visibly cut off. False: taken from the post's own data, so complete.
     # None: no evidence either way.
     truncated: bool | None = None
@@ -284,6 +296,7 @@ def analyze_capture(page: CapturedPage, shortcode: str) -> CaptionAnalysis:
                         text=text,
                         author=media_author(media),
                         coauthors=media_coauthors(media),
+                        media=media_items(media),
                         truncated=False,
                     )
                 )
@@ -367,6 +380,71 @@ def media_coauthors(media: dict[str, Any]) -> list[PostPerson]:
     if not isinstance(producers, list):
         return []
     return [person for person in map(_person, producers) if person is not None]
+
+
+def media_items(media: dict[str, Any]) -> list[PostMediaItem]:
+    """The post's pictures and videos, in order. Two shapes, both seen live (docs/instagram-feasibility.md):
+    - post page: media_type 1 (image), 2 (video) or 8 (carousel, items in carousel_media); pictures in
+      image_versions2.candidates (several sizes, sometimes without sizes: the first is the largest),
+      videos in video_versions (no sizes; the first is the best);
+    - embed view: display_url / display_resources, is_video and video_url, carousel items in
+      edge_sidecar_to_children.edges[].node.
+    """
+    children = media.get("carousel_media")
+    if not isinstance(children, list) or not children:
+        sidecar = media.get("edge_sidecar_to_children")
+        edges = sidecar.get("edges") if isinstance(sidecar, dict) else None
+        children = [edge.get("node") for edge in edges if isinstance(edge, dict)] if isinstance(edges, list) else []
+    items = [child for child in children if isinstance(child, dict)] or [media]
+    found = []
+    for index, item in enumerate(items):
+        image, width, height = _best_picture(item)
+        videos = _video_urls(item)
+        is_video = item.get("media_type") == 2 or item.get("is_video") is True or bool(videos)
+        if image is None and not videos:
+            continue  # nothing to show: not a media item after all
+        found.append(
+            PostMediaItem(
+                index=index, kind="video" if is_video else "image", image_url=image, video_urls=videos,
+                width=_int(item.get("original_width")) or width, height=_int(item.get("original_height")) or height,
+            )
+        )
+    return found
+
+
+def _best_picture(item: dict[str, Any]) -> tuple[str | None, int | None, int | None]:
+    """The largest picture: by its size when given, else the first (Instagram lists the largest first)."""
+    candidates = (item.get("image_versions2") or {}).get("candidates") if isinstance(item.get("image_versions2"), dict) else None
+    pictures = [
+        (c["url"], _int(c.get("width")), _int(c.get("height")))
+        for c in candidates or []
+        if isinstance(c, dict) and isinstance(c.get("url"), str)
+    ]
+    resources = item.get("display_resources")
+    pictures += [
+        (r["src"], _int(r.get("config_width")), _int(r.get("config_height")))
+        for r in resources if isinstance(resources, list)
+        for r in [r] if isinstance(r, dict) and isinstance(r.get("src"), str)
+    ] if isinstance(resources, list) else []
+    for key in ("display_url", "display_uri", "thumbnail_src"):
+        if isinstance(item.get(key), str):
+            pictures.append((item[key], None, None))
+    if not pictures:
+        return None, None, None
+    sized = [p for p in pictures if p[1] and p[2]]
+    return max(sized, key=lambda p: p[1] * p[2]) if sized else pictures[0]
+
+
+def _video_urls(item: dict[str, Any]) -> list[str]:
+    versions = item.get("video_versions")
+    urls = [v["url"] for v in versions if isinstance(v, dict) and isinstance(v.get("url"), str)] if isinstance(versions, list) else []
+    if isinstance(item.get("video_url"), str):
+        urls.append(item["video_url"])
+    return list(dict.fromkeys(urls))  # the same file listed twice is tried once
+
+
+def _int(value: Any) -> int | None:
+    return value if isinstance(value, int) and value > 0 else None
 
 
 def embed_caption(soup: BeautifulSoup) -> CaptionCandidate | None:
@@ -816,6 +894,7 @@ class CaptionRetrieval(BaseModel):
     retrieved_from: PageName | None = None
     author: PostPerson | None = None
     coauthors: list[PostPerson] = Field(default_factory=list)
+    media: list[PostMediaItem] = Field(default_factory=list)  # the post's pictures and videos, in order
     attempts: list[RetrievalAttempt] = Field(default_factory=list)
 
 
@@ -881,10 +960,20 @@ def _combine(
                     retrieved_from=page_name,
                     author=analysis.best.author,
                     coauthors=analysis.best.coauthors,
+                    media=analysis.best.media or _media_from_any(analyses),
                     attempts=attempts,
                 )
     outcome = min((analysis.outcome for _, analysis in analyses), key=_FAILURE_ORDER.index)
     return CaptionRetrieval(url=ref.canonical_url, outcome=outcome, attempts=attempts)
+
+
+def _media_from_any(analyses: list[tuple[PageName, CaptionAnalysis]]) -> list[PostMediaItem]:
+    """When the caption came from a preview, the media may still have come with a page's post data."""
+    for _, analysis in analyses:
+        for candidate in analysis.candidates:
+            if candidate.media:
+                return candidate.media
+    return []
 
 
 def retrieve_caption_blocking(ref: InstagramRef) -> CaptionRetrieval:

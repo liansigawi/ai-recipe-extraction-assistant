@@ -12,12 +12,15 @@ nothing is saved and the page keeps the pasted text.
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Annotated
+
+import httpx2
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app import crud
+from app import crud, media
 from app.config import load_settings
 from app.db import get_session
 from app.errors import ERROR_RESPONSES, ApiError, ErrorResponse
@@ -140,6 +143,8 @@ def import_instagram(
     session: SessionDep,
     new_extractor: Annotated[ExtractorFactory, Depends(get_extractor_factory)],
     retrieve: Annotated[CaptionRetriever, Depends(get_caption_retriever)],
+    media_folder: Annotated[Path, Depends(media.get_media_root)],
+    transport: Annotated[httpx2.BaseTransport | None, Depends(media.get_media_transport)],
 ) -> Recipe:
     """A public post's address -> its caption, read from Instagram -> a saved draft, as for pasted text.
 
@@ -177,10 +182,30 @@ def import_instagram(
         "author": creators[0].model_dump() if retrieval.author is not None else None,
         "coauthors": [creator.model_dump() for creator in creators[1 if retrieval.author is not None else 0 :]],
     }
-    return crud.create_import(
+    created = crud.create_import(
         session, draft, original_text=retrieval.caption, model=model, kind="instagram", url=url,
         retrieved_from=retrieval.retrieved_from, source_details=details,
     )
+    _attach_media(session, created.id, parse_instagram_url(url), retrieval, media_folder, transport)
+    return crud.get_recipe(session, created.id)
+
+
+def _attach_media(
+    session: Session, recipe_id: int, ref: InstagramRef, retrieval: CaptionRetrieval, folder: Path,
+    transport: httpx2.BaseTransport | None,
+) -> None:
+    """The post's pictures and videos, saved here with the new draft. A problem with them never fails the
+    import: the draft is saved already, and a review point says what is missing."""
+    try:
+        report = media.attach_post_media(session, folder, crud.load_recipe(session, recipe_id), ref, retrieval.media, transport)
+        issue = media.report_issue(report)
+    except Exception:  # noqa: BLE001  any failure here must leave the saved draft as it is
+        log.exception("Saving the media of %s failed", ref.canonical_url)
+        session.rollback()
+        issue = Issue(kind="media_incomplete", message='שמירת התמונות והסרטונים של הפוסט נכשלה. אפשר לנסות שוב בכפתור "שליפת מדיה מהפוסט".')
+    if issue is not None:
+        crud.add_issue(session, recipe_id, issue)
+    session.expire_all()
 
 
 def recipes_with_post(session: Session, url: str) -> list[LinkedRecipe]:

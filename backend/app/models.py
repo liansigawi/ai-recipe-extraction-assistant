@@ -23,7 +23,7 @@ these classes. tests/test_migrations.py checks that the two agree.
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, ForeignKey, ForeignKeyConstraint, Text, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, ForeignKey, ForeignKeyConstraint, Index, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, UTCDateTime
@@ -82,6 +82,8 @@ class Recipe(Base):
     # The imported original, if the recipe was imported. Saved with the recipe and deleted with it;
     # crud.py never assigns it after creation, so editing cannot change it.
     original: Mapped["RecipeImport | None"] = relationship(cascade="all, delete-orphan")
+    # Its pictures and videos (app/media.py), deleted with it; the files themselves only when unused.
+    media: Mapped[list["RecipeMedia"]] = relationship(cascade="all, delete-orphan", order_by="RecipeMedia.id")
 
 
 class RecipeSource(Base):
@@ -110,3 +112,52 @@ class RecipeImport(Base):
     retrieved_from: Mapped[str | None]  # "post_page" or "embed_view" for a caption read automatically
     # Who posted it, as read from the post: {"author": {"name", "username"}, "coauthors": [...]}.
     source_details: Mapped[dict | None] = mapped_column(JSON)
+
+
+class MediaFile(Base):
+    """A picture or video file under <data folder>/media, stored once by its content (sha256)."""
+
+    __tablename__ = "media_files"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sha256: Mapped[str] = mapped_column(unique=True)
+    path: Mapped[str]  # relative to the media folder: "ab/ab12....jpg"
+    content_type: Mapped[str]  # from the file's first bytes: image/jpeg, image/png, image/webp, image/gif, video/mp4
+    size_bytes: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class RecipeMedia(Base):
+    """One of a recipe's pictures or videos: from its Instagram post (in the post's order) or uploaded."""
+
+    __tablename__ = "recipe_media"
+    __table_args__ = (
+        # A post's item once per recipe: fetching the post's media again adds nothing twice.
+        UniqueConstraint("recipe_id", "post_shortcode", "post_index"),
+        CheckConstraint("kind IN ('image', 'video')", name="media_kind"),
+        CheckConstraint("status IN ('saved', 'thumbnail_only')", name="media_status"),
+        CheckConstraint("origin IN ('instagram', 'upload')", name="media_origin"),
+        CheckConstraint("file_id IS NOT NULL OR thumbnail_file_id IS NOT NULL", name="media_has_a_file"),
+        # At most one cover per recipe.
+        Index("one_cover_per_recipe", "recipe_id", unique=True, sqlite_where=text("is_cover = 1")),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recipe_id: Mapped[int] = mapped_column(ForeignKey("recipes.id", ondelete="CASCADE"))
+    kind: Mapped[str]  # "image" or "video"
+    # "saved": the picture or video is here. "thumbnail_only": a video that could not be saved: its
+    # poster is here, and the post's link plays it.
+    status: Mapped[str]
+    file_id: Mapped[int | None] = mapped_column(ForeignKey("media_files.id"))  # the picture or the video
+    thumbnail_file_id: Mapped[int | None] = mapped_column(ForeignKey("media_files.id"))  # a video's poster
+    origin: Mapped[str]  # "instagram" or "upload"
+    post_url: Mapped[str | None]
+    post_shortcode: Mapped[str | None]
+    post_index: Mapped[int | None]  # its place in the post, from 0
+    width: Mapped[int | None]
+    height: Mapped[int | None]
+    is_cover: Mapped[bool] = mapped_column(default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+    file: Mapped[MediaFile | None] = relationship(foreign_keys=[file_id])
+    thumbnail: Mapped[MediaFile | None] = relationship(foreign_keys=[thumbnail_file_id])

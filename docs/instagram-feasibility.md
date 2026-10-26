@@ -280,6 +280,21 @@ The co-author of `DANUmOOIcRM` (alehonline) came through with its author. The em
 needed in any live load; it is covered by offline tests only. Still untested live: photo and carousel
 posts, private and age-restricted posts, posts with embedding disabled, and a real rate limit.
 
+## Pictures and videos (2026-10-26)
+
+The same post data lists the post's media: `media_type` 1 (image), 2 (video) or 8 (carousel, items in
+`carousel_media`), each with `image_versions2.candidates` (several sizes, the largest first; some
+without sizes) and, for a video, `video_versions` (no sizes; often one address listed three times) and
+a poster in `image_versions2`. The embed view has the older shape (`display_url`, `display_resources`,
+`is_video`, `video_url`, `edge_sidecar_to_children`). The files themselves are on Instagram's media
+servers (`*.fbcdn.net`) and downloaded with a plain HTTP client, no cookies, at once: their addresses
+expire.
+
+Formats seen live: reels (`Cm1mCdCpSzJ`, `DPbKEn-CnUt`, `DANUmOOIcRM`: one video with its poster), a
+mixed carousel (`CLJ5G9rDi1a`: video, image, video), a photo carousel (`DQbcFZziKTW`: 14 images). A
+single-image post was not found among the posts available; it is tested with fixtures of the same
+shape (`media_type` 1 at the top).
+
 ## Re-running the probe
 
 From `backend/`:

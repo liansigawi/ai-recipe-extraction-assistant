@@ -424,9 +424,14 @@ All local data goes in one folder: `data/` at the repository root by default, ex
 - **Recipes:** `<data folder>/recipes.db`, one SQLite file. The backend creates it on its first
   start, with the starter categories and the sample recipes, and prints its location in the terminal
   ("Using the recipes database at …").
-- **Back up:** stop the backend, then copy `recipes.db` (or the whole folder).
-- **Start over:** stop the backend, delete `recipes.db`, and start the backend again. You get a new
-  database with only the categories and samples. Everything you created is gone.
+- **Pictures and videos:** `<data folder>/media/`, each file once (named by its content), shared by
+  every recipe that uses it. A file is deleted only when no recipe uses it any more.
+- **Back up:** stop the backend, then copy **both** `recipes.db` **and** the `media/` folder (or simply
+  the whole data folder). The database says which pictures belong to which recipe; the folder holds
+  the pictures themselves. Restore them together: a database without its `media/` folder shows
+  "התמונה לא נמצאה" placeholders, and a `media/` folder without its database is just files.
+- **Start over:** stop the backend, delete `recipes.db` and `media/`, and start the backend again. You
+  get a new database with only the categories and samples. Everything you created is gone.
 - **Probe runs:** `<data folder>/instagram-probe/<run-id>/`. **Quality check results:**
   `<data folder>/evals/extraction/<run>/`.
 
