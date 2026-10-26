@@ -1,8 +1,8 @@
 {
-  "about": "Invented. A drink fits none of the three categories: it must stay unresolved, with no new category suggested.",
+  "about": "Invented. A drink: it goes in the drinks category the owner added (until 2026-10-25 no category fit, and it had to stay unresolved with no new category suggested; cases 05, 08, 24 and 25 still check that).",
   "expect": {
     "title": "לימונדה נענע ביתית",
-    "category": null,
+    "category": "משקאות",
     "ingredient_groups": [
       {
         "name": null,
@@ -34,12 +34,6 @@
       "ממיסים את הסוכר בכוס מים חמים, מוסיפים את שאר המים, את מיץ הלימון והנענע.",
       "מצננים לפחות שעה ומגישים עם קרח."
     ],
-    "never_suggested": [
-      "משקאות",
-      "drinks"
-    ],
-    "warnings": [
-      "classification_unresolved"
-    ]
+    "warnings": []
   }
 }

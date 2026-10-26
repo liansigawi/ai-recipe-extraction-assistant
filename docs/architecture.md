@@ -80,7 +80,7 @@ response includes it.
 {
   "id": 2,
   "title": "עוף בסיר עם אורז",
-  "category": { "id": 2, "name": "בישולים" },
+  "category": { "id": 2, "name": "ארוחות בשריות" },
   "subcategory": null,
   "servings": "4 מנות",
   "ingredient_groups": [
@@ -239,12 +239,12 @@ then use the same extraction and checks.
 
 The database is one SQLite file, `<data folder>/recipes.db`. The tables are defined as SQLAlchemy
 classes in [`backend/app/models.py`](../backend/app/models.py), and created and changed by
-migrations (below). A new database also gets the three starter categories and the four sample
+migrations (below). A new database also gets the four starter categories and the four sample
 recipes (`backend/app/seed.py`), once: deleted samples are not added again.
 
 | Table | Columns | Notes |
 |---|---|---|
-| `categories` | `id`, `name`, `description`, `parent_id` (NULL = top level) | Subcategories are rows whose parent is a top-level category (one level deep). `UNIQUE(id, parent_id)` lets recipes reference the pair. The three starter categories (קינוחים, בישולים, ארוחות קלילות) are created with the database; after that only the user manages categories (milestone 6). |
+| `categories` | `id`, `name`, `description`, `parent_id` (NULL = top level) | Subcategories are rows whose parent is a top-level category (one level deep). `UNIQUE(id, parent_id)` lets recipes reference the pair. The four starter categories (קינוחים, ארוחות בשריות, ארוחות קלילות, משקאות) are created with the database; after that only the user manages categories (milestone 6). |
 | `recipes` | `id`, `title`, `category_id`, `subcategory_id`, `servings`, `ingredient_groups` (JSON), `step_groups` (JSON), `notes` (JSON), `is_sample`, `created_at`, `updated_at`, `status`, `issues` (JSON) | Composite foreign key `(subcategory_id, category_id) → categories(id, parent_id)`, so the database rejects a subcategory under the wrong parent. See the enforcement notes below. Times are stored as UTC. `status` is `'draft'` or `'saved'` (a CHECK constraint). |
 | `recipe_sources` | `id`, `recipe_id`, `position`, `kind`, `url`, `creators` (JSON) | Editable attribution, in order. Deleting a recipe deletes its sources; saving replaces them. |
 | `recipe_imports` | `id`, `recipe_id` (unique), `kind`, `original_text`, `model`, `imported_at` | The imported original, exactly as pasted. Written once, when the import is saved; saving the recipe never touches it; deleting the recipe deletes it. |
@@ -256,7 +256,10 @@ outcome for links (milestone 5).
 creates the milestone-3 tables statement for statement (a test compares it with
 `tests/fixtures/milestone3_schema.sql`); `0002` adds `status`, `issues` and `recipe_imports`
 with `ALTER TABLE ... ADD COLUMN`, which keeps the existing rows in place; `0003` replaces the
-three starter categories' descriptions, only where a description is still the starter text. At start-up,
+three starter categories' descriptions, only where a description is still the starter text; `0004` and
+`0005` do the same for the user's own meanings, and `0005` also renames "בישולים" to "ארוחות בשריות" in
+place (same id, so its recipes stay in it) and adds "משקאות" to a notebook that already has categories
+(a new one gets it from the seed). At start-up,
 `app/migrate.py`:
 - creates a new database with every migration, then seeds it;
 - recognizes a milestone-3 database (tables but no `alembic_version`) and marks it as `0001`;
@@ -427,6 +430,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-25 (2) | A colon cuts a line only after a label of at most five words; a sentence that ends in a colon keeps its list | An introduction ("…the secret turned out simple: salt, a lot of garlic and no vinegar") became two ingredient lines beside the real list (case 26). A list after a rejected introduction label is also kept out when the recipe has its own list. |
 | 2026-10-25 (2) | A passage labeled a heading that ends a sentence is a step (or an ingredient); a title passage that is only a label takes the rest of its line; the prompt says a title names the dish and an introduction that mentions it is not one | "מחממים תנור מראש." was a heading (case 18); the title was "ארוחת בוקר של שישי" without the dish (case 14), or an introduction sentence (case 24). |
 | 2026-10-25 (2) | Categories by the user's meaning (migration 0004): sweet desserts, dairy desserts included; generally savory dairy-based meals; generally meat- or poultry-based main dishes; no clear fit stays unclassified. The classification prompt says a category's description decides over its name, and the dish summary names what it is mainly made of | Measured on the same 60 drafts against the re-annotated expectations: 54 right, 5 wrong, 1 unresolved; the user's descriptions with the previous wording 46–49 right; the previous descriptions 44. The name "בישולים" (cooked dishes) had drawn vegetarian dishes. |
+| 2026-10-25 (3) | The user's reorganized categories (migration 0005): "בישולים" renamed "ארוחות בשריות" (meat and poultry meals), "ארוחות קלילות" for savory dairy **or egg** meals, "משקאות" added at the user's request (drinks, smoothies, coffee drinks, lemonade; sweet or milk drinks too). The descriptions name concrete dishes and avoid the double meaning of "מלוח" (savory or salty); the no-fit example in the prompt no longer names a drink | Measured on the same 68 drafts with the category request alone: 65 right, 2 wrong, 1 unresolved with the chosen descriptions; 59 to 61 with plainer ones. A yes/no answer per category (59–60) and quoting the matching description words (60, forcing a category onto pickles and soup) were worse. |
 | 2026-10-25 (2) | The evaluation reports import success apart from accuracy within drafts, and a line or step kept as a group heading as misplaced | A refused recipe has no lines to check: without its own count it would vanish from the per-area numbers. |
 | 2026-10-20 | Ollama requests send `"shift": false` | Without it, an answer that fills the working memory makes Ollama drop the oldest half (the instructions and the text) and continue: one runaway answer ran 28,000 tokens until the 10-minute timeout. Now it stops at the limit and the import reports it. |
 | 2026-10-20 | No compact-JSON request, although it is about 30% faster | Measured on the 20 cases: more wrong quantities in both modes (references 16 instead of 11) and fewer drafts without corrections (8 instead of 10). Quality first. |
@@ -455,7 +459,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 - **One import at a time per page**, and the import screen has a single text box (no multiple
   recipes in one paste: the model takes the main one and flags `multiple_recipes`).
 - **A local model's wrong category is not caught.** The backend can check that a category exists,
-  not that it fits: Qwen3 8B sometimes puts a vegetarian main dish under "בישולים". The review
+  not that it fits: Qwen3 8B sometimes puts a dairy pasta or a fish dish under "ארוחות בשריות". The review
   screen shows the chosen category, and the person decides; an unclassified recipe can be saved.
 - **Quantities follow fixed rules, not judgment.** `quantity.py` knows the common Hebrew and
   English amounts and units; an unusual unit or wording gives no quantity (never a wrong one

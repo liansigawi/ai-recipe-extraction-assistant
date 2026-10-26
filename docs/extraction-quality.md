@@ -89,11 +89,16 @@ listed strawberries and water that only the steps use, which the app should flag
 and split "לציפוי - מלח מאלדון" into a group, while a passage is copied whole). The held-out cases'
 expectations were written by their author and checked only mechanically (every string is in its text).
 
-**Expected categories (2026-10-25, afternoon)** follow the person's own meanings: "קינוחים" sweet
-desserts, dairy desserts included; "ארוחות קלילות" generally savory dairy-based meals; "בישולים"
-generally meat- or poultry-based main dishes; egg, vegetable, fish and other dishes without a clear
-fit unclassified. A savory dish with cheese or yogurt as one part (a feta salad, fritters with a
-yogurt sauce) accepts "ארוחות קלילות" or unclassified.
+**Expected categories (2026-10-25, evening)** follow the person's reorganized categories:
+"קינוחים" sweet desserts, dairy desserts included; "ארוחות בשריות" (formerly "בישולים") meat and
+poultry meals; "ארוחות קלילות" savory dairy or egg meals (shakshuka 07 and 14 and the spinach-cheese
+pie 10 now belong there); "משקאות", added by the person, drinks (the lemonades 06, 21, the watermelon
+drink 27 and the coffee drink real-4). Fish, vegetable, legume and other dishes without a clear fit
+stay unclassified (11, 12, 25, 26, 31). A savory dish with cheese, yogurt or egg as one part (a feta
+salad 04, fritters with a yogurt sauce 19, avocado toast with eggs 24) accepts "ארוחות קלילות" or
+unclassified. Case 06 used to check that a drink stays unresolved with no "משקאות" suggested; now
+that the person added that category it expects it, and cases 05, 08, 24 and 25 still check that no
+new category is suggested.
 
 Run all thirty-seven with:
 
@@ -108,6 +113,51 @@ uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/eva
 
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
+
+### 2026-10-25 (evening): your reorganized categories
+
+Your four categories: "קינוחים", "ארוחות בשריות" (formerly "בישולים", same id), "ארוחות קלילות" (now
+dairy **or egg**) and "משקאות" (added by you). Local `qwen3:8b`, two live runs of all 37 cases
+(`20261025-222407`, `20261025-223146`), 100% on the GPU, about 457 s per run, scored against the
+expected categories above. The first request (labels and recognition) did not change; the category
+request has the new descriptions and a no-fit example without "a drink". **Not independent:** the
+descriptions were chosen by replaying the category request on the afternoon runs' drafts of these
+same cases, so these category numbers are after tuning.
+
+| | run 1 | run 2 |
+|---|---|---|
+| recipe texts imported | 34/34 | 34/34 |
+| texts that are not recipes refused | 3/3 | 3/3 |
+| category (within drafts) | 41/42 | 41/42 |
+| problems (not minor) | 7 | 6 |
+| cases where every check passed | 28 of 37 | 29 of 37 |
+| ingredient lines, quantities | 298/298, 298/298 | 298/298, 298/298 |
+
+**The cases you named, five runs each** (the two above and three more of just these):
+
+| case | category, 5 runs | every check passed |
+|---|---|---|
+| your coffee drink (real-4) | משקאות 5 | 5 |
+| lemonade (06), frozen lemonade (21), watermelon drink (27) | משקאות 5 each | 5, 0 ("שמרו לימים החמים" kept as a note), 5 |
+| shakshuka (07, 14) | ארוחות קלילות 5 each | 4 ("בתיאבון!" once), 5 |
+| cheesecake (30), salted honey tart (real-3), vanilla torte (real-1), salted-caramel brownies (23) | קינוחים 5 each | 5 each |
+| ricotta-stuffed shells (28) | **ארוחות בשריות 5** (expected ארוחות קלילות) | 0 |
+
+**The one category miss is consistent.** Asked alone, the model gives "ארוחות בשריות" 0.83–0.92 for
+the shells right after summing them up as "pasta and cheese". Swapping the two categories' ids moves
+the answer with the category, so it is the content, not the position; with a neutral name in place of
+"ארוחות קלילות" it chose that category for one of the two drafts, so the word "light" plays a part.
+Descriptions that name cheese-filled shells, a description that starts with "ארוחות חלביות", a yes/no
+answer per category and quoting the description's words did not fix it without breaking others.
+
+**Categories measured alone** (the category request only, on the same 68 drafts): plainer
+descriptions 59–61 right; the chosen ones 65 right, 2 wrong (the shells; the chraime once), 1 left
+unclassified. The changes that helped: concrete dishes in each description (פרגיות, מאפינס, פשטידות,
+frozen lemonade), "לא מתוקות" instead of "מלוחות" (which also means "salty": the salted honey tart was
+put with the savory meals), and no drink in the prompt's example of a recipe with no category.
+
+Other findings are the afternoon's: sign-offs kept as notes (07 once, 11, 21, real-2), the short title
+"בראוניז" (13), "תיבול: ..." as its own group (20), and the source gaps the word list cannot see.
 
 ### 2026-10-25 (afternoon): recognition apart from categories, your category meanings, passage context
 

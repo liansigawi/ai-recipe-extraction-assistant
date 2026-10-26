@@ -86,8 +86,10 @@ def test_a_milestone_3_database_is_upgraded_and_keeps_every_recipe(data_dir):
 
     with TestClient(app, base_url="http://localhost") as client:
         recipes = client.get("/api/recipes").json()
-        # Not seeded again: the database already existed.
-        assert [category["name"] for category in client.get("/api/categories").json()] == ["קינוחים", "בישולים", "ארוחות קלילות"]
+        # Not seeded again: the database already existed. (0005 renamed one category and added the drinks.)
+        assert [category["name"] for category in client.get("/api/categories").json()] == [
+            "קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות"
+        ]
 
     assert [recipe["title"] for recipe in recipes] == ["בדיקה", "עוגת שוקולד עם גנאש"]
     mine, sample = recipes
@@ -193,7 +195,7 @@ def test_the_starter_descriptions_are_made_clearer_but_a_description_you_changed
     upgrade_database(path)
 
     after = dict(categories_of(path))
-    assert after["בישולים"] == "שלי" and after["מרקים"] == "קערות חמות"  # yours, untouched
+    assert after["ארוחות בשריות"] == "שלי" and after["מרקים"] == "קערות חמות"  # yours, untouched (renamed by 0005)
     assert after["קינוחים"] == STARTER["קינוחים"] and "לא משקאות" in after["קינוחים"]
     assert after["ארוחות קלילות"] == STARTER["ארוחות קלילות"] and "על בסיס חלבי" in after["ארוחות קלילות"]
     with closing(sqlite3.connect(path)) as db:
@@ -233,5 +235,76 @@ def test_descriptions_from_0003_take_your_meaning_and_one_you_changed_since_is_k
     upgrade_database(path)
     after = dict(categories_of(path))
     assert after["קינוחים"] == "מה שאני רוצה"  # yours, untouched
-    assert after["בישולים"] == STARTER["בישולים"] and "בשר או עוף" in after["בישולים"]
+    assert after["ארוחות בשריות"] == STARTER["ארוחות בשריות"] and "בשר בקר" in after["ארוחות בשריות"]
     assert after["ארוחות קלילות"] == STARTER["ארוחות קלילות"]
+
+
+def database_at_0004(path: Path) -> None:
+    """A milestone-3 database with the first starter descriptions, migrated up to 0004 only, with one
+    recipe in "בישולים" and its imported original."""
+    make_milestone3_database(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.executemany("UPDATE categories SET description = ? WHERE name = ?", [(d, n) for n, d in OLD_DESCRIPTIONS])
+        db.commit()
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.stamp(alembic_config(connection), "0001")
+        command.upgrade(alembic_config(connection), "0004")
+    engine.dispose()
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("UPDATE recipes SET category_id = 2 WHERE id = 2")
+        db.execute("INSERT INTO recipe_imports VALUES (1, 2, 'text', 'בדיקה\nמערבבים.', 'qwen3:8b', '2026-10-25 10:00:00')")
+        db.commit()
+
+
+def rows(path: Path, table: str) -> list[tuple]:
+    with closing(sqlite3.connect(path)) as db:
+        return db.execute(f"SELECT * FROM {table} ORDER BY id").fetchall()
+
+
+def test_0005_renames_in_place_adds_the_drinks_and_keeps_every_recipe(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    recipes, originals, sources = rows(path, "recipes"), rows(path, "recipe_imports"), rows(path, "recipe_sources")
+
+    upgrade_database(path)
+
+    with closing(sqlite3.connect(path)) as db:
+        categories = db.execute("SELECT id, name, description FROM categories ORDER BY id").fetchall()
+    # Same id: the recipe that was in "בישולים" is in "ארוחות בשריות" without being touched.
+    assert [(id_, name) for id_, name, _ in categories] == [
+        (1, "קינוחים"), (2, "ארוחות בשריות"), (3, "ארוחות קלילות"), (4, "משקאות")
+    ]
+    assert [description for _, _, description in categories] == list(STARTER.values())
+    assert rows(path, "recipes") == recipes and rows(path, "recipe_imports") == originals
+    assert rows(path, "recipe_sources") == sources
+    assert len(list(tmp_path.glob("recipes.backup-*-before-0005.db"))) == 1
+
+
+def test_0005_leaves_a_category_you_renamed_and_a_drinks_category_you_already_have(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("UPDATE categories SET name = 'עיקריות' WHERE name = 'בישולים'")
+        db.execute("INSERT INTO categories (name, description, parent_id) VALUES ('משקאות', 'שלי', NULL)")
+        db.commit()
+    upgrade_database(path)
+    names = [name for name, _ in categories_of(path)]
+    assert names == ["קינוחים", "עיקריות", "ארוחות קלילות", "משקאות"]
+    assert dict(categories_of(path))["משקאות"] == "שלי"
+
+
+def test_downgrading_0005_keeps_the_drinks_category_while_a_recipe_is_in_it(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    upgrade_database(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("UPDATE recipes SET category_id = 4 WHERE id = 1")
+        db.commit()
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.downgrade(alembic_config(connection), "0004")
+    engine.dispose()
+    assert [name for name, _ in categories_of(path)] == ["קינוחים", "בישולים", "ארוחות קלילות", "משקאות"]
+    with closing(sqlite3.connect(path)) as db:
+        assert db.execute("SELECT category_id FROM recipes ORDER BY id").fetchall() == [(4,), (2,)]

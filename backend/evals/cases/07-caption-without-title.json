@@ -2,7 +2,7 @@
   "about": "Invented, Instagram style. No title line: one is composed and flagged. Emoji used as bullets are dropped, the lines kept. Calls to action, mentions and hashtags are left out.",
   "expect": {
     "title_composed": true,
-    "category": null,
+    "category": "ארוחות קלילות",
     "ingredient_groups": [
       {
         "name": null,
@@ -56,6 +56,6 @@
       "#",
       "@shakshuka.lovers"
     ],
-    "warnings": ["missing_title", "classification_unresolved"]
+    "warnings": ["missing_title"]
   }
 }

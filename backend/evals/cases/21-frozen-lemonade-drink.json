@@ -1,8 +1,8 @@
 {
- "about": "Hebrew frozen lemonade, a drink that fits no category: a mention inside the introduction, 'ועוד' joining two amounts, an amount after a prefix with a volume in parentheses, approximations, a serving line inside the list, a yield line, and one tip that is both a substitution and storage advice. Written independently as a held-out case.",
+ "about": "Hebrew frozen lemonade, a drink (the drinks category): a mention inside the introduction, 'ועוד' joining two amounts, an amount after a prefix with a volume in parentheses, approximations, a serving line inside the list, a yield line, and one tip that is both a substitution and storage advice. Written independently as a held-out case.",
  "expect": {
   "title": "לימונענע גרוסה ביתית",
-  "category": null,
+  "category": "משקאות",
   "ingredient_groups": [
    {
     "name": "לסירופ",
@@ -45,8 +45,6 @@
    "שמרו לימים החמים",
    "#לימונענע #משקאות_קיץ #קיץ_ישראלי"
   ],
-  "warnings": [
-   "classification_unresolved"
-  ]
+  "warnings": []
  }
 }

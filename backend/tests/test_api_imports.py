@@ -12,6 +12,7 @@ import pytest
 from app.api.imports import get_extractor_factory
 from app.errors import ApiError
 from app.extraction.output import ExtractionOutput
+from app.sample_data import STARTER_CATEGORIES
 from tests.test_extraction_review import SOURCE
 from tests.test_extraction_review import answer as review_answer
 
@@ -105,7 +106,7 @@ def test_an_import_saves_a_draft_with_the_original_text_exactly_as_pasted(client
     assert draft["issues"] == []
     # The extractor got the text and the categories from the database.
     [(text, categories)] = extractor.calls
-    assert text == pasted and [category.name for category in categories] == ["קינוחים", "בישולים", "ארוחות קלילות"]
+    assert text == pasted and [category.name for category in categories] == ["קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות"]
 
 
 def test_the_review_save_keeps_the_original_and_cannot_change_it(client, use):
@@ -194,7 +195,7 @@ def test_an_invalid_category_from_the_model_never_reaches_the_database(client, u
     assert draft["category"] is None
     assert [issue["kind"] for issue in draft["issues"]] == ["classification_unresolved"]
     with closing(sqlite3.connect(data_dir / "recipes.db")) as db:
-        assert db.execute("SELECT count(*) FROM categories").fetchone() == (3,)  # nothing created
+        assert db.execute("SELECT count(*) FROM categories").fetchone() == (len(STARTER_CATEGORIES),)  # nothing created
 
 
 def test_imports_are_refused_from_other_sites(client, use):

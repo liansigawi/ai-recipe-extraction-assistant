@@ -3,7 +3,7 @@
  "expect": {
   "title": "עוף ואורז בסיר אחד עם שקדים וצימוקים",
   "title_acceptable": ["עוף ואורז בסיר אחד"],
-  "category": "בישולים",
+  "category": "ארוחות בשריות",
   "ingredient_groups": [
    {"name": "לעוף", "items": [
     ["8 כרעיים עוף עם עור", "8"],

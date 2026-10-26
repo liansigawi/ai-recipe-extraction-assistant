@@ -2,10 +2,7 @@
   "about": "Invented. The title shares a line with an introduction ('ארוחת בוקר של שישי:'), the ingredients follow 'מצרכים:' on one line, and one step continues on the next line.",
   "expect": {
     "title": "שקשוקה ירוקה",
-    "category_one_of": [
-      "ארוחות קלילות",
-      null
-    ],
+    "category": "ארוחות קלילות",
     "ingredient_groups": [
       {
         "name": null,

@@ -12,25 +12,33 @@ labels them as examples. You can edit or delete them like any other recipe.
 
 from app.schemas import Ingredient, IngredientGroup, RecipeInput, Source, StepGroup
 
-# The three starter categories from the brief: (name, description). After this, only you manage categories.
+# The starter categories: (name, description). The brief's three, with "בישולים" renamed "ארוחות בשריות",
+# and "משקאות", which you added. After this, only you manage categories.
 # The model chooses a category by these descriptions, which say what you mean by each: sweet desserts;
-# generally savory dairy-based meals ("light" is your own label, not about calories); generally meat-
-# or poultry-based main dishes. A dish without a clear fit stays unclassified. Migrations 0003 and 0004
-# brought older databases up to these.
+# meat and poultry meals; savory dairy or egg meals ("light" is your own label, not about calories or
+# portions); drinks. A dish without a clear fit stays unclassified. Migrations 0003 to 0005 brought older
+# databases up to these.
 STARTER_CATEGORIES: list[tuple[str, str]] = [
     (
         "קינוחים",
-        "קינוחים מתוקים, כולל קינוחי חלב: עוגות, עוגיות, מאפים מתוקים, פאי וטארטים מתוקים וקינוחים קרים. "
-        "מתוק גם כשיש בו קצת מלח או גבינה. לא משקאות.",
+        "קינוחים מתוקים, כולל קינוחי חלב: עוגות, עוגיות, מאפינס, מאפים מתוקים, פאי וטארטים מתוקים וקינוחים "
+        "קרים. מתוק גם כשיש בו מלח (קרמל מלוח, דבש מלוח) או גבינה. לא משקאות.",
     ),
     (
-        "בישולים",
-        "בדרך כלל מנות עיקריות על בסיס בשר או עוף.",
+        "ארוחות בשריות",
+        "ארוחות שיש בהן בשר בקר, טלה, הודו או עוף כמרכיב עיקרי: תבשילים, צלי, קציצות, שניצל, פרגיות, כרעיים "
+        "ומנות עוף אחרות. מנה בלי בשר ובלי עוף (למשל דגים, פסטה עם גבינה, קטניות) לא כאן.",
     ),
     (
         "ארוחות קלילות",
-        "בדרך כלל ארוחות מלוחות על בסיס חלבי (גבינות, יוגורט, שמנת), למשל טורטיות במילוי גבינה או פיצה "
-        "מבצק יוגורט. \"קלילות\" הוא שם אישי, לא עניין של קלוריות או גודל מנה.",
+        "ארוחות לא מתוקות על בסיס חלבי או ביצים, בלי בשר: פסטה במילוי גבינה (כמו קונכיות או רביולי ממולאים), "
+        "פיצה מבצק יוגורט, טורטיות במילוי גבינה, פשטידות, חביתות ושקשוקה. \"קלילות\" הוא שם אישי, לא עניין של "
+        "קלוריות או גודל מנה.",
+    ),
+    (
+        "משקאות",
+        "משקאות: שייקים וסמוטי, משקאות קפה, לימונדה (גם גרוסה או קפואה) ומשקאות קרים או חמים אחרים. "
+        "משקה מתוק או על בסיס חלב שייך לכאן, לא לקינוחים.",
     ),
 ]
 
@@ -91,7 +99,7 @@ SAMPLE_RECIPES: list[tuple[str | None, RecipeInput]] = [
         ),
     ),
     (
-        "בישולים",
+        "ארוחות בשריות",
         RecipeInput(
             title="עוף בסיר עם אורז",
             servings="4 מנות",

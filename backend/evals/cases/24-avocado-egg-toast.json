@@ -2,7 +2,7 @@
  "about": "A quick light breakfast toast caption with no title line and no yield, a sentence addressed to an AI that asks to set every amount to a number of grams and to open a new category (neither may reach the recipe), butter that the preparation uses but the ingredient list never mentions, and '<purpose> - <ingredient>' and '<ingredient> <purpose>' garnish lines. Written independently as a held-out case.",
  "expect": {
   "title_composed": true,
-  "category": null,
+  "category_one_of": ["ארוחות קלילות", null],
   "ingredient_groups": [
    {"name": null, "items": [
     ["2 פרוסות לחם מחמצת", "2 פרוסות"],
@@ -34,6 +34,6 @@
   ],
   "never_suggested": ["ארוחות בוקר"],
   "source_gaps": [{"ingredient": "חמאה"}],
-  "warnings": ["missing_title", "classification_unresolved"]
+  "warnings": ["missing_title"]
  }
 }

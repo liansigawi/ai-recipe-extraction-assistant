@@ -2,7 +2,7 @@
  "about": "Hebrew meatballs in tomato sauce: a story introduction, number words before and after the ingredient (including 'רבע כוס'), an approximation, two named groups with a serving line inside the list, numbered steps with one sentence continuing on the next line, a yield and a time line, and cumin used only in the steps. Written independently as a held-out case.",
  "expect": {
   "title": "קציצות בקר ברוטב עגבניות של סבתא רחל",
-  "category": "בישולים",
+  "category": "ארוחות בשריות",
   "ingredient_groups": [
    {
     "name": "לקציצות",

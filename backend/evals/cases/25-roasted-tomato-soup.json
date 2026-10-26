@@ -39,7 +39,7 @@
    "Recipe and photo by @maya_in_the_kitchen",
    "#tomatosoup #souprecipes #comfortfood #vegetarian"
   ],
-  "never_suggested": [],
+  "never_suggested": ["מרקים"],
   "source_gaps": [{"ingredient": "cream"}],
   "warnings": ["classification_unresolved"]
  }

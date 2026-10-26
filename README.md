@@ -7,7 +7,7 @@ collection that supports Hebrew and right-to-left text.
 > **Status: milestone 4 of 7.** A FastAPI backend with a SQLite database and a React + TypeScript
 > frontend run locally. You can **paste recipe text and have Claude turn it into a draft**, review
 > the draft beside the original text, and save it explicitly; or create, edit and delete recipes by
-> hand. A new database starts with three categories and **four invented sample recipes**, labeled
+> hand. A new database starts with four categories and **four invented sample recipes**, labeled
 > "דוגמה". Importing from websites, screenshots and Instagram links comes in milestone 5.
 > Milestone 1 (Instagram feasibility) is documented in
 > [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
@@ -283,7 +283,11 @@ The model still decides a few things, and the backend checks each:
 - the **category**: only one of your existing categories, chosen by their descriptions (a
   category's name can be a personal label; its description decides), and when unsure the recipe
   stays unclassified, which never prevents saving it. With the local model the category is asked
-  in a second, short request about the finished draft (its copied lines);
+  in a second, short request about the finished draft (its copied lines). The starter categories
+  are yours: "קינוחים" (sweet desserts, dairy desserts included), "ארוחות בשריות" (meat and poultry
+  meals), "ארוחות קלילות" (savory dairy or egg meals; "light" is a personal label, not about
+  calories or portions) and "משקאות" (drinks, smoothies, coffee drinks, lemonade). A fish, vegetable
+  or legume dish usually fits none and stays unclassified;
 - **roles, corrected by the surrounding structure**: a short line in the ingredient list that says
   what it is for ("לציפוי - מלח מאלדון", "להגשה: גלידת וניל", "Lemon wedges, for serving") is an
   ingredient, as written, with no invented quantity, even if the model called it a tip;

@@ -89,8 +89,8 @@ CLASSIFICATION: choose only among the person's existing categories, given by id 
 label: where the name and the description differ, the description decides.
 - fit = "clear" only when the recipe plainly is the kind of dish one category is for, judged by \
 its description: give its id, and a subcategory id only if one of that category's own \
-subcategories clearly fits. A recipe that is none of the listed kinds (for example a drink, a \
-sauce or a spice mix, when no category is for those) has no fit. When in doubt, answer \
+subcategories clearly fits. A recipe that is none of the listed kinds (for example a sauce or a \
+spice mix, when no category is for those) has no fit. When in doubt, answer \
 "ambiguous" or "no_fit": the person classifies it; an unclassified recipe is fine, a wrong \
 category is not.
 - fit = "ambiguous" when two or more categories could fit: category_id null, and their ids in \
@@ -188,8 +188,8 @@ CLASSIFICATION: choose only among the person's existing categories, given by id 
 label: where the name and the description differ, the description decides.
 - fit = "clear" only when the recipe plainly is the kind of dish one category is for, judged by \
 its description: give its id, and a subcategory id only if one of that category's own \
-subcategories clearly fits. A recipe that is none of the listed kinds (for example a drink, a \
-sauce or a spice mix, when no category is for those) has no fit. When in doubt, answer \
+subcategories clearly fits. A recipe that is none of the listed kinds (for example a sauce or a \
+spice mix, when no category is for those) has no fit. When in doubt, answer \
 "ambiguous" or "no_fit": the person classifies it; an unclassified recipe is fine, a wrong \
 category is not.
 - fit = "ambiguous" when two or more categories could fit: category_id null, and their ids in \

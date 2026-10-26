@@ -1,8 +1,8 @@
 {
- "about": "A short Hebrew drink caption with a personal introduction, a 'הגרסה שלי:' ingredient heading, five ingredient lines and two preparation sentences; a drink has no category. Written independently as a held-out case.",
+ "about": "A short Hebrew drink caption with a personal introduction, a 'הגרסה שלי:' ingredient heading, five ingredient lines and two preparation sentences; a drink (the drinks category). Written independently as a held-out case.",
  "expect": {
   "title": "משקה אבטיח, לימון ונענע",
-  "category": null,
+  "category": "משקאות",
   "ingredient_groups": [
    {
     "name": "הגרסה שלי",
@@ -39,8 +39,6 @@
    "השבוע השכנה השאירה לי חצי אבטיח ענק על המדרגות, אז זה מה שאני מוזגת לעצמי כל צהריים.",
    "#משקאות_קיץ #אבטיח #קיץ_ישראלי"
   ],
-  "warnings": [
-   "classification_unresolved"
-  ]
+  "warnings": []
  }
 }
