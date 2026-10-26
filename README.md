@@ -202,6 +202,13 @@ post's own data, which holds the complete caption. Only if that gives no caption
 say the post is unavailable or ask to wait) is the post's public embed view fetched once over plain
 HTTP. A preview that may be cut off is never imported as if it were complete.
 
+**When the post is already in the notebook** (in a draft or a recipe, as its imported original or as
+a source you entered), the import stops before anything is read and the page lists those recipes, each
+with **"פתיחה"** (open it), and offers **"ייבוא עותק נוסף"** (import another copy). Nothing is replaced
+or blocked. The same post is recognized whatever the form of its address: `/p/`, `/reel/` or `/tv/`,
+with or without a username, `www` or tracking parameters (`?igsh=...`). Pasted text that comes with a
+link is checked the same way.
+
 **When the post cannot be read**, nothing is saved, and the page says why: Instagram says the post
 isn't available (deleted, private, or temporarily), asks to log in, asks to wait before reading more
 posts, the post has no caption, or the page did not answer in time. The link stays in its field: copy

@@ -296,3 +296,59 @@ describe('importing an Instagram post', () => {
     expect(api.changes()).toEqual([])
   })
 })
+
+describe('a post that is already in the notebook', () => {
+  const POST = 'https://www.instagram.com/reel/Cm1mCdCpSzJ/?igsh=abc'
+  const [cake] = sampleRecipes
+  const duplicate = {
+    error: {
+      code: 'duplicate_link',
+      message: 'This post is already in the notebook.',
+      details: { url: 'https://www.instagram.com/reel/Cm1mCdCpSzJ/', matches: [{ id: cake.id, title: cake.title, status: 'saved' }] },
+    },
+  }
+
+  async function importExisting() {
+    const result = await openImport()
+    result.api.answerNextWith(409, duplicate)
+    await result.user.click(linkBox())
+    await result.user.paste(POST)
+    await result.user.click(screen.getByRole('button', { name: 'ייבוא מהקישור' }))
+    await screen.findByText('הפוסט הזה כבר במחברת')
+    return result
+  }
+
+  it('shows the recipe that has it, and opens it on request', async () => {
+    const { user, api } = await importExisting()
+    const notice = screen.getByRole('alert')
+    expect(notice).toHaveTextContent(cake.title)
+    expect(notice).toHaveTextContent('מתכון')
+    await user.click(within(notice).getByRole('button', { name: `פתיחת ${cake.title}` }))
+    expect(screen.getByRole('heading', { level: 2, name: cake.title })).toBeInTheDocument()
+    expect(api.changes()).toHaveLength(1) // only the import that stopped: nothing saved, nothing replaced
+  })
+
+  it('imports another copy only when asked', async () => {
+    const { user, api } = await importExisting()
+    await user.click(screen.getByRole('button', { name: 'ייבוא עותק נוסף' }))
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+    expect(api.changes().map((call) => call.body)).toEqual([
+      { url: POST, use_model: true },
+      { url: POST, use_model: true, allow_duplicate: true },
+    ])
+  })
+
+  it('checks a link that comes with pasted text too, and keeps the choice for it', async () => {
+    const { user, api } = await openImport()
+    await user.click(linkBox())
+    await user.paste(POST)
+    await user.click(textBox())
+    await user.paste(PASTED)
+    api.answerNextWith(409, duplicate)
+    await user.click(screen.getByRole('button', { name: 'קריאה עם Claude' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('הפוסט הזה כבר במחברת')
+    await user.click(screen.getByRole('button', { name: 'ייבוא עותק נוסף' }))
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+    expect(api.changes()[1].body).toEqual({ text: PASTED, use_model: true, url: POST, allow_duplicate: true })
+  })
+})

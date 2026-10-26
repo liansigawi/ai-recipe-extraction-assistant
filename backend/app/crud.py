@@ -139,6 +139,17 @@ def _category_row(row: models.Category) -> schemas.CategoryRow:
     return schemas.CategoryRow(id=row.id, name=row.name, description=row.description, parent_id=row.parent_id)
 
 
+def linked_urls(session: Session) -> list[tuple[schemas.LinkedRecipe, str]]:
+    """Every address a recipe holds, in its imported original or its sources, with the recipe: drafts
+    and saved recipes alike. (Which of them are the same post is decided by the caller.)"""
+    recipe = (models.Recipe.id, models.Recipe.title, models.Recipe.status)
+    originals = select(*recipe, models.RecipeImport.url).join(models.RecipeImport).where(models.RecipeImport.url.is_not(None))
+    sources = select(*recipe, models.RecipeSource.url).join(models.RecipeSource).where(models.RecipeSource.url.is_not(None))
+    # SELECT ... FROM recipes JOIN recipe_imports ... UNION ALL SELECT ... FROM recipes JOIN recipe_sources ...
+    rows = sorted(session.execute(originals.union_all(sources)), key=lambda row: row[0], reverse=True)  # newest first
+    return [(schemas.LinkedRecipe(id=id_, title=title, status=status), url) for id_, title, status, url in rows]
+
+
 # --- The category rule -------------------------------------------------------------------------
 
 

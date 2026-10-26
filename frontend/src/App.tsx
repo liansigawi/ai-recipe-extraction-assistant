@@ -204,7 +204,7 @@ export default function App() {
 
   let content: ReactNode
   if (mode.kind === 'import') {
-    content = <ImportPanel onImported={handleImported} onCancel={handleCancel} />
+    content = <ImportPanel onImported={handleImported} onCancel={handleCancel} onOpenRecipe={handleSelect} />
   } else if (mode.kind === 'categories') {
     content = (
       <CategoryManager

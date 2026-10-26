@@ -2,7 +2,7 @@
 // calling fetch themselves, so request details and error handling live in one place.
 //
 // The paths start with /api: in development Vite forwards them to FastAPI (vite.config.ts).
-import type { Category, CategoryInput, CategoryRow, ExtractionInfo, Recipe, RecipeInput } from './types'
+import type { Category, CategoryInput, CategoryRow, ExtractionInfo, LinkedRecipe, Recipe, RecipeInput } from './types'
 
 /** Any failed request: an error response from the API, or no answer at all. */
 export class ApiError extends Error {
@@ -109,6 +109,8 @@ export function errorMessage(error: unknown): string {
       return 'לא הצלחנו לקרוא את הפוסט.'
     case 'instagram_caption_incomplete':
       return 'נקראה רק תצוגה מקדימה של הכיתוב, וייתכן שהיא קטועה.'
+    case 'duplicate_link':
+      return 'הפוסט הזה כבר במחברת.'
     default:
       return `הפעולה נכשלה: ${error.message}`
   }
@@ -156,14 +158,15 @@ export function getExtractionInfo(): Promise<ExtractionInfo> {
 export function importText(
   text: string,
   useModel: boolean,
-  from: { url?: string; possiblyIncomplete?: boolean } = {},
+  from: { url?: string; possiblyIncomplete?: boolean; allowDuplicate?: boolean } = {},
 ): Promise<Recipe> {
-  // The post's address and the "preview" flag are sent only when there is one.
+  // The post's address and the flags are sent only when they say something.
   const body = {
     text,
     use_model: useModel,
     ...(from.url ? { url: from.url } : {}),
     ...(from.possiblyIncomplete ? { possibly_incomplete: true } : {}),
+    ...(from.allowDuplicate ? { allow_duplicate: true } : {}),
   }
   return request('/api/imports/text', { method: 'POST', body: JSON.stringify(body) })
 }
@@ -173,8 +176,16 @@ export function importText(
  * draft for review. Takes a few seconds more than pasted text. When the post cannot be read, the
  * error's details carry the address and any caption that was read (captionFrom below).
  */
-export function importInstagram(url: string, useModel: boolean): Promise<Recipe> {
-  return request('/api/imports/instagram', { method: 'POST', body: JSON.stringify({ url, use_model: useModel }) })
+export function importInstagram(url: string, useModel: boolean, allowDuplicate = false): Promise<Recipe> {
+  const body = { url, use_model: useModel, ...(allowDuplicate ? { allow_duplicate: true } : {}) }
+  return request('/api/imports/instagram', { method: 'POST', body: JSON.stringify(body) })
+}
+
+/** The recipes that already have this post, when an import stopped for that (duplicate_link). */
+export function linkedRecipesFrom(error: unknown): LinkedRecipe[] | null {
+  if (!(error instanceof ApiError) || error.code !== 'duplicate_link') return null
+  const matches = (error.details as { matches?: LinkedRecipe[] } | null)?.matches
+  return Array.isArray(matches) ? matches : null
 }
 
 /** The caption an Instagram import read before it failed (a preview, or one the model found no recipe in). */

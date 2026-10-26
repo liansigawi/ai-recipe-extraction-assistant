@@ -33,7 +33,7 @@ from app.importers.instagram import (
     parse_instagram_url,
     retrieve_caption_blocking,
 )
-from app.schemas import ExtractionInfo, InstagramImport, Issue, Recipe, RecipeInput, Source, TextImport
+from app.schemas import ExtractionInfo, InstagramImport, Issue, LinkedRecipe, Recipe, RecipeInput, Source, TextImport
 
 IMPORT_ERRORS = {
     **ERROR_RESPONSES,
@@ -44,7 +44,10 @@ IMPORT_ERRORS = {
 
 INSTAGRAM_ERRORS = {
     **IMPORT_ERRORS,
-    409: {"model": ErrorResponse, "description": "Only a preview of the caption was read; it may be cut off"},
+    409: {
+        "model": ErrorResponse,
+        "description": "The post is already in the notebook (duplicate_link), or only a preview of its caption was read",
+    },
     429: {"model": ErrorResponse, "description": "Instagram asks to wait before reading more posts"},
 }
 
@@ -94,6 +97,8 @@ def import_text(
     address is kept with the original and becomes the recipe's source.
     """
     url = _canonical_url(data.url) if data.url is not None and data.url.strip() else None
+    if url is not None and not data.allow_duplicate:
+        _refuse_duplicate(session, url)
     draft, model = _draft(data.text, data.use_model, session, new_extractor)
     if url is not None:
         draft = draft.model_copy(update={"sources": [Source(kind="instagram", url=url)]})
@@ -134,6 +139,8 @@ def import_instagram(
     carry the address and any caption read, so the page can offer pasting the caption instead.
     """
     url = _canonical_url(data.url)
+    if not data.allow_duplicate:
+        _refuse_duplicate(session, url)  # before anything is fetched
     session.commit()  # nothing is read from the database during the page loads
     retrieval = retrieve(parse_instagram_url(url))
     log.info(
@@ -158,6 +165,32 @@ def import_instagram(
         session, draft, original_text=retrieval.caption, model=model, kind="instagram", url=url,
         retrieved_from=retrieval.retrieved_from,
     )
+
+
+def recipes_with_post(session: Session, url: str) -> list[LinkedRecipe]:
+    """The recipes that already link to this post, in their imported original or their sources. The
+    same post whatever the address's form: /p/, /reel/ or /tv/, with or without a username or tracking
+    parameters (the shortcode decides)."""
+    wanted = parse_instagram_url(url).shortcode
+    found: dict[int, LinkedRecipe] = {}
+    for recipe, linked in crud.linked_urls(session):
+        try:
+            if parse_instagram_url(linked).shortcode == wanted:
+                found.setdefault(recipe.id, recipe)
+        except InvalidInstagramUrl:
+            continue  # a website or another kind of address: not this post
+    return list(found.values())
+
+
+def _refuse_duplicate(session: Session, url: str) -> None:
+    """Stop before reading anything when the post is already in the notebook: the page shows the
+    recipes and lets the person open one or import another copy (allow_duplicate)."""
+    matches = recipes_with_post(session, url)
+    if matches:
+        raise ApiError(
+            409, "duplicate_link", "This post is already in the notebook.",
+            {"url": url, "matches": [match.model_dump(mode="json") for match in matches]},
+        )
 
 
 def _canonical_url(text: str) -> str:

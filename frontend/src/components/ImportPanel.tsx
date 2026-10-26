@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ApiError, captionFrom, errorMessage, getExtractionInfo, importInstagram, importText } from '../api'
-import type { ExtractionInfo, Recipe } from '../types'
+import { ApiError, captionFrom, errorMessage, getExtractionInfo, importInstagram, importText, linkedRecipesFrom } from '../api'
+import type { ExtractionInfo, LinkedRecipe, Recipe } from '../types'
 
 const MAX_CHARACTERS = 20_000 // the backend's limit (MAX_IMPORT_CHARACTERS)
 const STORAGE_KEY = 'recipe-notebook:import-text'
@@ -46,9 +46,18 @@ interface ImportPanelProps {
   /** Called with the saved draft when an import succeeds. */
   onImported: (draft: Recipe) => void
   onCancel: () => void
+  /** Opens a recipe that already has the post (from the duplicate notice). */
+  onOpenRecipe: (id: number) => void
 }
 
-export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) {
+// An import that stopped because the post is already in the notebook: the recipes that have it, and
+// how to repeat the same import as another copy.
+interface Duplicate {
+  matches: LinkedRecipe[]
+  again: () => void
+}
+
+export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: ImportPanelProps) {
   const id = useId()
   const [url, setUrl] = useState('')
   // A function given to useState runs once, on the first render: start from the kept text.
@@ -61,6 +70,9 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
   const [error, setError] = useState<string | null>(null)
   // Where the message belongs: under the link (reading the post) or under the text box.
   const [errorAt, setErrorAt] = useState<'link' | 'text'>('text')
+  const [duplicate, setDuplicate] = useState<Duplicate | null>(null)
+  // The address the person chose to import again although the notebook has it (kept for the paste fallback).
+  const [anotherCopyOf, setAnotherCopyOf] = useState<string | null>(null)
   const urlRef = useRef<HTMLInputElement>(null)
   const textRef = useRef<HTMLTextAreaElement>(null)
 
@@ -105,9 +117,10 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
     return true
   }
 
-  async function startInstagram() {
+  async function startInstagram(allowDuplicate = anotherCopyOf === url.trim()) {
     if (working !== null) return
     setErrorAt('link')
+    setDuplicate(null)
     if (url.trim() === '') {
       setError('הדביקו קודם קישור לפוסט באינסטגרם.')
       urlRef.current?.focus()
@@ -116,8 +129,14 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
     setWorking('instagram')
     setError(null)
     try {
-      onImported(await importInstagram(url.trim(), modelReady))
+      onImported(await importInstagram(url.trim(), modelReady, allowDuplicate))
     } catch (failure) {
+      const matches = linkedRecipesFrom(failure)
+      if (matches !== null) {
+        setDuplicate({ matches, again: () => anotherCopy(() => startInstagram(true)) })
+        setWorking(null)
+        return
+      }
       const caption = captionFrom(failure)
       const inBox = caption !== null && offerCaption(caption)
       const incomplete = failure instanceof ApiError && failure.code === 'instagram_caption_incomplete'
@@ -129,9 +148,17 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
     }
   }
 
-  async function start(useModel: boolean) {
+  /** "ייבוא עותק נוסף": the same import again, allowed although the post is already here. */
+  function anotherCopy(repeat: () => void) {
+    setAnotherCopyOf(url.trim())
+    setDuplicate(null)
+    repeat()
+  }
+
+  async function start(useModel: boolean, allowDuplicate = url.trim() !== '' && anotherCopyOf === url.trim()) {
     if (working !== null) return
     setErrorAt('text')
+    setDuplicate(null)
     if (text.trim() === '') {
       setError('הדביקו קודם את טקסט המתכון.')
       textRef.current?.focus()
@@ -145,11 +172,17 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
     setWorking(useModel ? 'model' : 'manual')
     setError(null)
     try {
-      const draft = await importText(text, useModel, { url: url.trim(), possiblyIncomplete: preview !== null && text === preview })
+      const draft = await importText(text, useModel, {
+        url: url.trim(),
+        possiblyIncomplete: preview !== null && text === preview,
+        allowDuplicate,
+      })
       storeText('') // imported: the draft and its original are in the database now
       onImported(draft)
     } catch (failure) {
-      setError(errorMessage(failure)) // the text stays in the box, and in storage
+      const matches = linkedRecipesFrom(failure)
+      if (matches !== null) setDuplicate({ matches, again: () => anotherCopy(() => start(useModel, true)) })
+      else setError(errorMessage(failure)) // the text stays in the box, and in storage
       setWorking(null)
     }
   }
@@ -209,6 +242,7 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
             {error}
           </p>
         )}
+        {duplicate !== null && errorAt === 'link' && <DuplicateNotice duplicate={duplicate} onOpen={onOpenRecipe} />}
       </div>
 
       <p className="import-divider">או הדביקו את הטקסט</p>
@@ -272,6 +306,7 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
       <output className="working-note">
         {working === 'model' && (local ? 'המודל המקומי קורא את המתכון… בדרך כלל זה לוקח עד דקה.' : 'Claude קורא את המתכון… בדרך כלל זה לוקח פחות מדקה.')}
       </output>
+      {duplicate !== null && errorAt === 'text' && <DuplicateNotice duplicate={duplicate} onOpen={onOpenRecipe} />}
       {error !== null && errorAt === 'text' && (
         <p role="alert" className="form-alert">
           {error}
@@ -290,5 +325,35 @@ export default function ImportPanel({ onImported, onCancel }: ImportPanelProps) 
         </button>
       </div>
     </section>
+  )
+}
+
+/** The post is already in the notebook: open a recipe that has it, or import another copy. Nothing is replaced. */
+function DuplicateNotice({ duplicate, onOpen }: { duplicate: Duplicate; onOpen: (id: number) => void }) {
+  const { matches, again } = duplicate
+  return (
+    <div role="alert" className="duplicate-notice">
+      <p>
+        <strong>הפוסט הזה כבר במחברת</strong>
+        {matches.length === 1 ? ', במתכון:' : `, ב-${matches.length} מתכונים:`}
+      </p>
+      <ul className="duplicate-list">
+        {matches.map((match) => (
+          <li key={match.id}>
+            <span dir="auto">{match.title}</span>
+            <span className={match.status === 'draft' ? 'badge-draft' : 'badge-saved'}>{match.status === 'draft' ? 'טיוטה' : 'מתכון'}</span>
+            <button type="button" className="button" aria-label={`פתיחת ${match.title}`} onClick={() => onOpen(match.id)}>
+              פתיחה
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="field-hint">אפשר לפתוח את המתכון הקיים, או לייבא עותק נוסף. שום מתכון קיים לא ישתנה.</p>
+      <div className="button-row">
+        <button type="button" className="button" onClick={again}>
+          ייבוא עותק נוסף
+        </button>
+      </div>
+    </div>
   )
 }

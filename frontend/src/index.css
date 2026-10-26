@@ -1018,3 +1018,41 @@ h4.category-name {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.badge-saved {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* The post is already in the notebook: the recipes that have it, each with "open". */
+.duplicate-notice {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-inline-start: 4px solid #d9a400;
+  border-radius: var(--radius);
+  background: #fff8e0;
+}
+
+.duplicate-notice p {
+  margin: 0;
+}
+
+.duplicate-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.duplicate-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}

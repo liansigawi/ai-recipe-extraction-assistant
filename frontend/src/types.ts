@@ -148,6 +148,13 @@ export interface CategoryInput {
   parent_id?: number | null
 }
 
+/** A recipe that already links to the same Instagram post (a duplicate_link error lists them). */
+export interface LinkedRecipe {
+  id: number
+  title: string
+  status: RecipeStatus
+}
+
 /** A category as created or changed. */
 export interface CategoryRow {
   id: number

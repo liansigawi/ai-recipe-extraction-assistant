@@ -275,6 +275,8 @@ class InstagramImport(ContractModel):
 
     url: str = Field(min_length=1, max_length=2000)
     use_model: bool = True  # False: save the caption as a draft to fill in by hand
+    # True: the person chose to import another copy of a post that is already in the notebook.
+    allow_duplicate: bool = False
 
 
 class TextImport(ContractModel):
@@ -290,6 +292,9 @@ class TextImport(ContractModel):
     url: str | None = Field(default=None, max_length=2000)
     # The text is a caption preview that may be cut off, sent unchanged: the draft says so.
     possibly_incomplete: bool = False
+    # True: the person chose to import another copy although a recipe already has this url.
+    allow_duplicate: bool = False
+
 
     @field_validator("text")
     @classmethod
@@ -297,6 +302,14 @@ class TextImport(ContractModel):
         if not trim_edges(value):
             raise ValueError("the text is empty")
         return value
+
+
+class LinkedRecipe(ContractModel):
+    """A recipe that already has a link to the same post (in its imported original or its sources)."""
+
+    id: int
+    title: NonEmptyStr
+    status: RecipeStatus
 
 
 class ExtractionInfo(ContractModel):
