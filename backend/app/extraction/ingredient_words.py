@@ -192,6 +192,11 @@ def _listed(entry: str, listed: set[str]) -> bool:
     return False
 
 
+def mentions_ingredient(text: str) -> bool:
+    """Does the text name an ingredient of the word list (also after a prefix letter: "ובשוקולד")?"""
+    return any(_key(form) in _SINGLE for word in _WORD.findall(text) for form in _forms(word))
+
+
 def only_in_steps(lines: list[str], steps: list[str]) -> list[tuple[str, str]]:
     """Each ingredient word that a step uses and no ingredient line has: (the words as the step writes
     them, without a prefix letter, and the step). The first step that uses it; longer names first

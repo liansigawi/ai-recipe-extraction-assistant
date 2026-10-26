@@ -329,9 +329,20 @@ The model still decides a few things, and the backend checks each:
   meals), "ארוחות קלילות" (savory dairy or egg meals; "light" is a personal label, not about
   calories or portions) and "משקאות" (drinks, smoothies, coffee drinks, lemonade). A fish, vegetable
   or legume dish usually fits none and stays unclassified;
-- **roles, corrected by the surrounding structure**: a short line in the ingredient list that says
-  what it is for ("לציפוי - מלח מאלדון", "להגשה: גלידת וניל", "Lemon wedges, for serving") is an
-  ingredient, as written, with no invented quantity, even if the model called it a tip;
+- **roles, corrected by the surrounding structure**:
+  - a short line in the ingredient list that says what it is for, or that it is optional ("לציפוי -
+    מלח מאלדון", "להגשה: גלידת וניל", "אופציונאלי: שוקולד צ׳יפס", "Lemon wedges, for serving"), is an
+    ingredient, as written, with no invented quantity, even if the model called it a tip;
+  - a passage that only **introduces** what follows is not part of the recipe: a question alone on
+    its line before the ingredients ("אז מה צריך לכל הטוב הזה?"), a question labeled a heading ("איך
+    מכינים?"), or a sentence labeled a heading before the list starts. It starts that list and stays
+    in your original text only. Other sentences labeled a heading become what they head: an
+    instruction before the steps ("מחממים תנור מראש." is a step);
+  - a labeled note's line is one note, whatever its pieces were labeled: "*אופציה טבעונית: כף פשתן
+    טחון+3 כפות מים=לערבב ולתת לו לנוח 6 דקות. זה תחליף לביצה" stays one note, label included, and the
+    alternative never becomes one more ingredient. After a plain "טיפ:" each sentence is its own note;
+  - a purely social line ("תהנו ❤️", "בתיאבון!", "תייגו חברה", "Enjoy!") is not a note, unless it also
+    says something useful (a number, an ingredient, keeping, serving or swapping);
 - **which passages to point out**: the model can point at a passage that looks cut off or
   unclear, an "or" whose scope is unclear, or a request inside the text, and at an ingredient a
   step uses that the list does not have. The **messages are written by the backend**, quote the

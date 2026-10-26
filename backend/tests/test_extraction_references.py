@@ -683,3 +683,101 @@ def test_a_composed_title_with_words_not_in_the_text_says_so():
     draft = draft_for(source, ["not_recipe", "ingredient", "step"], title="טוסט avocado", title_written_in_text=False)
     [point] = [issue for issue in draft.issues if issue.kind == "missing_title"]
     assert "לא כל המילים בה מופיעות בטקסט" in point.message
+
+
+# --- Introductions, optional ingredients, labeled notes and sign-offs (real case: almond cookies) -----
+
+COOKIES = (
+    "עוגיות שקדים\nאז מה צריך לכל הטוב הזה?\n✔️ביצה\n✔️חצי כוס קמח שקדים\nאופציונאלי: שוקולד צ׳יפס\n"
+    "אופן ההכנה:\nבקערה, נערבב את הביצה והקמח.\nנאפה 15 דקות.\nתהנו ❤️\n*יצאו לי 8 עוגיות\n"
+    "*אופציה טבעונית: כף פשתן טחון+3 כפות מים=לערבב. זה תחליף לביצה"
+)
+
+
+def cookies(intro_role: str = "step_heading", **roles_at):
+    source = COOKIES
+    assert len(segment_text(source)) == 14  # "אופציונאלי:" and "*אופציה טבעונית:" are cut at their colons
+    roles = ["title", intro_role, "ingredient", "ingredient", "tip", "ingredient", "step_heading", "step", "step", "tip",
+             "info", "tip", "ingredient", "tip"]
+    for number, role in roles_at.items():
+        roles[int(number.lstrip("p")) - 1] = role
+    return draft_for(source, roles, title="עוגיות שקדים", title_written_in_text=True)
+
+
+@pytest.mark.parametrize("intro_role", ["step_heading", "ingredient_heading", "tip", "step"])
+def test_a_question_that_introduces_the_ingredients_is_neither_a_step_nor_an_ingredient_nor_a_note(intro_role):
+    draft = cookies(intro_role)
+    everything = [*ingredient_texts(draft), *(s for g in draft.step_groups for s in g.steps), *draft.notes,
+                  *(g.name or "" for g in draft.ingredient_groups)]
+    assert not any("מה צריך" in item for item in everything)  # it stays in the original only
+    assert draft.step_groups[0].steps[0] == "בקערה, נערבב את הביצה והקמח."
+    assert [g.name for g in draft.ingredient_groups] == [None]
+
+
+def test_an_optional_ingredient_keeps_its_label_on_one_line():
+    assert ingredient_texts(cookies()) == ["ביצה", "חצי כוס קמח שקדים", "אופציונאלי: שוקולד צ׳יפס"]
+
+
+def test_a_labeled_alternative_after_the_steps_is_one_note_and_not_one_more_ingredient():
+    draft = cookies()
+    assert "כף פשתן טחון+3 כפות מים=לערבב" not in " ".join(ingredient_texts(draft))
+    assert draft.notes[-1] == "אופציה טבעונית: כף פשתן טחון+3 כפות מים=לערבב. זה תחליף לביצה"
+
+
+def test_a_sign_off_is_not_a_note_but_the_yield_is():
+    draft = cookies()
+    assert not any("תהנו" in note for note in draft.notes)
+    assert "יצאו לי 8 עוגיות" in draft.notes
+
+
+@pytest.mark.parametrize(
+    ("line", "kept"),
+    [
+        ("בתיאבון!", False),
+        ("וזהו😍 נכון קל?", False),
+        ("תכיני ותתייגי אותי, מחכה לשמוע איך יצא לך❤️", False),
+        ("Enjoy!", False),
+        ("תהנו! נשמר במקרר 3 ימים", True),  # a number and keeping: useful
+        ("בתיאבון, ומגישים חם", True),  # serving
+        ("תהנו מהשוקולד", True),  # names an ingredient
+        ("מגישים חם", True),  # not social at all
+        ("זהו הטריק לבצק פריך", True),  # "this is the trick", not "that's it"
+        ("עקבו אחרי הזמנים בדיוק", True),  # follow the timings: an instruction
+        ("Enjoy warm!", True),  # how to serve it
+        ("עקבו אחריי לעוד מתכונים", False),
+    ],
+)
+def test_only_purely_social_lines_leave_the_notes(line, kept):
+    source = f"עוגה\n2 כוסות קמח\nאופים.\n{line}"
+    count = len(segment_text(source)) - 3
+    draft = draft_for(source, ["title", "ingredient", "step", *["tip"] * count], title="עוגה", title_written_in_text=True)
+    assert bool(draft.notes) is kept
+
+
+def test_a_question_before_a_step_stays_with_the_steps():
+    # "Want it crispier?" then "bake 5 more minutes": the question is part of the instruction.
+    source = "עוגה\n2 כוסות קמח\nאופים 20 דקות.\nרוצים פריך יותר?\nאופים עוד 5 דקות."
+    draft = draft_for(source, ["title", "ingredient", "step", "step", "step"], title="עוגה", title_written_in_text=True)
+    assert draft.step_groups[0].steps == ["אופים 20 דקות.", "רוצים פריך יותר?", "אופים עוד 5 דקות."]
+
+
+def test_a_question_labeled_a_preparation_heading_starts_the_steps_without_being_one():
+    source = "עוגה\n2 כוסות קמח\nאיך מכינים?\nמערבבים ואופים."
+    draft = draft_for(source, ["title", "ingredient", "step_heading", "step"], title="עוגה", title_written_in_text=True)
+    assert [(g.name, g.steps) for g in draft.step_groups] == [(None, ["מערבבים ואופים."])]
+
+
+def test_a_sentence_labeled_a_heading_inside_the_list_is_still_an_ingredient():
+    source = "עוגה\nמצרכים:\n2 כוסות קמח\nמלח ופלפל.\n1 ביצה\nמערבבים."
+    roles = ["title", "ingredient_heading", "ingredient", "ingredient_heading", "ingredient", "step"]
+    draft = draft_for(source, roles, title="עוגה", title_written_in_text=True)
+    assert ingredient_texts(draft) == ["2 כוסות קמח", "מלח ופלפל", "1 ביצה"]
+
+
+def test_a_plain_tip_label_keeps_its_line_out_of_the_ingredients_and_one_note_per_sentence():
+    source = "עוגה\n2 כוסות קמח\nאופים.\nטיפ: 50 גרם אגוזים. מגישים קר."
+    pieces = len(segment_text(source))
+    roles = ["title", "ingredient", "step", "tip", *["ingredient"] * (pieces - 4)]
+    draft = draft_for(source, roles, title="עוגה", title_written_in_text=True)
+    assert ingredient_texts(draft) == ["2 כוסות קמח"]
+    assert draft.notes == ["50 גרם אגוזים.", "מגישים קר."]

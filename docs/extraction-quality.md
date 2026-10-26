@@ -114,6 +114,33 @@ uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/eva
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
 
+### 2026-10-26 (afternoon): an ingredient introduction, an optional label, a vegan alternative
+
+A real post the person imported (https://www.instagram.com/p/CLJ5G9rDi1a/, almond cookies), now the
+private regression case real-5. Traced passage by passage: the text is cut correctly; the model's
+labels were the same in three runs (`20261026-120025`, `-120048`, `-120108`); the mistakes come from
+how the backend turned those labels into a draft:
+
+| passage | model's label | before | cause | after |
+|---|---|---|---|---|
+| "אז מה צריך לכל הטוב הזה?" (before the ingredient list) | step heading | step 1 | the rule "a sentence labeled a heading is a step" (added for "מחממים תנור מראש.") ran before the rule that a heading heads what follows | an introduction: starts the list, in the original only |
+| "אופציונאלי:" + "שוקולד צ׳יפס…" | tip + ingredient | "שוקולד צ׳יפס…" (the label lost) | only purpose words ("להגשה:") kept a label with its item | "אופציונאלי: שוקולד צ׳יפס לבן/שברי שקדי/שברי אגוזים" |
+| "*אופציה טבעונית:" + flax mixture + "זה תחליף לביצה" | tip + ingredient + tip | an extra ingredient, and a stray note "זה תחליף לביצה" | nothing kept a note's label with the rest of its line after the steps | one note: "אופציה טבעונית: כף פשתן טחון+3 כפות מים=לערבב ולתת לו לנוח 6 דקות. זה תחליף לביצה" |
+| "תהנו ❤️" | tip | a note | the prompt calls sign-offs not part of the recipe; the model disagreed | left out |
+
+The text states the replacement itself ("זה תחליף לביצה"), so the note keeps exactly that; the egg
+stays in the list, and nothing is inferred or added.
+
+**Checks.** The same saved answers rebuilt with the code before and after the fix (no model calls):
+the two full runs of 2026-10-25 went from 7 and 6 problems to 4 and 4 (every check passed in 31 of 37
+cases in both, before 28 and 29); no draft changed except three sign-offs removed ("בתיאבון!" in 07 and
+11, "וזהו😍 נכון קל?" in real-2); real-5 from 6 problems to none. Live afterwards
+(`20261026-121043`, 12 varied cases): every check passed in 10, case 18 still starts with "מחממים תנור
+מראש."; the two misses are known ("שמרו לימים החמים" kept in 21, the source gap "עלה גפן" in 26). real-5
+passed every check in all three live runs since. Through the page on a test database: the post read
+in 7.3 s, the draft as above, saved and unchanged after a reload. real-5 is not independent: the fix
+was made for it; the synthetic unit tests cover each rule and what it must not touch.
+
 ### 2026-10-26: Instagram links, end to end
 
 Reading the post and extracting the recipe are measured separately. **Reading:** the three supplied

@@ -73,13 +73,14 @@ _TIME = re.compile(
 # line, the line is a time for the whole recipe, kept as a note with its label.
 _TIME_LABEL = re.compile(r"זמן|(?<!\w)(?:time|prep|cook|cooking|bake|baking|ready|total)(?!\w)", re.IGNORECASE)
 _WATER = {"מים", "water"}  # rarely listed as an ingredient: no point about it
-# A line that says what an ingredient is for: "לציפוי - מלח מאלדון", "קרח להגשה", "To garnish: basil",
-# "Lemon wedges, for serving". At the end of an ingredient list the model labeled such lines as tips
-# (measured: the same line in the middle of the list, or without its purpose word, was an ingredient).
-_PURPOSES = "לציפוי|לקישוט|להגשה|לפיזור|לזילוף|למריחה|לגלגול|לבזיקה|לטבילה|לצד|לליווי"
+# A line that says what an ingredient is for, or that it is optional: "לציפוי - מלח מאלדון", "קרח להגשה",
+# "אופציונאלי: שוקולד צ׳יפס", "To garnish: basil", "Lemon wedges, for serving". At the end of an ingredient
+# list the model labeled such lines as tips (measured: the same line in the middle of the list, or without
+# its purpose word, was an ingredient), and it labels the label alone as a tip ("אופציונאלי:" was lost).
+_PURPOSES = "לציפוי|לקישוט|להגשה|לפיזור|לזילוף|למריחה|לגלגול|לבזיקה|לטבילה|לצד|לליווי|אופציונלי|אופציונאלי|לא חובה"
 _PURPOSES_EN = (
     r"for (?:the )?(?:serving|garnish(?:ing)?|topping|decoration|decorating|sprinkling|dusting|dipping|drizzling)"
-    r"|to (?:serve|garnish|top|decorate|sprinkle|dust)"
+    r"|to (?:serve|garnish|top|decorate|sprinkle|dust)|optional"
 )
 _PURPOSE_LINE = re.compile(
     rf"^\W*(?:{_PURPOSES}|{_PURPOSES_EN})(?![\w])[^.!?]{{0,40}}[-–—:]\s*\S"  # the purpose first
@@ -88,6 +89,26 @@ _PURPOSE_LINE = re.compile(
     re.IGNORECASE,
 )
 _PURPOSE_LABEL = re.compile(rf"^\W*(?:{_PURPOSES}|{_PURPOSES_EN})(?:\s\S+)?\s*:\s*$", re.IGNORECASE)  # "להגשה:"
+# A note's label that says nothing more than "a note" ("טיפ:"): left out. Other labels say what the note is
+# ("אופציה טבעונית:", "אחסון:", "Make ahead:") and stay with it.
+_GENERIC_NOTE_LABEL = re.compile(r"^\W*(?:טיפ|טיפים|הערה|הערות|שימו לב|tips?|notes?)\W*$", re.IGNORECASE)
+# A wish, a sign-off or a call to followers ("תהנו ❤️", "בתיאבון!", "וזהו😍 נכון קל?", "תייגו חברה", "Enjoy!").
+# The prompt calls these not part of the recipe, but the model still labeled some as tips (measured: 5 cases).
+_SOCIAL = re.compile(
+    # "וזהו" and a line-ending "זהו" are "that's it"; "זהו הטריק" ("this is the trick") is not social.
+    r"(?<!\w)ו?(?:בתיאבון|תהנו|תיהנו|בהצלחה|(?<=ו)זהו|זהו זה|זהו(?=\W*$)|נכון קל|קל נכון|מחכה לשמוע|ספרו לי|תספרו לי"
+    r"|תייג\w*|תתייג\w*|שתפו|תשתפו|תשלח\w* את הפוסט|שלחו את הפוסט|עקבו אחרי(?:י|נו)|ת?שמרו את ה?(?:מתכון|פוסט))(?!\w)"
+    r"|(?<!\w)(?:enjoy|bon app[eé]tit|happy (?:baking|cooking)|let me know|tag (?:a friend|me|someone)"
+    r"|share (?:this|it|with)|save (?:this|the) (?:recipe|post)|follow (?:me|for))(?!\w)",
+    re.IGNORECASE,
+)
+# What makes a short line useful whatever else it says: keeping, serving (and at what temperature), heating,
+# swapping.
+_NOTE_CONTENT = re.compile(
+    r"מקרר|מקפיא|להגיש|מגישים|לחמם|מחממים|להחליף|להמיר|אפשר|ניתן|(?<!\w)(?:חם|חמים|חמה|קר|קרה|קרים|צונן)(?!\w)"
+    r"|fridge|freez|serve|reheat|swap|substitut|instead|warm|cold|chilled|hot(?!\w)",
+    re.IGNORECASE,
+)
 # Words that say a line is the recipe's yield.
 _YIELD = re.compile(
     r"מנות|מנה|יחידות|יחידה|סועדים|אנשים|יוצא|יוצאת|יוצאות|יוצאים|מספיק"
@@ -422,6 +443,8 @@ def build_draft_from_references(
     step_groups: list[dict] = []
     notes: list[list] = []
     info_starts: set[int] = set()  # the first passage of each note that is a yield or time line
+    labeled_notes: set[int] = set()  # notes that start with a label saying what they are ("אופציה טבעונית:")
+    skip_through = 0  # passages up to this one were already copied into the item before them
     last_note: list | None = None  # the note that the passage before belongs to
     purpose_items: set[int] = set()  # ingredients that start with their purpose label ("להגשה: גלידה")
     joined: int | None = None  # a passage already copied as the rest of the item before it
@@ -431,7 +454,7 @@ def build_draft_from_references(
     # Lines that hold the recipe's own ingredient list, for telling a list inside an introduction apart.
     ingredient_lines = {s.line for s in segments if labels.get(s.id) in ("ingredient", "ingredient_heading")}
     for segment in segments:
-        if segment.id == joined:
+        if segment.id == joined or segment.id <= skip_through:
             continue
         role = labels.get(segment.id)
         if role == "continues":
@@ -455,11 +478,26 @@ def build_draft_from_references(
             continue
         if role in ("ingredient", "step") and _in_rejected_list(source_text, segments, labels, segment, ingredient_lines):
             role = "not_recipe"  # "...the secret is simple: salt, garlic": the introduction's words, not its list
+        if role in ("tip", "info", "step") and _is_social(source_text, segments, segment, role):
+            role = "not_recipe"  # "תהנו ❤️": a sign-off, not a note
         if segment.id == title_passage or role in ("title", "not_recipe") or _PROMO_ONLY.fullmatch(segment.text(source_text)):
             previous = "not_recipe"
             continue
+        list_started = any(group["items"] for group in ingredient_groups)
+        introduces = _introduction(source_text, segments, labels, segment, role, list_started)
+        if introduces is not None:
+            # "אז מה צריך לכל הטוב הזה?" before the ingredients: it starts that list, and its words stay in
+            # the original only (not a step, an ingredient or a note)
+            groups = ingredient_groups if introduces == "ingredient" else step_groups
+            if not groups or groups[-1]["items"]:
+                groups.append({"heading": None, "items": []})
+            previous, last_note = f"{introduces}_heading", None
+            continue
         if role in ("ingredient_heading", "step_heading") and _is_sentence(source_text, segment):
-            role = "ingredient" if role == "ingredient_heading" else "step"  # "מחממים תנור מראש." is a step
+            # A sentence is never a heading: what it heads says what it is. Before ingredients, an
+            # ingredient written as a sentence; otherwise an instruction ("מחממים תנור מראש." is a step).
+            heads = _next_section(segments, labels, segment)
+            role = "ingredient" if heads == "ingredient" or (heads is None and role == "ingredient_heading") else "step"
         in_list = bool(ingredient_groups) and not step_groups  # after the list started, before the steps
         rest = _rest_of_line(source_text, segments, segment)
         if (
@@ -473,6 +511,18 @@ def build_draft_from_references(
             notes.append(current)
             info_starts.add(segment.id)
             joined, previous, last_note = rest.id, "info", current
+            continue
+        line_rest = _rest_of_its_line(source_text, segments, labels, segment) if role == "tip" and not in_list else []
+        for piece in line_rest:
+            labels[piece.id] = "tip"  # a tip label's line is the tip, whatever its pieces were labeled
+        if line_rest and not _GENERIC_NOTE_LABEL.match(segment.text(source_text)):
+            # "*אופציה טבעונית: כף פשתן טחון+3 כפות מים=לערבב... זה תחליף לביצה": the label says what the whole
+            # line is, so it is one note with its label (an alternative, not one more ingredient). After a
+            # plain "טיפ:" each sentence stays a note of its own.
+            current = [segment.id, line_rest[-1].id]
+            notes.append(current)
+            labeled_notes.add(segment.id)
+            skip_through, previous, last_note = line_rest[-1].id, role, current
             continue
         if (
             rest is not None
@@ -566,7 +616,7 @@ def build_draft_from_references(
 
     note_list: list[str] = []
     for first, last in notes:
-        text = _line(text_of(first, last, keep_labels=first in info_starts))
+        text = _line(text_of(first, last, keep_labels=first in info_starts or first in labeled_notes))
         if text and normalize(text) not in {normalize(kept) for kept in note_list}:
             note_list.append(text)
             _flag_promo(text, "ההערה", issues)
@@ -590,6 +640,83 @@ def build_draft_from_references(
     if not ingredient_list and not step_list:
         issues.append(schemas.Issue(kind="missing_information", message="לא נמצאו בטקסט מצרכים או שלבי הכנה."))
     return _draft(title, servings, ingredient_list, step_list, note_list, category_id, subcategory_id, issues)
+
+
+def _introduction(
+    source_text: str, segments: list[Segment], labels: dict[int, str], segment: Segment, role: str | None,
+    list_started: bool,
+) -> str | None:
+    """The list this passage only introduces ("ingredient" or "step"), or None. An introduction says what
+    comes next instead of being part of it:
+    - a question alone on its line, right before the ingredients ("אז מה צריך לכל הטוב הזה?", "What do you
+      need?"), or labeled a heading before either list ("איך מכינים?");
+    - a sentence labeled a heading before the ingredient list has started, with no amount in it ("הנה
+      מה שצריך."): not an ingredient.
+    A question before a step can be part of it ("רוצים פריך יותר?" then "אופים עוד 5 דקות"), so a
+    question labeled a step or a tip introduces only an ingredient list."""
+    if role in (None, "title", "not_recipe", "continues", "ingredient") or ends_with_colon(source_text, segment):
+        return None
+    heads = _next_section(segments, labels, segment)
+    if heads is None:
+        return None
+    text = _without_end_decoration(segment.text(source_text)).rstrip()
+    heading = role in ("ingredient_heading", "step_heading")
+    if text.endswith("?") and _alone_on_line(segments, segment):
+        return heads if heading or heads == "ingredient" else None
+    if heading and heads == "ingredient" and not list_started and _is_sentence(source_text, segment) and find_quantity(text) is None:
+        return "ingredient"
+    return None
+
+
+def _next_section(segments: list[Segment], labels: dict[int, str], segment: Segment) -> str | None:
+    """The list that starts right after this passage, on a later line ("ingredient" or "step"); None
+    when its own line goes on, or a note or nothing comes next."""
+    for after in segments[segment.id :]:
+        label = labels.get(after.id)
+        if label in (None, "not_recipe"):
+            continue
+        if after.line == segment.line:
+            return None
+        return {"ingredient": "ingredient", "ingredient_heading": "ingredient", "step": "step", "step_heading": "step"}.get(label)
+    return None
+
+
+def _alone_on_line(segments: list[Segment], segment: Segment) -> bool:
+    before = segments[segment.id - 2] if segment.id > 1 else None
+    after = segments[segment.id] if segment.id < len(segments) else None
+    return all(other is None or other.line != segment.line for other in (before, after))
+
+
+def _rest_of_its_line(source_text: str, segments: list[Segment], labels: dict[int, str], segment: Segment) -> list[Segment]:
+    """For a label ("אופציה טבעונית:"), the passages after it on its line, up to anything that is not part
+    of the recipe (hashtags, a passage the model rejected)."""
+    if not ends_with_colon(source_text, segment):
+        return []
+    rest = []
+    for after in segments[segment.id :]:
+        if (
+            after.line != segment.line
+            or labels.get(after.id) in (None, "title", "not_recipe")
+            or _PROMO_ONLY.fullmatch(after.text(source_text))
+        ):
+            break
+        rest.append(after)
+    return rest
+
+
+def _is_social(source_text: str, segments: list[Segment], segment: Segment, role: str) -> bool:
+    """A wish, a sign-off or a call to followers, and nothing else: short, no number, no ingredient, nothing
+    about keeping, serving or swapping. A step only when it is all of its line."""
+    text = segment.text(source_text)
+    if role == "step" and not _alone_on_line(segments, segment):
+        return False
+    return (
+        len(text.split()) <= 12
+        and bool(_SOCIAL.search(text))
+        and not re.search(r"\d", text)
+        and not _NOTE_CONTENT.search(text)
+        and not ingredient_words.mentions_ingredient(text)
+    )
 
 
 def _heading_of_what_follows(role: str, segments: list[Segment], labels: dict[int, str], segment: Segment) -> str:
