@@ -70,8 +70,8 @@ class Classification(BaseModel):
 class ExtractionOutput(BaseModel):
     is_recipe: bool = Field(description="false if the text does not contain a recipe; then leave the lists empty.")
     title: str = Field(
-        description="The recipe's title as written in the text. If the text has no title, a short title made "
-        "from the text's own words."
+        description="The recipe's title as written in the text. If the text has no title, a short name of the "
+        "dish itself (what it is, its main ingredients) in the text's own words, never the occasion or the praise."
     )
     title_written_in_text: bool = Field(description="true if the title is written in the text; false if you composed it.")
     servings: str | None = Field(description="The yield as written (e.g. '12 פרוסות', 'serves 4'), or null.")
@@ -144,8 +144,8 @@ class ReferenceLabels(BaseModel):
         "it is; false if it contains no recipe (then label every passage 'not_recipe')."
     )
     title: str = Field(
-        description="The recipe's title as written in the text. If the text has no title, a short title made "
-        "from the text's own words."
+        description="The recipe's title as written in the text. If the text has no title, a short name of the "
+        "dish itself (what it is, its main ingredients) in the text's own words, never the occasion or the praise."
     )
     title_written_in_text: bool = Field(description="true if the title is written in the text; false if you composed it.")
     servings: str | None = Field(description="The yield as written (e.g. '12 פרוסות', 'serves 4'), or null.")

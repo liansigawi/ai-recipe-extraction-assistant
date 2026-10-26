@@ -114,6 +114,37 @@ uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/eva
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
 
+### 2026-10-26: composed titles
+
+A small change to the title instruction (name the dish itself, in the text's spelling, from the
+introduction too; no occasion, story or hype) and one backend rule (a title that starts no line of the
+text is always flagged as composed). Checked on the 8 existing cases whose title matters (6 without a
+title line, 2 with one) and on **5 new examples written for this check and not used for tuning**
+(a holiday couscous, a "viral" English side dish, a sponsored drink, a lunch that never names its dish,
+and a written title after a hype line); two live runs each (`20261026-083126`, `20261026-083411`), the
+new examples also once with the previous prompt. The evaluator accepts any composed title, so titles
+were read by hand:
+
+| case | before | after (both runs unless noted) |
+|---|---|---|
+| your coffee drink (real-4) | משקה טרנדי לכבוד היום האחרון של הקיץ | משקה טרנדי של שייק בננה תמר ואייס קפה |
+| shoulder and ptitim (real-2) | מנה של הצלי כתף ופתיתים | צלי כתף ופתיתים |
+| green shakshuka (14, written title) | ארוחת בוקר של שישי: שקשוקה ירוקה | שקשוקה ירוקה |
+| tortillas (20) | הפיצה המקופלת | טורטיה מקופלת / הפיצה המקופלת |
+| shakshuka (07), cheesecake (30) | שקשוקה; עוגת הגבינה הקרה עם הפירורים | שקשוקה; עוגת גבינה קרירה עם פירורים |
+| avocado toast (24) | טוסט avocado | טוסט avocado (now always flagged as composed) |
+| new: sponsored matcha | אייס מאצ'ה עם חלב שקדים ודבש | the same |
+| new: viral potatoes | crispy smashed potatoes with garlic yogurt | Crispy smashed potatoes with garlic yogurt |
+| new: holiday couscous | koskos עם ירקות שורש ונענע | the same (a misspelling of "קוסקוס"; flagged) |
+| new: lunch with no dish name | ארוחת צהריים זריזה ממה שהיה במקרר | the same (the model labels that line a title) |
+| new: written title after hype | Lemon Ricotta Pancakes | the same |
+
+Every composed title was flagged for review in every run (before the backend rule, three were flagged
+only as "not found in the text"). Remaining: the coffee title still starts with the caption's own
+"משקה טרנדי"; a composed title is typed by the model and can be misspelled ("koskos"); a lunch that
+never names its dish gets its introduction line as the title. Other checks on these cases were
+unchanged (the sign-offs of real-2 kept as notes in one run, a known issue).
+
 ### 2026-10-25 (evening): your reorganized categories
 
 Your four categories: "קינוחים", "ארוחות בשריות" (formerly "בישולים", same id), "ארוחות קלילות" (now

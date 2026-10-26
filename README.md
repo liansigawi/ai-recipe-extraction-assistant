@@ -271,7 +271,11 @@ The model still decides a few things, and the backend checks each:
 - a **title**: the line that names the dish. A title it says is written must start a line of the
   text; if the model retyped it wrongly but labeled the title line, that line's own words are used;
   a title line that is only a framing label ("ארוחת בוקר של שישי:") keeps the rest of its line;
-  an introduction sentence that only mentions the dish is not a title; a composed title is flagged;
+  an introduction sentence that only mentions the dish is not a title. When no line names the
+  dish, the model composes the dish's own name (what it is, its main ingredients) from the text's
+  words, the introduction included, without the occasion or hype words (measured results and
+  what still slips through: docs/extraction-quality.md). A composed title is always flagged for review, also
+  when the model claims it is written, and the point says whether all its words are in the text;
 - the **servings**: kept only from a line that says it is the yield ("12 יחידות", "Serves 2");
   otherwise the field stays empty. A passage the model labeled "not part of the recipe" (such as
   an instruction written inside the text) never supplies the servings or the title;

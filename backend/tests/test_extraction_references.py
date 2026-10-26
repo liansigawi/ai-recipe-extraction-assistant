@@ -263,7 +263,16 @@ def test_a_misspelled_title_without_a_labeled_title_line_is_kept_and_flagged():
     source = "מרק עדשים כתומות\nמבשלים 20 דקות."
     draft = draft_for(source, ["not_recipe", "step"], title="מרк עדשים כתומות", title_written_in_text=True)
     assert draft.title == "מרк עדשים כתומות"
-    assert "not_found_in_source" in kinds(draft)
+    # On no line of the text, so composed whatever the answer claims; the point says a word is not in the text.
+    [point] = [issue for issue in draft.issues if issue.kind == "missing_title"]
+    assert "לא כל המילים בה מופיעות בטקסט" in point.message
+
+
+def test_a_composed_title_claimed_as_written_is_still_flagged_as_composed():
+    source = "בוקר של שבת ואני מכינה את הטוסט שאני הכי אוהבת\n2 ביצים\nקולים את הלחם."
+    draft = draft_for(source, ["not_recipe", "ingredient", "step"], title="טוסט ביצים", title_written_in_text=True)
+    [point] = [issue for issue in draft.issues if issue.kind == "missing_title"]
+    assert "נלקחה ממילים בטקסט" in point.message and "not_found_in_source" not in kinds(draft)
 
 
 def test_a_title_the_model_found_in_the_text_is_kept_even_if_the_line_says_more():

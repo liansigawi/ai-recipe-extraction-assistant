@@ -62,8 +62,9 @@ sugar") exactly as written.
 
 ALSO
 - title: the recipe's title as written, with title_written_in_text = true. If the text has no \
-title, compose a short one from the text's own words (the dish it names) and set \
-title_written_in_text = false.
+title, compose a short name of the dish itself (what it is and, when it helps, its main \
+ingredients) in the words the text uses for it, also from the introduction, never the occasion, \
+the story or the praise; and set title_written_in_text = false.
 - servings: the yield as written, or null.
 - notes: only tips the text gives (substitutions, storage, equipment, pan size, serving), as \
 written.
@@ -162,8 +163,13 @@ even when it talks about the dish: a tip tells the cook what to do or what to us
 
 WRITE YOURSELF
 - title: the recipe's title as written in the text, with title_written_in_text = true. If no \
-line names the dish, compose a short title from the text's own words for the dish and set \
-title_written_in_text = false.
+line names the dish, set title_written_in_text = false and compose a short name of the dish \
+itself: what it is and, when it helps, its main ingredients, with the words copied exactly as \
+the text spells them. The introduction often names the dish although it is not part of the \
+recipe; the ingredients help too. Leave out the occasion, the story, and praise or hype words \
+("trendy", "viral", "the best"): from "For my son's birthday I finally baked the cake everyone \
+online is talking about, a chocolate and banana loaf" the title is "Chocolate and banana loaf", \
+not "The viral birthday cake".
 - servings: the yield as written, or null.
 - If the text holds more than one recipe, use the main one and add an issue "multiple_recipes".
 - A text that says what to use and how to make a food or a drink is a recipe, whatever kind of \

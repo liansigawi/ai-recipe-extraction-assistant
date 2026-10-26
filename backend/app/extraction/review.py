@@ -399,7 +399,7 @@ def build_draft_from_references(
     if title_is_label:  # "ארוחת בוקר של שישי:" alone is a framing, not the dish: its line as written is the title
         title = title_line or ""
     else:
-        title = _title(output.title, output.title_written_in_text, source_text, original, issues, title_line, rejected)
+        title = _title(output.title, output.title_written_in_text, source_text, issues, title_line, rejected)
     issues.extend(_referenced_issues(output, source_text, segments, labels))
     servings = _servings(output.servings, labels, source_text, segments)
 
@@ -716,7 +716,6 @@ def _title(
     title: str,
     written: bool,
     source_text: str,
-    original: _Original,
     issues: list[schemas.Issue],
     title_line: str | None = None,
     rejected: set[str] | None = None,
@@ -734,10 +733,9 @@ def _title(
         return title_line
     if not title:
         title = first_line(source_text)
-    if written and not original.contains(title) and not _words_in_text(title, source_text):
-        issues.append(_not_found("הכותרת", title))
-    else:  # composed, or words from inside a sentence: the text has no title line with them
-        issues.append(_missing_title(title, from_text=_words_in_text(title, source_text)))
+    # No title line holds it, so it is composed, whatever the answer says ("written" composed titles
+    # were measured): the point says whether its words come from the text.
+    issues.append(_missing_title(title, from_text=_words_in_text(title, source_text)))
     return title
 
 
@@ -898,12 +896,6 @@ def _draft(
         )
     except ValidationError:
         raise ApiError(502, "extraction_invalid_output", "The model's answer could not be turned into a recipe.") from None
-
-
-def _not_found(what: str, piece: str) -> schemas.Issue:
-    return schemas.Issue(
-        kind="not_found_in_source", message=f'{what} "{piece}" לא מופיע כך בטקסט המקורי. השוו למקור ותקנו אם צריך.'
-    )
 
 
 def _quantity_not_in_line(quantity: str, text: str) -> schemas.Issue:
