@@ -4,12 +4,13 @@ A personal recipe notebook that runs on your own computer. The goal: import reci
 posts, recipe websites, screenshots, or pasted text; review them; and keep them in a searchable
 collection that supports Hebrew and right-to-left text.
 
-> **Status: milestone 5 of 7, in progress.** A FastAPI backend with a SQLite database and a React +
+> **Status: milestones 5 and 6 in progress.** A FastAPI backend with a SQLite database and a React +
 > TypeScript frontend run locally. You can **paste recipe text or an Instagram post's link** and have
 > a model (a local one through Ollama, or Claude) turn it into a draft, review the draft beside the
-> original text, and save it explicitly; or create, edit and delete recipes by hand. A new database
-> starts with four categories and **four invented sample recipes**, labeled "דוגמה". Importing from
-> websites and screenshots comes later in milestone 5.
+> original text, and save it explicitly; or create, edit and delete recipes by hand. You can **manage
+> your categories and subcategories**, **search and filter** the list, and the app **warns about a
+> post you already have**. A new database starts with four categories, two dessert subcategories and
+> **four invented sample recipes**, labeled "דוגמה". Importing from websites and screenshots comes later.
 > Milestone 1 (Instagram feasibility) is documented in
 > [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
 > contract are in [docs/architecture.md](docs/architecture.md), and the original requirements are

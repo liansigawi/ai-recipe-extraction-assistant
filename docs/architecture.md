@@ -491,6 +491,16 @@ redirect; a redirect would send the browser past the Vite proxy.
 
 ## Known limitations
 
+- **Categories cannot be deleted or moved yet.** A subcategory stays under the category it was created
+  in; removing a category needs a decision about its recipes (milestone 6).
+- **Search looks at titles and ingredient lines only**, as plain text (every word, anywhere): not the
+  steps or notes, and no Hebrew word forms beyond "part of a word" ("תפוח" finds "תפוחים", but "ביצה"
+  does not find "ביצים").
+- **Duplicates are recognized by Instagram links only** (the post's shortcode). The same recipe
+  pasted without a link, or from another post, is not recognized as a copy.
+- **The dessert subcategory can follow one ingredient word** rather than the whole recipe: a date cake
+  and oat cookies built on flour, sugar and butter were put under "קינוחים בריאים" (docs/extraction-quality.md).
+
 - **Direction of mixed-language lists.** A content list takes its direction from its first line
   (`dir="auto"`), so a Hebrew list whose first line starts with a Latin brand name (Oreo) is laid out
   left to right. To be fixed in milestone 6: decide the direction once per recipe and let each line
