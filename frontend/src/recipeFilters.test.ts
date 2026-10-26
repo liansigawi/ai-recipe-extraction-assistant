@@ -27,7 +27,7 @@ const titles = (filters: Partial<RecipeFilters>) => filterRecipes(recipes, { ...
 describe('normalizing text for search', () => {
   it('ignores niqqud, invisible marks, quote marks, case and extra spaces', () => {
     expect(normalizeForSearch('שׁוֹקוֹלָד')).toBe('שוקולד')
-    expect(normalizeForSearch('‏ג׳ינג׳ר')).toBe(normalizeForSearch("ג'ינג'ר"))
+    expect(normalizeForSearch('\u200fג׳ינג׳ר')).toBe(normalizeForSearch("ג'ינג'ר"))
     expect(normalizeForSearch("ג'ינג'ר")).toBe('גינגר')
     expect(normalizeForSearch('  Rolled   OATS ')).toBe('rolled oats')
     expect(normalizeForSearch('מ״ל')).toBe('מל')

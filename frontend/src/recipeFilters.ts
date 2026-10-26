@@ -25,7 +25,7 @@ export function isFiltering(filters: RecipeFilters): boolean {
 }
 
 // Invisible direction marks, which copied Hebrew text often carries.
-const BIDI_MARKS = /[‎‏‪-‮⁦-⁩]/g
+const BIDI_MARKS = /[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g
 // Apostrophes, geresh and gershayim: "ג'ינג'ר", "ג׳ינג׳ר" and "גינגר" are found alike, and "ש״ש" as "שש".
 const QUOTES = /['׳`´‘’"״“”]/g
 

@@ -54,7 +54,7 @@ export default function RecipeFilters({ filters, onChange, categories, shown, to
             </option>,
             ...category.subcategories.map((sub) => (
               <option key={`s${sub.id}`} value={`s:${sub.id}`}>
-                {'   '}↳ {sub.name}
+                {'\u00a0\u00a0\u00a0'}↳ {sub.name}
               </option>
             )),
           ])}
