@@ -132,6 +132,13 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
 ### What you can do in the page
 
 - **Browse:** the list shows every recipe, newest first; click a card to open it.
+- **Search and filter:** above the list, the search box finds recipes by their title or an ingredient
+  line (every word you type, anywhere; niqqud, case and ׳/' marks do not matter). The category menu
+  shows one category, with all its subcategories and its recipes without one ("קינוחים"), one
+  subcategory ("↳ קינוחים בריאים"), or the unclassified recipes ("לא מסווג"). "הכל / מתכונים / טיוטות"
+  shows everything, saved recipes only, or drafts only. They all combine; "ניקוי" clears them, and the
+  line under them says how many recipes match. Searching runs in the page, on the recipes already
+  loaded: no request and no model.
 - **Create:** "מתכון חדש" opens an empty form. Only the title is required. Type each ingredient
   line as written, and copy its amount into the quantity box ("200 גרם" from "200 גרם קמח"); leave
   the quantity empty when the recipe gives none. The form refuses a quantity that is not in its line.
@@ -496,12 +503,13 @@ The project keeps these separate and reports which one was run:
 │       ├── App.tsx                  loads the notebook from the API; what is shown; save and delete
 │       ├── api.ts                   every call to the backend, and its error messages
 │       ├── editorForm.ts            the editor's form state, checks and conversions (no React)
+│       ├── recipeFilters.ts         search and filters for the recipe list (no React)
 │       ├── types.ts                 the recipe contract in TypeScript
 │       ├── labels.ts                display names, e.g. for source kinds
 │       ├── index.css                styles (right-to-left aware)
 │       ├── components/              RecipeList, RecipeCard, RecipeView, RecipeActions, RecipeEditor
 │       │                            (with IngredientsEditor, StepsEditor, RowButtons, FieldError), CategoryChip,
-│       │                            ImportPanel, ReviewIssues, OriginalText, CategoryManager
+│       │                            ImportPanel, ReviewIssues, OriginalText, CategoryManager, RecipeFilters
 │       ├── test/                    test setup, the fake API, sample recipes as test data
 │       └── *.test.ts(x)             Vitest + Testing Library tests
 └── data/                            local data (git-ignored)

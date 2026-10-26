@@ -5,9 +5,21 @@ interface RecipeListProps {
   recipes: Recipe[]
   selectedId: number | null
   onSelect: (id: number) => void
+  /** Given while a search or a filter is on: an empty list then means "nothing matches". */
+  onClearFilters?: () => void
 }
 
-export default function RecipeList({ recipes, selectedId, onSelect }: RecipeListProps) {
+export default function RecipeList({ recipes, selectedId, onSelect, onClearFilters }: RecipeListProps) {
+  if (recipes.length === 0 && onClearFilters !== undefined) {
+    return (
+      <div className="empty-state">
+        <p>לא נמצאו מתכונים שמתאימים לחיפוש ולסינון.</p>
+        <button type="button" className="button" onClick={onClearFilters}>
+          ניקוי החיפוש והסינון
+        </button>
+      </div>
+    )
+  }
   if (recipes.length === 0) {
     return <p className="empty-state">אין עדיין מתכונים במחברת.</p>
   }

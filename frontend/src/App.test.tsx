@@ -84,6 +84,9 @@ describe('browsing', () => {
     await user.tab() // the "import" button
     await user.tab() // the "new recipe" button
     await user.tab() // the "categories" button
+    await user.tab() // the search box
+    await user.tab() // the category filter
+    await user.tab() // the status filter (one stop for its three choices)
     await user.tab() // the first card
     await user.tab() // the second card
     await user.keyboard('{Enter}')

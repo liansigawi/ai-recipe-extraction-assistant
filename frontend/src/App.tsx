@@ -4,8 +4,10 @@ import CategoryManager from './components/CategoryManager'
 import ImportPanel from './components/ImportPanel'
 import RecipeActions from './components/RecipeActions'
 import RecipeEditor from './components/RecipeEditor'
+import RecipeFilters from './components/RecipeFilters'
 import RecipeList from './components/RecipeList'
 import RecipeView from './components/RecipeView'
+import { filterRecipes, isFiltering, NO_FILTERS, type RecipeFilters as Filters } from './recipeFilters'
 import type { Category, Recipe } from './types'
 
 // What the main area shows. A "discriminated union": `kind` tells which shape the value has,
@@ -32,10 +34,13 @@ export default function App() {
   const [mode, setMode] = useState<Mode>({ kind: 'view' })
   const [unsavedChanges, setUnsavedChanges] = useState(false)
   const [notice, setNotice] = useState('') // "saved" / "deleted" confirmations
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS)
 
-  // Derived on every render instead of stored: the chosen recipe, or the first one until the
-  // user chooses (or if the chosen one is no longer in the list). undefined only for an empty list.
-  const selected = recipes.find((recipe) => recipe.id === selectedId) ?? recipes.at(0)
+  // Derived on every render instead of stored: the recipes the search and filters let through, and
+  // the chosen recipe, or until the user chooses (or if the chosen one is gone) the first one shown.
+  // undefined only for an empty notebook.
+  const shown = filterRecipes(recipes, filters)
+  const selected = recipes.find((recipe) => recipe.id === selectedId) ?? shown.at(0) ?? recipes.at(0)
   const editing = mode.kind === 'edit' ? recipes.find((recipe) => recipe.id === mode.recipeId) : undefined
 
   // useRef keeps a reference to the recipe title element on the page.
@@ -291,10 +296,14 @@ export default function App() {
                 </button>
               </div>
             </div>
+            {recipes.length > 0 && (
+              <RecipeFilters filters={filters} onChange={setFilters} categories={categories} shown={shown.length} total={recipes.length} />
+            )}
             <RecipeList
-              recipes={recipes}
+              recipes={shown}
               selectedId={mode.kind === 'view' || mode.kind === 'edit' ? (editing ?? selected)?.id ?? null : null}
               onSelect={handleSelect}
+              onClearFilters={isFiltering(filters) ? () => setFilters(NO_FILTERS) : undefined}
             />
           </nav>
 
