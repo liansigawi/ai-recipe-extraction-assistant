@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { sampleRecipes } from '../test/sampleRecipes'
+import CategoryChip from './CategoryChip'
 import RecipeView from './RecipeView'
 
 const [chocolateCake, chicken, , granola] = sampleRecipes
@@ -140,5 +141,16 @@ describe('RecipeView for imported recipes', () => {
     expect(details.querySelector('.original-text-body')?.textContent).toBe(original.text)
     expect(screen.getByText('claude-opus-5-5').tagName).toBe('BDI')
     expect(screen.queryByText(/טיוטה מיובאת/)).not.toBeInTheDocument()
+  })
+})
+
+describe('the category chip', () => {
+  it('shows a subcategory alone when its name starts with the category, and both otherwise', () => {
+    const { rerender } = render(<CategoryChip category={{ id: 1, name: 'קינוחים' }} subcategory={{ id: 5, name: 'קינוחים רגילים' }} />)
+    expect(screen.getByText('קינוחים רגילים')).toBeInTheDocument()
+    rerender(<CategoryChip category={{ id: 3, name: 'ארוחות קלילות' }} subcategory={{ id: 7, name: 'פשטידות' }} />)
+    expect(screen.getByText('ארוחות קלילות · פשטידות')).toBeInTheDocument()
+    rerender(<CategoryChip category={null} />)
+    expect(screen.getByText('לא מסווג')).toBeInTheDocument()
   })
 })

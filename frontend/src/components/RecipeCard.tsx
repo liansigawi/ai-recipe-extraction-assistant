@@ -25,7 +25,7 @@ export default function RecipeCard({ recipe, isSelected, onSelect }: RecipeCardP
       </span>
       <span className="recipe-card-tags">
         {recipe.status === 'draft' && <span className="badge-draft">טיוטה</span>}
-        <CategoryChip category={recipe.category} />
+        <CategoryChip category={recipe.category} subcategory={recipe.subcategory} />
         {recipe.is_sample && <span className="badge-sample">דוגמה</span>}
       </span>
       <span className="recipe-card-meta">
