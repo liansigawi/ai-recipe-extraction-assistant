@@ -262,9 +262,11 @@ def resolve_classification(
             return category.id, None, None
         if any(sub.id == choice.subcategory_id for sub in category.subcategories):
             return category.id, choice.subcategory_id, None
-        return unresolved(
-            f'המודל בחר ב"{category.name}" עם תת-קטגוריה שאינה שייכת אליה, ולכן המתכון נשאר לא מסווג. '
-            "בחרו בעצמכם, או השאירו לא מסווג."
+        # The category is clear; only the subcategory is not one of its own: keep the category.
+        return category.id, None, schemas.Issue(
+            kind="classification_unresolved",
+            message=f'המודל בחר ב"{category.name}" עם תת-קטגוריה שאינה שייכת אליה, ולכן נשמרה רק הקטגוריה. '
+            "בחרו תת-קטגוריה בעצמכם אם צריך.",
         )
     if choice.fit == "ambiguous":
         names = [by_id[i].name for i in dict.fromkeys(choice.candidate_category_ids) if i in by_id]

@@ -25,7 +25,11 @@ def test_a_new_database_lists_the_four_samples_newest_first(client):
 def test_categories_are_the_four_starter_categories(client):
     categories = client.get("/api/categories").json()
     assert [category["name"] for category in categories] == ["קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות"]
-    assert all(category["subcategories"] == [] for category in categories)
+    # Desserts have the two subcategories you asked for; the others have none.
+    assert [[sub["name"] for sub in category["subcategories"]] for category in categories] == [
+        ["קינוחים רגילים", "קינוחים בריאים"], [], [], []
+    ]
+    assert all(sub["description"] for sub in categories[0]["subcategories"])
 
 
 def test_json_uses_snake_case_and_explicit_nulls(client):

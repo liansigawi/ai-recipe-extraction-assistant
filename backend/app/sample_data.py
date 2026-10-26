@@ -42,6 +42,26 @@ STARTER_CATEGORIES: list[tuple[str, str]] = [
     ),
 ]
 
+# The starter subcategories, by their category's name: (name, description). "קינוחים בריאים" is your own
+# style of dessert, judged by the whole recipe, not a nutritional verdict and not "vegan" or "dairy-free".
+# A dessert whose style is unclear stays in "קינוחים" without a subcategory. Migration 0007 added these
+# to older databases.
+STARTER_SUBCATEGORIES: dict[str, list[tuple[str, str]]] = {
+    "קינוחים": [
+        (
+            "קינוחים רגילים",
+            "רוב הקינוחים: עוגות, עוגיות, מאפים, טארטים, בראוניז וקינוחי חלב שבנויים על קמח רגיל, סוכר, חמאה, "
+            "שמנת או שוקולד. גם כשיש בהם קצת דבש, אגוזים או שקדים (למשל טארט דבש מלוח).",
+        ),
+        (
+            "קינוחים בריאים",
+            "הסגנון האישי שלי: קינוחים שבנויים בעיקר על תמרים, שיבולת שועל, אגוזים, קמח שקדים או חמאת אגוזים, "
+            "לפעמים ממותקים בדבש או במייפל, למשל כדורי תמרים ושיבולת שועל. לפי המתכון כולו ולא לפי מרכיב "
+            "אחד; לא הערכה תזונתית, ולא בהכרח טבעוני או ללא חלב.",
+        ),
+    ],
+}
+
 
 def ingredient(text: str, quantity: str | None) -> Ingredient:
     return Ingredient(text=text, quantity=quantity)

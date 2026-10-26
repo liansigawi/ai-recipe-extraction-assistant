@@ -180,8 +180,17 @@ OLD_DESCRIPTIONS = [
 
 
 def categories_of(path: Path) -> list[tuple[str, str | None]]:
+    """The top-level categories (subcategories: subcategories_of)."""
     with closing(sqlite3.connect(path)) as db:
-        return db.execute("SELECT name, description FROM categories ORDER BY id").fetchall()
+        return db.execute("SELECT name, description FROM categories WHERE parent_id IS NULL ORDER BY id").fetchall()
+
+
+def subcategories_of(path: Path) -> list[tuple[int, str, str, int]]:
+    with closing(sqlite3.connect(path)) as db:
+        return db.execute(
+            "SELECT sub.id, parent.name, sub.name, sub.parent_id FROM categories AS sub "
+            "JOIN categories AS parent ON parent.id = sub.parent_id ORDER BY sub.id"
+        ).fetchall()
 
 
 def test_the_starter_descriptions_are_made_clearer_but_a_description_you_changed_is_kept(tmp_path):
@@ -270,7 +279,7 @@ def test_0005_renames_in_place_adds_the_drinks_and_keeps_every_recipe(tmp_path):
     upgrade_database(path)
 
     with closing(sqlite3.connect(path)) as db:
-        categories = db.execute("SELECT id, name, description FROM categories ORDER BY id").fetchall()
+        categories = db.execute("SELECT id, name, description FROM categories WHERE parent_id IS NULL ORDER BY id").fetchall()
     # Same id: the recipe that was in "בישולים" is in "ארוחות בשריות" without being touched.
     assert [(id_, name) for id_, name, _ in categories] == [
         (1, "קינוחים"), (2, "ארוחות בשריות"), (3, "ארוחות קלילות"), (4, "משקאות")
@@ -323,3 +332,58 @@ def test_0006_gives_existing_originals_no_address_and_downgrade_keeps_them(tmp_p
     engine.dispose()
     with closing(sqlite3.connect(path)) as db:
         assert db.execute("SELECT recipe_id, kind, original_text FROM recipe_imports").fetchall() == [(2, "text", "בדיקה\nמערבבים.")]
+
+
+def test_0007_adds_the_dessert_subcategories_and_changes_no_recipe(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("UPDATE recipes SET category_id = 1 WHERE id = 2")  # a dessert, no subcategory
+        db.commit()
+    recipes = rows(path, "recipes")
+    upgrade_database(path)
+    # Ids after the four top-level categories, as a new database gives them (app/seed.py).
+    assert subcategories_of(path) == [(5, "קינוחים", "קינוחים רגילים", 1), (6, "קינוחים", "קינוחים בריאים", 1)]
+    assert rows(path, "recipes") == recipes  # the dessert stays without a subcategory until you choose one
+    with closing(sqlite3.connect(path)) as db:
+        descriptions = dict(db.execute("SELECT name, description FROM categories WHERE parent_id = 1").fetchall())
+    from app.sample_data import STARTER_SUBCATEGORIES
+    assert descriptions == dict(STARTER_SUBCATEGORIES["קינוחים"])
+
+
+def test_0007_does_not_add_a_subcategory_you_already_have_or_without_desserts(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("INSERT INTO categories (name, description, parent_id) VALUES ('קינוחים בריאים', 'שלי', 1)")
+        db.commit()
+    upgrade_database(path)
+    assert [(parent, name) for _, parent, name, _ in subcategories_of(path)] == [
+        ("קינוחים", "קינוחים בריאים"), ("קינוחים", "קינוחים רגילים")
+    ]
+    other = tmp_path / "other.db"
+    database_at_0004(other)
+    with closing(sqlite3.connect(other)) as db:
+        db.execute("UPDATE categories SET name = 'מתוקים' WHERE id = 1")  # you renamed it before 0007
+        db.commit()
+    upgrade_database(other)
+    assert subcategories_of(other) == []
+
+
+def test_downgrading_0007_keeps_a_subcategory_that_has_recipes(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    upgrade_database(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("UPDATE recipes SET category_id = 1, subcategory_id = 6 WHERE id = 1")
+        db.commit()
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.downgrade(alembic_config(connection), "0006")
+    engine.dispose()
+    assert [name for _, _, name, _ in subcategories_of(path)] == ["קינוחים בריאים"]
+
+
+def test_a_new_database_starts_with_the_dessert_subcategories(client):
+    categories = client.get("/api/categories").json()
+    assert [(sub["id"], sub["name"]) for sub in categories[0]["subcategories"]] == [(5, "קינוחים רגילים"), (6, "קינוחים בריאים")]

@@ -128,8 +128,6 @@ def test_a_clear_choice_of_an_existing_category_classifies():
     "choice",
     [
         classification("clear", 99),  # no such category
-        classification("clear", 2, 10),  # subcategory 10 belongs to category 1, not 2
-        classification("clear", 1, 77),  # no such subcategory
         classification("ambiguous", None, None, [1, 3]),
         classification("ambiguous", 1, None, [1, 3]),  # an id together with "ambiguous" does not count
         classification("no_fit"),
@@ -140,6 +138,24 @@ def test_anything_but_a_clear_valid_choice_stays_unclassified_with_an_explanatio
     draft = build_draft(answer(classification=choice), SOURCE, CATEGORIES)
     assert (draft.category_id, draft.subcategory_id) == (None, None)
     assert kinds(draft) == ["classification_unresolved"]
+
+
+@pytest.mark.parametrize(
+    ("choice", "kept"),
+    [
+        (classification("clear", 2, 10), 2),  # subcategory 10 belongs to category 1, not 2
+        (classification("clear", 1, 77), 1),  # no such subcategory
+    ],
+)
+def test_a_subcategory_that_is_not_the_categorys_own_is_dropped_and_the_category_kept(choice, kept):
+    draft = build_draft(answer(classification=choice), SOURCE, CATEGORIES)
+    assert (draft.category_id, draft.subcategory_id) == (kept, None)
+    assert kinds(draft) == ["classification_unresolved"] and "נשמרה רק הקטגוריה" in draft.issues[0].message
+
+
+def test_a_clear_choice_with_one_of_its_own_subcategories_keeps_both():
+    draft = build_draft(answer(classification=classification("clear", 1, 10)), SOURCE, CATEGORIES)
+    assert (draft.category_id, draft.subcategory_id, kinds(draft)) == (1, 10, [])
 
 
 def test_an_ambiguous_choice_names_only_existing_categories():

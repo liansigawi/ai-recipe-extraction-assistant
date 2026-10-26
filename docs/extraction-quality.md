@@ -114,6 +114,26 @@ uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/eva
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
 
+### 2026-10-26 (evening): dessert subcategories
+
+The evaluation's categories now include "קינוחים רגילים" and "קינוחים בריאים" (ids 5 and 6, as in a new
+database), and a case can expect a `subcategory` (or `subcategory_one_of`). Expected: healthy style for
+the date-and-almond energy balls (05) and the almond-butter cookies (real-5); regular for the cakes,
+cookies, brownies, the cheesecake, the torte and the salted honey tart; regular or none for the
+tahini-almond cookies (15). **Four new cases written for this check and not used for tuning:** date and
+oat balls (34, healthy), a classic date cake on white flour, sugar and butter (35, regular), banana
+muffins on oats and almond flour with maple (36, healthy), oat and raisin cookies on butter, flour and
+brown sugar (37, regular or none).
+
+Two live runs of the 16 desserts (`20261026-130634`, `20261026-131059`): the category right in all 16,
+the subcategory right in 14 of 16, the same in both runs. The two mistakes are the same kind: **one
+ingredient word outweighs the whole recipe**. The date cake (35) and the oat cookies (37) went to
+"קינוחים בריאים" although both are built on flour, sugar and butter. The salted honey tart stayed regular,
+and every healthy-style dessert was found. One general change to the regular subcategory's description
+("the whole recipe decides, also with dates, oats, honey or nuts beside flour, sugar and butter") was
+tried on the same drafts and changed nothing, so the descriptions stay as first written; you can
+refine them in the category screen.
+
 ### 2026-10-26 (afternoon): an ingredient introduction, an optional label, a vegan alternative
 
 A real post the person imported (https://www.instagram.com/p/CLJ5G9rDi1a/, almond cookies), now the

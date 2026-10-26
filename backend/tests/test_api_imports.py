@@ -12,7 +12,7 @@ import pytest
 from app.api.imports import get_extractor_factory
 from app.errors import ApiError
 from app.extraction.output import ExtractionOutput
-from app.sample_data import STARTER_CATEGORIES
+from app.sample_data import STARTER_CATEGORIES, STARTER_SUBCATEGORIES
 from tests.test_extraction_review import SOURCE
 from tests.test_extraction_review import answer as review_answer
 
@@ -195,7 +195,8 @@ def test_an_invalid_category_from_the_model_never_reaches_the_database(client, u
     assert draft["category"] is None
     assert [issue["kind"] for issue in draft["issues"]] == ["classification_unresolved"]
     with closing(sqlite3.connect(data_dir / "recipes.db")) as db:
-        assert db.execute("SELECT count(*) FROM categories").fetchone() == (len(STARTER_CATEGORIES),)  # nothing created
+        starter_rows = len(STARTER_CATEGORIES) + sum(len(subs) for subs in STARTER_SUBCATEGORIES.values())
+        assert db.execute("SELECT count(*) FROM categories").fetchone() == (starter_rows,)  # nothing created
 
 
 def test_imports_are_refused_from_other_sites(client, use):

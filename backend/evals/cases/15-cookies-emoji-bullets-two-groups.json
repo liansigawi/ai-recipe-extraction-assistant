@@ -3,6 +3,7 @@
   "expect": {
     "title": "עוגיות טחינה ושקדים",
     "category": "קינוחים",
+    "subcategory_one_of": ["קינוחים רגילים", null],
     "ingredient_groups": [
       {
         "name": "לבצק",

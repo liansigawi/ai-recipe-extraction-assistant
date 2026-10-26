@@ -1,0 +1,44 @@
+{
+  "about": "Invented for the dessert subcategories (2026-10-26), not used for tuning: date and oat balls with almond butter, the person's own example of a healthy-style dessert.",
+  "expect": {
+    "title": "כדורי תמרים ושיבולת שועל",
+    "category": "קינוחים",
+    "subcategory": "קינוחים בריאים",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 כוס תמרים מג'הול מגולענים",
+            "1 כוס"
+          ],
+          [
+            "1 כוס שיבולת שועל",
+            "1 כוס"
+          ],
+          [
+            "1/4 כוס חמאת שקדים",
+            "1/4 כוס"
+          ],
+          [
+            "2 כפות קקאו",
+            "2 כפות"
+          ],
+          [
+            "קורט מלח",
+            "קורט"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "טוחנים את שיבולת השועל במעבד מזון לקמח גס.",
+      "מוסיפים את התמרים, חמאת השקדים, הקקאו והמלח וטוחנים לעיסה דביקה.",
+      "יוצרים כדורים ומצננים במקרר חצי שעה."
+    ],
+    "yield": {
+      "text": "יוצאים כ-16 כדורים",
+      "number": "16"
+    }
+  }
+}

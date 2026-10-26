@@ -328,7 +328,11 @@ The model still decides a few things, and the backend checks each:
   are yours: "קינוחים" (sweet desserts, dairy desserts included), "ארוחות בשריות" (meat and poultry
   meals), "ארוחות קלילות" (savory dairy or egg meals; "light" is a personal label, not about
   calories or portions) and "משקאות" (drinks, smoothies, coffee drinks, lemonade). A fish, vegetable
-  or legume dish usually fits none and stays unclassified;
+  or legume dish usually fits none and stays unclassified. "קינוחים" has two subcategories:
+  "קינוחים רגילים" and "קינוחים בריאים" (your own style: desserts built mainly on dates, oats, nuts,
+  almond flour or nut butter, sometimes sweetened with honey or maple; not a nutritional verdict). The
+  model picks a subcategory only when one clearly fits; otherwise the dessert stays in "קינוחים"
+  without one. A subcategory that is not its category's own is dropped and the category kept;
 - **roles, corrected by the surrounding structure**:
   - a short line in the ingredient list that says what it is for, or that it is optional ("לציפוי -
     מלח מאלדון", "להגשה: גלידת וניל", "אופציונאלי: שוקולד צ׳יפס", "Lemon wedges, for serving"), is an

@@ -1,0 +1,51 @@
+{
+  "about": "Invented for the dessert subcategories, not used for tuning: oat and raisin cookies on butter, brown sugar and flour. Ambiguous: a regular dessert, or no subcategory.",
+  "expect": {
+    "title": "עוגיות שיבולת שועל וצימוקים",
+    "category": "קינוחים",
+    "subcategory_one_of": [
+      "קינוחים רגילים",
+      null
+    ],
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "100 גרם חמאה רכה",
+            "100 גרם"
+          ],
+          [
+            "1/2 כוס סוכר חום",
+            "1/2 כוס"
+          ],
+          [
+            "1 ביצה",
+            "1"
+          ],
+          [
+            "3/4 כוס קמח",
+            "3/4 כוס"
+          ],
+          [
+            "1 כוס שיבולת שועל",
+            "1 כוס"
+          ],
+          [
+            "1/2 כוס צימוקים",
+            "1/2 כוס"
+          ],
+          [
+            "1/2 כפית קינמון",
+            "1/2 כפית"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מקציפים את החמאה עם הסוכר החום ומוסיפים את הביצה.",
+      "מוסיפים את הקמח, שיבולת השועל, הצימוקים והקינמון.",
+      "יוצרים עוגיות על תבנית ואופים 12 דקות ב-180 מעלות."
+    ]
+  }
+}

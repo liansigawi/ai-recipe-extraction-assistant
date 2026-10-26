@@ -35,17 +35,29 @@ from app.errors import ApiError
 from app.extraction.choose import extraction_info, make_extractor
 from app.extraction.claude import Extractor
 from app.extraction.review import is_recipe, make_draft
-from app.sample_data import STARTER_CATEGORIES
+from app.sample_data import STARTER_CATEGORIES, STARTER_SUBCATEGORIES
 from evals.scoring import score_case, totals, verdict
 
 CASES_DIR = Path(__file__).parent / "cases"
 MAX_CASES = 40  # bounded: with Claude each case is one paid request
 
-# The categories of a new notebook, with the ids a new database gives them.
-CATEGORIES = [
-    schemas.Category(id=index, name=name, description=description)
-    for index, (name, description) in enumerate(STARTER_CATEGORIES, start=1)
-]
+
+def _starter_categories() -> list[schemas.Category]:
+    """The categories of a new notebook, with the ids a new database gives them: the top-level ones
+    first, then the subcategories (app/seed.py)."""
+    categories = [
+        schemas.Category(id=index, name=name, description=description)
+        for index, (name, description) in enumerate(STARTER_CATEGORIES, start=1)
+    ]
+    next_id = len(categories) + 1
+    for category in categories:
+        for name, description in STARTER_SUBCATEGORIES.get(category.name, []):
+            category.subcategories.append(schemas.Subcategory(id=next_id, name=name, description=description))
+            next_id += 1
+    return categories
+
+
+CATEGORIES = _starter_categories()
 
 
 def load_cases(folders: list[Path], only: list[str]) -> list[tuple[str, str, dict]]:
