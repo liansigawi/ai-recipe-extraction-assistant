@@ -138,3 +138,20 @@ export interface Subcategory {
 export interface Category extends Subcategory {
   subcategories: Subcategory[]
 }
+
+/** What the page sends to create a category (POST) or to change one (PUT: no parent_id; it never changes). */
+export interface CategoryInput {
+  name: string
+  /** What belongs in it: the model classifies new imports by it. Empty: none. */
+  description: string
+  /** Only when creating: the top-level category a new subcategory goes under. */
+  parent_id?: number | null
+}
+
+/** A category as created or changed. */
+export interface CategoryRow {
+  id: number
+  name: string
+  description: string | null
+  parent_id: number | null
+}

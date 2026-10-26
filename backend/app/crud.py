@@ -99,6 +99,46 @@ def list_categories(session: Session) -> list[schemas.Category]:
     ]
 
 
+def create_category(session: Session, data: schemas.CategoryInput) -> schemas.CategoryRow:
+    """A category the person creates: top-level, or a subcategory of an existing top-level category
+    (one level deep). Its name must be new among its siblings."""
+    if data.parent_id is not None:
+        parent = session.get(models.Category, data.parent_id)
+        if parent is None or parent.parent_id is not None:
+            raise ApiError(
+                422, "invalid_parent", f"There is no top-level category with id {data.parent_id} to add a subcategory to.",
+                {"field": "parent_id"},
+            )
+    _check_name_free(session, data.name, data.parent_id, None)
+    row = models.Category(name=data.name, description=data.description, parent_id=data.parent_id)
+    session.add(row)
+    session.commit()  # INSERT INTO categories ...; COMMIT
+    return _category_row(row)
+
+
+def update_category(session: Session, category_id: int, data: schemas.CategoryUpdate) -> schemas.CategoryRow:
+    """A new name and description; the id stays, so every recipe in it stays in it."""
+    row = session.get(models.Category, category_id)
+    if row is None:
+        raise ApiError(404, "category_not_found", f"There is no category with id {category_id}.")
+    _check_name_free(session, data.name, row.parent_id, row.id)
+    row.name, row.description = data.name, data.description
+    session.commit()  # UPDATE categories SET name = ?, description = ? WHERE id = ?; COMMIT
+    return _category_row(row)
+
+
+def _check_name_free(session: Session, name: str, parent_id: int | None, own_id: int | None) -> None:
+    same_level = models.Category.parent_id.is_(None) if parent_id is None else models.Category.parent_id == parent_id
+    taken = {row.name.casefold(): row.id for row in session.scalars(select(models.Category).where(same_level))}
+    if taken.get(name.casefold(), own_id) != own_id:
+        where = "among the top-level categories" if parent_id is None else "in this category"
+        raise ApiError(409, "category_name_taken", f'There is already a category named "{name}" {where}.', {"field": "name"})
+
+
+def _category_row(row: models.Category) -> schemas.CategoryRow:
+    return schemas.CategoryRow(id=row.id, name=row.name, description=row.description, parent_id=row.parent_id)
+
+
 # --- The category rule -------------------------------------------------------------------------
 
 

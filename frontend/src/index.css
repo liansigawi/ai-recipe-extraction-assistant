@@ -800,3 +800,106 @@ p {
   color: var(--color-success);
   font-weight: 600;
 }
+
+/* Categories: each top-level category, its subcategories indented under it, one form open at a time. */
+.category-manager {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.manager-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.category-tree,
+.subcategory-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.category-node {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-page);
+}
+
+.subcategory-list {
+  padding-inline-start: 1.25rem;
+  border-inline-start: 3px solid var(--color-accent-soft);
+}
+
+.category-summary {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.category-summary-text {
+  min-width: 0;
+}
+
+.category-name {
+  display: inline;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+h4.category-name {
+  font-size: 0.95rem;
+}
+
+.category-count {
+  margin-inline-start: 0.5rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.category-description {
+  margin: 0.25rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.category-form fieldset {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.category-form legend {
+  padding: 0 0.25rem;
+  font-weight: 600;
+}
+
+.category-form input,
+.category-form textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #c9b9a9;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+}

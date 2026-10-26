@@ -2,7 +2,7 @@
 // calling fetch themselves, so request details and error handling live in one place.
 //
 // The paths start with /api: in development Vite forwards them to FastAPI (vite.config.ts).
-import type { Category, ExtractionInfo, Recipe, RecipeInput } from './types'
+import type { Category, CategoryInput, CategoryRow, ExtractionInfo, Recipe, RecipeInput } from './types'
 
 /** Any failed request: an error response from the API, or no answer at all. */
 export class ApiError extends Error {
@@ -60,6 +60,12 @@ export function errorMessage(error: unknown): string {
       return error.message // already written for the page, in request() above
     case 'recipe_not_found':
       return 'המתכון לא נמצא. ייתכן שנמחק בחלון אחר; רעננו את הדף.'
+    case 'category_name_taken':
+      return 'כבר יש קטגוריה בשם הזה באותה רמה. בחרו שם אחר.'
+    case 'invalid_parent':
+      return 'אפשר להוסיף תת-קטגוריה רק לקטגוריה ראשית קיימת.'
+    case 'category_not_found':
+      return 'הקטגוריה לא נמצאה. ייתכן ששונתה בחלון אחר; רעננו את הדף.'
     case 'forbidden_origin':
       return 'השרת דחה את השינוי כי הדף לא נפתח מהכתובת הצפויה. פתחו את המחברת בכתובת http://localhost:5173'
     // Importing (backend/app/extraction/: claude.py for the Claude API, ollama.py for a local model).
@@ -114,6 +120,17 @@ export function listRecipes(): Promise<Recipe[]> {
 
 export function listCategories(): Promise<Category[]> {
   return request('/api/categories')
+}
+
+/** A new top-level category, or with parent_id a subcategory of one. */
+export function createCategory(input: CategoryInput): Promise<CategoryRow> {
+  return request('/api/categories', { method: 'POST', body: JSON.stringify(input) })
+}
+
+/** A category's new name and description: its id, parent and recipes stay. */
+export function updateCategory(id: number, input: CategoryInput): Promise<CategoryRow> {
+  const { name, description } = input
+  return request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify({ name, description }) })
 }
 
 export function createRecipe(input: RecipeInput): Promise<Recipe> {

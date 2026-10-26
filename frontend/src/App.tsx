@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ApiError, deleteRecipe, errorMessage, listCategories, listRecipes } from './api'
+import CategoryManager from './components/CategoryManager'
 import ImportPanel from './components/ImportPanel'
 import RecipeActions from './components/RecipeActions'
 import RecipeEditor from './components/RecipeEditor'
@@ -9,7 +10,12 @@ import type { Category, Recipe } from './types'
 
 // What the main area shows. A "discriminated union": `kind` tells which shape the value has,
 // and TypeScript allows `recipeId` only where kind is 'edit'.
-type Mode = { kind: 'view' } | { kind: 'edit'; recipeId: number } | { kind: 'create' } | { kind: 'import' }
+type Mode =
+  | { kind: 'view' }
+  | { kind: 'edit'; recipeId: number }
+  | { kind: 'create' }
+  | { kind: 'import' }
+  | { kind: 'categories' }
 type Loading = { status: 'loading' } | { status: 'failed'; message: string } | { status: 'ready' }
 
 const DISCARD_QUESTION = 'לצאת מהעריכה? השינויים שלא נשמרו יאבדו.'
@@ -119,6 +125,19 @@ export default function App() {
     setNotice('')
   }
 
+  function handleManageCategories() {
+    if (!closeEditor()) return
+    setMode({ kind: 'categories' })
+    setNotice('')
+  }
+
+  /** After a category was created or changed: the categories, and the recipes' category names, again. */
+  async function reloadAfterCategoryChange() {
+    const [loadedRecipes, loadedCategories] = await Promise.all([listRecipes(), listCategories()])
+    setRecipes(loadedRecipes)
+    setCategories(loadedCategories)
+  }
+
   function handleImported(draft: Recipe) {
     setRecipes((current) => [draft, ...current])
     if (latest.current.mode.kind === 'import') {
@@ -181,6 +200,16 @@ export default function App() {
   let content: ReactNode
   if (mode.kind === 'import') {
     content = <ImportPanel onImported={handleImported} onCancel={handleCancel} />
+  } else if (mode.kind === 'categories') {
+    content = (
+      <CategoryManager
+        categories={categories}
+        recipes={recipes}
+        onChanged={reloadAfterCategoryChange}
+        onClose={handleCancel}
+        onDirtyChange={setUnsavedChanges}
+      />
+    )
   } else if (mode.kind === 'create') {
     // A different key gives a fresh editor with fresh state, instead of reusing the previous one.
     content = (
@@ -257,11 +286,14 @@ export default function App() {
                 <button type="button" className="button" onClick={handleCreate}>
                   מתכון חדש
                 </button>
+                <button type="button" className="button" aria-pressed={mode.kind === 'categories'} onClick={handleManageCategories}>
+                  קטגוריות
+                </button>
               </div>
             </div>
             <RecipeList
               recipes={recipes}
-              selectedId={mode.kind === 'create' || mode.kind === 'import' ? null : (editing ?? selected)?.id ?? null}
+              selectedId={mode.kind === 'view' || mode.kind === 'edit' ? (editing ?? selected)?.id ?? null : null}
               onSelect={handleSelect}
             />
           </nav>

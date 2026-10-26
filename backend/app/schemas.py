@@ -231,6 +231,40 @@ class Category(ContractModel):
     subcategories: list[Subcategory] = []
 
 
+MAX_CATEGORY_NAME = 60
+MAX_CATEGORY_DESCRIPTION = 600  # the model reads every description at each import: keep them short
+
+
+def _blank_is_none(value: str | None) -> str | None:
+    return value if value else None
+
+
+OptionalDescription = Annotated[str | None, Field(max_length=MAX_CATEGORY_DESCRIPTION), AfterValidator(_blank_is_none)]
+
+
+class CategoryUpdate(ContractModel):
+    """PUT /api/categories/{id}: a category's new name and description. Its parent never changes: recipes
+    point at the pair (category, subcategory), so moving a subcategory would break them."""
+
+    name: Annotated[NonEmptyStr, Field(max_length=MAX_CATEGORY_NAME)]
+    description: OptionalDescription = None  # what belongs in it: the model classifies by it
+
+
+class CategoryInput(CategoryUpdate):
+    """POST /api/categories: a new top-level category, or with parent_id a subcategory of one."""
+
+    parent_id: int | None = None
+
+
+class CategoryRow(ContractModel):
+    """A category as created or changed: a subcategory has the id of its top-level category as parent_id."""
+
+    id: int
+    name: NonEmptyStr
+    description: NonEmptyStr | None = None
+    parent_id: int | None = None
+
+
 # --- Importing ---------------------------------------------------------------------------------
 
 MAX_IMPORT_CHARACTERS = 20_000  # a long recipe page is about 10,000; an Instagram caption at most 2,200

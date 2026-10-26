@@ -83,6 +83,7 @@ describe('browsing', () => {
 
     await user.tab() // the "import" button
     await user.tab() // the "new recipe" button
+    await user.tab() // the "categories" button
     await user.tab() // the first card
     await user.tab() // the second card
     await user.keyboard('{Enter}')

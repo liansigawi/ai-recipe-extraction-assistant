@@ -138,6 +138,12 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
 - **Edit:** "עריכה" opens the recipe in the same form. Rows can be added, moved (▲ ▼) and removed (✕).
   The category list offers only existing categories, or "לא מסווג" (not classified).
 - **Delete:** "מחיקה" asks first, in the page. Deleting cannot be undone.
+- **Categories:** "קטגוריות" lists your categories and their subcategories, with how many recipes each
+  holds. "עריכה" changes a name or a description; "+ הוספת תת-קטגוריה" adds a subcategory under a
+  top-level category; "הוספת קטגוריה ראשית" adds a new one. The descriptions are what the model
+  classifies new imports by. Renaming never moves a recipe (the id stays); a recipe's category is
+  changed in its editor. Subcategories are one level deep, and a name must be new among its
+  siblings. Deleting a category is not offered yet.
 - Leaving the form with unsaved changes (another recipe, cancel, closing the tab) asks first.
 
 ### Import a recipe from pasted text
@@ -495,7 +501,7 @@ The project keeps these separate and reports which one was run:
 │       ├── index.css                styles (right-to-left aware)
 │       ├── components/              RecipeList, RecipeCard, RecipeView, RecipeActions, RecipeEditor
 │       │                            (with IngredientsEditor, StepsEditor, RowButtons, FieldError), CategoryChip,
-│       │                            ImportPanel, ReviewIssues, OriginalText
+│       │                            ImportPanel, ReviewIssues, OriginalText, CategoryManager
 │       ├── test/                    test setup, the fake API, sample recipes as test data
 │       └── *.test.ts(x)             Vitest + Testing Library tests
 └── data/                            local data (git-ignored)

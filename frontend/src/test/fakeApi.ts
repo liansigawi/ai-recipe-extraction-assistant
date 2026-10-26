@@ -49,6 +49,7 @@ export function fakeApi(initial: {
   let extraction: ExtractionInfo = initial.extraction ?? { configured: true, provider: 'claude', model: 'claude-opus-5-5', local: false, problem: null }
   const draftFor = initial.draftFor ?? defaultDraft
   let nextId = Math.max(0, ...recipes.map((recipe) => recipe.id)) + 1
+  let nextCategoryId = Math.max(0, ...categories.flatMap((c) => [c.id, ...c.subcategories.map((s) => s.id)])) + 1
   const calls: Call[] = []
   const queued: Response[] = [] // one-off answers, given before the normal ones
   let offline = false
@@ -92,6 +93,33 @@ export function fakeApi(initial: {
 
     if (path === '/api/recipes' && method === 'GET') return json(200, recipes)
     if (path === '/api/categories' && method === 'GET') return json(200, categories)
+    if (path === '/api/categories' && method === 'POST') {
+      const { name, description, parent_id: parentId } = body as { name: string; description: string; parent_id: number | null }
+      const siblings = parentId == null ? categories : (categories.find((c) => c.id === parentId)?.subcategories ?? [])
+      if (siblings.some((c) => c.name === name.trim())) {
+        return json(409, { error: { code: 'category_name_taken', message: 'Taken.', details: { field: 'name' } } })
+      }
+      const row = { id: nextCategoryId++, name: name.trim(), description: description.trim() || null }
+      if (parentId == null) categories.push({ ...row, subcategories: [] })
+      else categories.find((c) => c.id === parentId)?.subcategories.push(row)
+      return json(201, { ...row, parent_id: parentId ?? null })
+    }
+    const categoryId = Number(/^\/api\/categories\/(\d+)$/.exec(path)?.[1])
+    if (categoryId && method === 'PUT') {
+      const { name, description } = body as { name: string; description: string }
+      const all = [...categories, ...categories.flatMap((c) => c.subcategories)]
+      const row = all.find((c) => c.id === categoryId)
+      if (row === undefined) return json(404, { error: { code: 'category_not_found', message: 'No.', details: null } })
+      row.name = name.trim()
+      row.description = description.trim() || null
+      // Like the real API, recipes show their category's current name.
+      recipes = recipes.map((recipe) => ({
+        ...recipe,
+        category: recipe.category?.id === categoryId ? { id: categoryId, name: row.name } : recipe.category,
+        subcategory: recipe.subcategory?.id === categoryId ? { id: categoryId, name: row.name } : recipe.subcategory,
+      }))
+      return json(200, { id: row.id, name: row.name, description: row.description, parent_id: null })
+    }
     if (path === '/api/extraction' && method === 'GET') return json(200, extraction)
     if (path === '/api/recipes' && method === 'POST') {
       const recipe = stored(body as RecipeInput, nextId++, SAVED_AT)
