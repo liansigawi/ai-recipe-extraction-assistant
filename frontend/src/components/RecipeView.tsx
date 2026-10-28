@@ -3,6 +3,7 @@ import { creditedSource, postLink, profileUrl, shownName } from '../credit'
 import { SOURCE_LABELS } from '../labels'
 import type { Creator, IngredientGroup, Recipe, Source, StepGroup } from '../types'
 import CategoryChip from './CategoryChip'
+import MediaGallery from './MediaGallery'
 import OriginalText from './OriginalText'
 
 // Dates in the page's language and the computer's own time zone; the API sends them in UTC.
@@ -12,11 +13,12 @@ interface RecipeViewProps {
   recipe: Recipe
   titleRef?: Ref<HTMLHeadingElement> // lets the parent reach the title element (App scrolls and focuses it)
   actions?: ReactNode // anything React can show; App passes the edit and delete buttons
+  onChange?: (recipe: Recipe) => void // after a change to its media (without it, the gallery only shows)
 }
 
 // The cooking view: title and facts, then the ingredients ABOVE the numbered preparation steps.
 // dir="auto" on recipe text lets an English recipe read left to right inside the right-to-left page.
-export default function RecipeView({ recipe, titleRef, actions }: RecipeViewProps) {
+export default function RecipeView({ recipe, titleRef, actions, onChange }: RecipeViewProps) {
   return (
     <article className="recipe-view">
       <div className="recipe-header">
@@ -55,6 +57,7 @@ export default function RecipeView({ recipe, titleRef, actions }: RecipeViewProp
           עודכן <time dateTime={recipe.updated_at}>{dateFormat.format(new Date(recipe.updated_at))}</time>
         </li>
       </ul>
+      <MediaGallery recipe={recipe} onChange={onChange} />
       {recipe.original !== null && <OriginalText original={recipe.original} />}
 
       <section className="recipe-section">

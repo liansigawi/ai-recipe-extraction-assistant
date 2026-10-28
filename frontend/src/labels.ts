@@ -28,4 +28,5 @@ export const ISSUE_LABELS: Record<IssueKind, string> = {
   unused_text: 'קטע שלא שובץ',
   invalid_reference: 'הפניה לא תקינה',
   caption_incomplete: 'כיתוב חלקי',
+  media_incomplete: 'תמונות וסרטונים',
 }

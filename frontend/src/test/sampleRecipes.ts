@@ -74,6 +74,8 @@ export const sampleRecipes: Recipe[] = [
     status: 'saved',
     issues: [],
     original: null,
+    media: [],
+    cover_id: null,
   },
   {
     id: 2,
@@ -120,6 +122,8 @@ export const sampleRecipes: Recipe[] = [
     status: 'saved',
     issues: [],
     original: null,
+    media: [],
+    cover_id: null,
   },
   {
     id: 3,
@@ -165,6 +169,8 @@ export const sampleRecipes: Recipe[] = [
     status: 'saved',
     issues: [],
     original: null,
+    media: [],
+    cover_id: null,
   },
   {
     id: 4,
@@ -204,5 +210,7 @@ export const sampleRecipes: Recipe[] = [
     status: 'saved',
     issues: [],
     original: null,
+    media: [],
+    cover_id: null,
   },
 ]

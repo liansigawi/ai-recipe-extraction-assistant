@@ -2,7 +2,7 @@
 // calling fetch themselves, so request details and error handling live in one place.
 //
 // The paths start with /api: in development Vite forwards them to FastAPI (vite.config.ts).
-import type { Category, CategoryInput, CategoryRow, ExtractionInfo, LinkedRecipe, Recipe, RecipeInput } from './types'
+import type { Category, CategoryInput, CategoryRow, ExtractionInfo, LinkedRecipe, MediaReport, Recipe, RecipeInput } from './types'
 
 /** Any failed request: an error response from the API, or no answer at all. */
 export class ApiError extends Error {
@@ -111,6 +111,22 @@ export function errorMessage(error: unknown): string {
       return 'נקראה רק תצוגה מקדימה של הכיתוב, וייתכן שהיא קטועה.'
     case 'duplicate_link':
       return 'הפוסט הזה כבר במחברת.'
+    // Pictures and videos (backend/app/media.py).
+    case 'unsupported_media':
+      return 'אפשר להעלות רק תמונה: JPEG, PNG, WebP או GIF.'
+    case 'media_too_large':
+      return 'התמונה גדולה מדי: עד 20 MB.'
+    case 'empty_upload':
+      return 'הקובץ ריק.'
+    case 'no_instagram_source':
+      return 'למתכון אין קישור לפוסט באינסטגרם. הוסיפו אותו במקורות, בעריכת המתכון.'
+    case 'instagram_no_media':
+      return 'הפוסט נקרא, אבל לא נמצאו בו תמונות או סרטונים.'
+    case 'media_not_found':
+    case 'media_missing':
+      return 'הפריט כבר לא נמצא. רעננו את הדף.'
+    case 'cover_needs_a_picture':
+      return 'לסרטון הזה אין תמונה להציג ככריכה.'
     default:
       return `הפעולה נכשלה: ${error.message}`
   }
@@ -133,6 +149,29 @@ export function createCategory(input: CategoryInput): Promise<CategoryRow> {
 export function updateCategory(id: number, input: CategoryInput): Promise<CategoryRow> {
   const { name, description } = input
   return request(`/api/categories/${id}`, { method: 'PUT', body: JSON.stringify({ name, description }) })
+}
+
+/** A picture for a recipe: the request's body is the file itself. */
+export function uploadMedia(recipeId: number, file: Blob): Promise<Recipe> {
+  return request(`/api/recipes/${recipeId}/media`, {
+    method: 'POST',
+    body: file,
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+  })
+}
+
+/** The media of the recipe's own Instagram post, saved here; nothing else about the recipe changes. */
+export function fetchPostMedia(recipeId: number): Promise<{ recipe: Recipe; report: MediaReport }> {
+  return request(`/api/recipes/${recipeId}/media/instagram`, { method: 'POST', body: JSON.stringify({}) })
+}
+
+/** The card's picture: one of the recipe's, or null for the default (the first picture). */
+export function chooseCover(recipeId: number, mediaId: number | null): Promise<Recipe> {
+  return request(`/api/recipes/${recipeId}/cover`, { method: 'PUT', body: JSON.stringify({ media_id: mediaId }) })
+}
+
+export function removeMedia(recipeId: number, mediaId: number): Promise<Recipe> {
+  return request(`/api/recipes/${recipeId}/media/${mediaId}`, { method: 'DELETE' })
 }
 
 export function createRecipe(input: RecipeInput): Promise<Recipe> {

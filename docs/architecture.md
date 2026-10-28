@@ -398,21 +398,22 @@ redirect; a redirect would send the browser past the Vite proxy.
 │   │   ├── db.py, models.py  SQLAlchemy: engine and sessions; the tables
 │   │   ├── migrate.py        upgrades the database at start-up, after a backup
 │   │   ├── crud.py           recipe reads and writes; the category check
+│   │   ├── media.py          pictures and videos: bounded downloads, uploads, content-addressed files, cleanup
 │   │   ├── seed.py           fills a new database once
 │   │   ├── sample_data.py    the starter categories and the four invented sample recipes
-│   │   ├── api/              recipes.py, categories.py, imports.py: the routes
+│   │   ├── api/              recipes.py, categories.py, imports.py, media.py: the routes
 │   │   ├── extraction/       output.py (answer schema), prompt.py, claude.py / ollama.py (the model call),
 │   │   │                     choose.py (which one), segments.py (numbered passages), review.py (checks),
 │   │   │                     quantity.py (quantities), ingredient_words.py (ingredients only in the steps)
 │   │   └── importers/        instagram.py (milestone 1); website.py, screenshots.py (milestone 5)
-│   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py, 0002_imports_and_review.py,
-│   │                         0003_clearer_category_descriptions.py
+│   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py … 0009_recipe_media.py
 │   ├── scripts/              probe_instagram.py: live checks, run by hand
 │   ├── tests/                pytest: offline, fixtures and in-process API calls only; never calls Claude
 │   └── evals/                the extraction quality check, run by hand; cases/ (invented texts), compare.py
 ├── frontend/                 React + TypeScript + Vite
-│   └── src/                  main.tsx, App.tsx, types.ts, api.ts, editorForm.ts, components/, test/
-├── data/                     git-ignored: recipes.db, uploads/, instagram-probe/
+│   └── src/                  main.tsx, App.tsx, types.ts, api.ts, editorForm.ts, credit.ts, media.ts,
+│                             components/ (MediaGallery: gallery, viewer, uploads), test/
+├── data/                     git-ignored: recipes.db, media/, instagram-probe/
 └── .github/workflows/        (milestone 7) CI: deterministic checks only
 ```
 
@@ -425,7 +426,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 3 | ✅ SQLite + SQLAlchemy models, recipe CRUD, editor; the page loads recipes from the API | Controlled forms, `useEffect` + `fetch` with cleanup, loading and error states, `key` to reset state, focus management; SQL behind the ORM, transactions, constraints |
 | 4 | ✅ Pasted text → Claude extraction → strict classification → review → save; migrations | Structured output, validating a model's answer, prompt injection, enforcing the category rule in code; migrations and transactions; `localStorage`; work that finishes after the user moved on |
 | 5 | Instagram importer ✅; website (JSON-LD first), screenshots (ordered, multimodal) | Fallback paths, file uploads, bounded timeouts; running a browser from a server |
-| 6 | Category settings ✅, search and filters ✅, duplicate links ✅; RTL polish, error handling | Composing screens, accessibility, mixed-direction text |
+| 6 | Category settings ✅, search and filters ✅, duplicate links ✅, creator credit ✅, pictures and videos ✅; RTL polish, error handling | Composing screens, accessibility, mixed-direction text; files on disk, `<dialog>`, `<video>` |
 | 7 | Regression tests, evaluation set, GitHub Actions, docs; then Docker if useful | Tests vs live checks vs model evaluation |
 
 ## Decisions log

@@ -72,6 +72,7 @@ export type IssueKind =
   | 'unused_text'
   | 'invalid_reference'
   | 'caption_incomplete'
+  | 'media_incomplete'
 
 export interface Issue {
   kind: IssueKind
@@ -98,6 +99,40 @@ export interface ImportedOriginal {
   coauthors: Creator[]
 }
 
+/** A file saved on this computer, served at its url. */
+export interface MediaFileRef {
+  id: number
+  url: string
+  content_type: string
+  size_bytes: number
+}
+
+/** One of a recipe's pictures or videos. Changed only through the media calls, never by saving the recipe. */
+export interface RecipeMediaItem {
+  id: number
+  kind: 'image' | 'video'
+  /** 'thumbnail_only': a video that could not be saved here; its poster is, and post_url plays it. */
+  status: 'saved' | 'thumbnail_only'
+  file: MediaFileRef | null
+  thumbnail: MediaFileRef | null
+  origin: 'instagram' | 'upload'
+  post_url: string | null
+  post_index: number | null
+  width: number | null
+  height: number | null
+  is_cover: boolean
+}
+
+/** What happened to a post's media. */
+export interface MediaReport {
+  found: number
+  saved: number
+  thumbnails_only: number
+  failed: number
+  already_had: number
+  problems: string[]
+}
+
 /** A stored recipe, as the API returns it. */
 export interface Recipe extends RecipeContent {
   id: number
@@ -111,6 +146,10 @@ export interface Recipe extends RecipeContent {
   issues: Issue[]
   /** null: typed in by hand. */
   original: ImportedOriginal | null
+  /** Its pictures and videos: the post's, in the post's order, then uploads. */
+  media: RecipeMediaItem[]
+  /** The one shown on the card: the chosen cover, or the first with a picture. */
+  cover_id: number | null
   /** ISO 8601 date and time with a time zone, e.g. "2026-10-19T08:00:00Z". */
   created_at: string
   updated_at: string

@@ -19,6 +19,7 @@ import { SOURCE_KINDS, SOURCE_LABELS } from '../labels'
 import type { Category, Recipe, RecipeStatus } from '../types'
 import FieldError from './FieldError'
 import IngredientsEditor from './IngredientsEditor'
+import MediaGallery from './MediaGallery'
 import OriginalText from './OriginalText'
 import ReviewIssues from './ReviewIssues'
 import RowButtons from './RowButtons'
@@ -145,6 +146,8 @@ export default function RecipeEditor({ recipe, categories, onSaved, onCancel, on
       )}
       {recipe?.original != null && <OriginalText original={recipe.original} open={isDraft} sticky={isDraft} />}
       {isDraft && <ReviewIssues issues={form.issues} onChange={(issues) => update({ ...form, issues })} />}
+      {/* What was saved from the post, to look at while reviewing; the cover and removal are in the recipe view. */}
+      {isDraft && recipe !== undefined && recipe.media.length > 0 && <MediaGallery recipe={recipe} />}
 
       <div className="editor-basics">
         <div className="editor-field editor-field-wide">

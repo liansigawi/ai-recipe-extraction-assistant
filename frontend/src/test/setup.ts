@@ -9,3 +9,14 @@ afterEach(() => {
   vi.restoreAllMocks()
   localStorage.clear() // e.g. the import screen's kept text
 })
+
+// jsdom has <dialog> but not its showModal() and close(): enough of them for the media viewer.
+if (typeof HTMLDialogElement !== 'undefined' && typeof HTMLDialogElement.prototype.showModal !== 'function') {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+  }
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    this.removeAttribute('open')
+    this.dispatchEvent(new Event('close'))
+  }
+}

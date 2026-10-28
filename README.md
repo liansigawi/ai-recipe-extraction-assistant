@@ -9,7 +9,8 @@ collection that supports Hebrew and right-to-left text.
 > a model (a local one through Ollama, or Claude) turn it into a draft, review the draft beside the
 > original text, and save it explicitly; or create, edit and delete recipes by hand. You can **manage
 > your categories and subcategories**, **search and filter** the list, and the app **warns about a
-> post you already have**. A new database starts with four categories, two dessert subcategories and
+> post you already have**. An imported post keeps its **creator's credit** and its **pictures and
+> videos**, saved on this computer; you can add pictures of your own to any recipe. A new database starts with four categories, two dessert subcategories and
 > **four invented sample recipes**, labeled "דוגמה". Importing from websites and screenshots comes later.
 > Milestone 1 (Instagram feasibility) is documented in
 > [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
@@ -21,7 +22,7 @@ collection that supports Hebrew and right-to-left text.
 - Both servers listen on this computer only (`127.0.0.1` / `localhost`), and the API answers only
   requests addressed to those names.
 - Local data goes in one folder (`data/` by default, excluded from git). It holds the recipes
-  database (`recipes.db`) and Instagram probe runs; uploaded screenshots (milestone 5) will go there too.
+  database (`recipes.db`), the recipes' pictures and videos (`media/`) and Instagram probe runs.
 - The notebook page loads nothing from the internet. The API documentation page (`/docs`) loads its
   viewer from cdn.jsdelivr.net, so it needs an internet connection.
 - **What is sent to Anthropic.** When you press "קריאה עם Claude" on the import screen, the text
@@ -32,8 +33,9 @@ collection that supports Hebrew and right-to-left text.
   the text is read on this computer and is not sent anywhere. The import screen says which one is in use.
 - **The API key stays on this computer**, in the backend's settings. The page never receives it.
 - **Importing an Instagram link** (and the probe) contacts Instagram's servers directly from this
-  computer: instagram.com, plus its content hosts (cdninstagram.com, fbcdn.net) when a browser is used.
-  It sends only the post's address, as a logged-out visitor. The caption it reads is then handled like
+  computer: instagram.com, plus its content hosts (cdninstagram.com, fbcdn.net) when a browser is used
+  and to download the post's pictures and videos. It sends only the post's address (and the media
+  addresses the post lists), as a logged-out visitor. The caption it reads is then handled like
   pasted text: read on this computer by a local model, or sent to Anthropic with Claude.
 
 ## Requirements
@@ -152,6 +154,16 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
   classifies new imports by. Renaming never moves a recipe (the id stays); a recipe's category is
   changed in its editor. Subcategories are one level deep, and a name must be new among its
   siblings. Deleting a category is not offered yet.
+- **Pictures and videos:** a card shows the recipe's cover picture (a plain placeholder when it has
+  none). In the recipe, "תמונות וסרטונים" shows them in the post's order, then your own; click one to
+  see it large ("הקודם", "הבא", or the arrow keys; Escape closes). A video plays only when you press
+  play, with the usual controls. "קביעה כתמונה ראשית" makes a picture, or a video's still, the
+  card's cover; "ביטול הבחירה כתמונה ראשית" goes back to the first picture. "הסרה מהמתכון" asks
+  first. **"העלאת תמונה"** adds pictures from this computer (JPEG, PNG, WebP or GIF, up to 20 MB each)
+  to any recipe, with or without an Instagram link. A video marked **"▶ באינסטגרם בלבד"** (dashed
+  outline) was not saved here: its still is, with a link to watch it in the post; a video marked
+  "▶ סרטון" is saved and plays offline. A file that is missing from the media folder shows
+  "התמונה לא נמצאה" in its place.
 - Leaving the form with unsaved changes (another recipe, cancel, closing the tab) asks first.
 
 ### Import a recipe from pasted text
@@ -200,6 +212,21 @@ once deleted, they are not added again.
    comes from the post, never from the model. You can edit it in the recipe's sources ("שם @שם_משתמש",
    separated by commas), for example when the posting account credits someone else; who posted it, as
    read, stays with the original text and never changes.
+3. The post's **pictures and videos** are saved with the draft, in the post's order, from the same
+   reading of the post. This can add a minute for a long video. If some could not be saved (too large,
+   refused, or too slow), the draft is still created, with the review point "תמונות וסרטונים" saying
+   how many were saved and why the others were not; a video that could not be saved keeps its still
+   and a link to the post. Nothing about pictures stops a recipe from being reviewed and saved.
+
+### Add pictures and videos to a recipe you already have
+
+Open the recipe and press **"שליפת מדיה מהפוסט"** under "תמונות וסרטונים". It appears when the recipe
+has an Instagram post: its imported original, or an Instagram link in its sources (add one in the
+editor if needed). It reads the post again, as an import does, and saves only its pictures and videos:
+the title, ingredients, steps, categories, credit and your cover choice stay exactly as they are, no new
+recipe is created, and the duplicate-link check does not interfere. The line under the button says what
+happened ("בפוסט 3 פריטים. 2 נשמרו עכשיו. …", with "פרטים" for the reasons). Pressing it again adds
+nothing twice; it retries only what is missing, such as a video that was kept as a still.
 
 How the caption is read: as a logged-out visitor. A fresh browser loads the post page and reads the
 post's own data, which holds the complete caption. Only if that gives no caption (and Instagram did not
@@ -239,8 +266,10 @@ copy the post's address. Instagram can change its pages at any time; pasting the
 
 You can also look inside the database while the backend is stopped, with any SQLite viewer (for
 example the "SQLite Viewer" extension in VS Code): `data/recipes.db` has the tables `recipes`,
-`recipe_sources`, `recipe_imports` (the original texts) and `categories`. The ingredient groups and
-steps are stored as readable JSON.
+`recipe_sources`, `recipe_imports` (the original texts), `categories`, `recipe_media` (which picture
+belongs to which recipe, in what order) and `media_files` (the files in `data/media/`). The ingredient
+groups and steps are stored as readable JSON. Pictures and videos are kept the same way: they are
+still there after a restart, and the browser loads them from this computer, not from Instagram.
 
 ## Connect the Claude API
 
@@ -501,12 +530,15 @@ The project keeps these separate and reports which one was run:
 │   │   ├── models.py                the database tables
 │   │   ├── migrate.py               brings the database up to date at start-up (with a backup first)
 │   │   ├── crud.py                  reading and writing recipes; the category check
+│   │   ├── media.py                 pictures and videos: bounded downloads, uploads, the files under data/media/
 │   │   ├── seed.py                  fills a new database once
 │   │   ├── sample_data.py           the starter categories and the four invented sample recipes
-│   │   ├── api/                     recipes.py, categories.py, imports.py (pasted text or an Instagram link -> draft)
+│   │   ├── api/                     recipes.py, categories.py, imports.py (pasted text or an Instagram link -> draft),
+│   │   │                            media.py (serving, uploading, fetching from the post, the cover, removing)
 │   │   ├── extraction/              passages (segments.py), answer schema, prompts, Claude / Ollama calls, the checks
 │   │   └── importers/instagram.py   Instagram URL parsing, page capture, caption analysis, reading a post for an import
-│   ├── migrations/                  database migrations (Alembic): 0001 milestone 3, 0002 imports, 0003-0005 categories, 0006 Instagram originals
+│   ├── migrations/                  database migrations (Alembic): 0001 milestone 3, 0002 imports, 0003-0005 categories,
+│   │                                0006 Instagram originals, 0007 subcategories, 0008 structured credit, 0009 media
 │   ├── alembic.ini                  Alembic's settings, for its command line
 │   ├── evals/                       the extraction quality check (paid; run by hand) and its cases
 │   ├── scripts/probe_instagram.py   bounded live probe and offline analysis
@@ -520,12 +552,15 @@ The project keeps these separate and reports which one was run:
 │       ├── api.ts                   every call to the backend, and its error messages
 │       ├── editorForm.ts            the editor's form state, checks and conversions (no React)
 │       ├── recipeFilters.ts         search and filters for the recipe list (no React)
+│       ├── credit.ts                the creator credit: profile links, reading and writing "name @username"
+│       ├── media.ts                 which picture a recipe or item shows, its Instagram post, a fetch's report
 │       ├── types.ts                 the recipe contract in TypeScript
 │       ├── labels.ts                display names, e.g. for source kinds
 │       ├── index.css                styles (right-to-left aware)
 │       ├── components/              RecipeList, RecipeCard, RecipeView, RecipeActions, RecipeEditor
 │       │                            (with IngredientsEditor, StepsEditor, RowButtons, FieldError), CategoryChip,
-│       │                            ImportPanel, ReviewIssues, OriginalText, CategoryManager, RecipeFilters
+│       │                            ImportPanel, ReviewIssues, OriginalText, CategoryManager, RecipeFilters,
+│       │                            MediaGallery (the gallery, the viewer, uploads)
 │       ├── test/                    test setup, the fake API, sample recipes as test data
 │       └── *.test.ts(x)             Vitest + Testing Library tests
 └── data/                            local data (git-ignored)

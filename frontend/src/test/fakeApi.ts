@@ -1,7 +1,8 @@
 // A stand-in for the backend in tests. It replaces the browser's fetch and answers from memory
 // the way the FastAPI app does, so tests run without a server and can check what the page sent.
 import { vi } from 'vitest'
-import type { Category, ExtractionInfo, Issue, Recipe, RecipeInput } from '../types'
+import { instagramPostOf, pictureUrl } from '../media'
+import type { Category, ExtractionInfo, Issue, MediaFileRef, MediaReport, Recipe, RecipeInput, RecipeMediaItem } from '../types'
 
 export interface Call {
   method: string
@@ -27,6 +28,35 @@ export const AMBIGUOUS: Issue = {
 /** The caption the fake backend "reads" from any Instagram post. */
 export const INSTAGRAM_CAPTION = 'עוגת לימון של סבתא 🍋\n3 ביצים\nמערבבים ואופים 40 דקות.\n#עוגה'
 
+export function fileRef(id: number, contentType: string): MediaFileRef {
+  return { id, url: `/api/media/${id}`, content_type: contentType, size_bytes: 1000 }
+}
+
+/** A media item, an image saved from a post unless `fields` say otherwise. */
+export function mediaItem(id: number, fields: Partial<RecipeMediaItem> = {}): RecipeMediaItem {
+  return {
+    id,
+    kind: 'image',
+    status: 'saved',
+    file: fileRef(id * 10, 'image/jpeg'),
+    thumbnail: null,
+    origin: 'instagram',
+    post_url: 'https://www.instagram.com/p/CLJ5G9rDi1a/',
+    post_index: 0,
+    width: 1080,
+    height: 1350,
+    is_cover: false,
+    ...fields,
+  }
+}
+
+/** What the fake backend "fetches" from any recipe's post: a saved video, an image, and a video kept only as its poster. */
+export const POST_MEDIA: RecipeMediaItem[] = [
+  mediaItem(0, { kind: 'video', file: fileRef(301, 'video/mp4'), thumbnail: fileRef(302, 'image/jpeg'), post_index: 0 }),
+  mediaItem(0, { file: fileRef(303, 'image/jpeg'), post_index: 1 }),
+  mediaItem(0, { kind: 'video', status: 'thumbnail_only', file: null, thumbnail: fileRef(304, 'image/jpeg'), post_index: 2 }),
+]
+
 function defaultDraft(text: string, useModel: boolean): Partial<Recipe> {
   const lines = text.split('\n').map((line) => line.trim()).filter((line) => line !== '')
   return {
@@ -50,6 +80,7 @@ export function fakeApi(initial: {
   const draftFor = initial.draftFor ?? defaultDraft
   let nextId = Math.max(0, ...recipes.map((recipe) => recipe.id)) + 1
   let nextCategoryId = Math.max(0, ...categories.flatMap((c) => [c.id, ...c.subcategories.map((s) => s.id)])) + 1
+  let nextMediaId = 500
   const calls: Call[] = []
   const queued: Response[] = [] // one-off answers, given before the normal ones
   let offline = false
@@ -71,9 +102,66 @@ export function fakeApi(initial: {
       status: input.status,
       issues: input.issues,
       original: existing?.original ?? null, // like the real API: a save never changes the original
+      media: existing?.media ?? [], // ...nor the media
+      cover_id: existing?.cover_id ?? null,
       created_at: createdAt,
       updated_at: SAVED_AT,
     }
+  }
+
+  /** Like the backend: the chosen cover, else the first item with a picture. */
+  function withCover(recipe: Recipe): Recipe {
+    const chosen = recipe.media.find((item) => item.is_cover) ?? recipe.media.find((item) => pictureUrl(item) !== null)
+    return { ...recipe, cover_id: chosen?.id ?? null }
+  }
+
+  function replace(recipe: Recipe): Recipe {
+    const next = withCover(recipe)
+    recipes = recipes.map((item) => (item.id === next.id ? next : item))
+    return next
+  }
+
+  // The media calls: an upload, the recipe's post (POST_MEDIA), the cover, a removal.
+  function handleMedia(id: number, part: string, rest: string | undefined, method: string, body: unknown): Response {
+    const recipe = recipes.find((item) => item.id === id)
+    if (recipe === undefined) return json(404, { error: { code: 'recipe_not_found', message: 'No.', details: null } })
+    if (part === 'media' && rest === undefined && method === 'POST') {
+      const fileId = nextMediaId++
+      const item = mediaItem(nextMediaId++, { origin: 'upload', post_url: null, post_index: null, file: fileRef(fileId, 'image/png') })
+      return json(201, replace({ ...recipe, media: [...recipe.media, item] }))
+    }
+    if (part === 'media' && rest === 'instagram' && method === 'POST') {
+      const post = instagramPostOf(recipe)
+      if (post === null) return json(422, { error: { code: 'no_instagram_source', message: 'No post.', details: null } })
+      const had = recipe.media.filter((item) => item.origin === 'instagram').map((item) => item.post_index)
+      const added = POST_MEDIA.filter((item) => !had.includes(item.post_index)).map((item) => ({ ...item, id: nextMediaId++, post_url: post }))
+      const uploads = recipe.media.filter((item) => item.origin === 'upload')
+      const fromPost = [...recipe.media.filter((item) => item.origin === 'instagram'), ...added].sort((a, b) => (a.post_index ?? 0) - (b.post_index ?? 0))
+      const next = replace({ ...recipe, media: [...fromPost, ...uploads] })
+      const remote = added.filter((item) => item.status === 'thumbnail_only').length
+      const report: MediaReport = {
+        found: POST_MEDIA.length,
+        saved: added.length - remote,
+        thumbnails_only: remote,
+        failed: 0,
+        already_had: POST_MEDIA.length - added.length,
+        problems: remote > 0 ? ['סרטון 3: גדול מדי (מעל 150 MB); נשמרה תמונה מתוכו.'] : [],
+      }
+      return json(200, { recipe: next, report })
+    }
+    if (part === 'cover' && method === 'PUT') {
+      const mediaId = (body as { media_id: number | null }).media_id
+      if (mediaId !== null && !recipe.media.some((item) => item.id === mediaId)) {
+        return json(404, { error: { code: 'media_not_found', message: 'No.', details: null } })
+      }
+      return json(200, replace({ ...recipe, media: recipe.media.map((item) => ({ ...item, is_cover: item.id === mediaId })) }))
+    }
+    if (part === 'media' && rest !== undefined && method === 'DELETE') {
+      const mediaId = Number(rest)
+      if (!recipe.media.some((item) => item.id === mediaId)) return json(404, { error: { code: 'media_not_found', message: 'No.', details: null } })
+      return json(200, replace({ ...recipe, media: recipe.media.filter((item) => item.id !== mediaId) }))
+    }
+    return json(405, { error: { code: 'method_not_allowed', message: 'Method Not Allowed', details: null } })
   }
 
   async function handle(path: string, init: RequestInit = {}): Promise<Response> {
@@ -154,6 +242,8 @@ export function fakeApi(initial: {
           author: null,
           coauthors: [],
         },
+        media: [],
+        cover_id: null,
         created_at: SAVED_AT,
         updated_at: SAVED_AT,
         ...draftFor(text, useModel),
@@ -187,6 +277,8 @@ export function fakeApi(initial: {
           author: { name: 'אופה ביתית', username: 'baker' },
           coauthors: [],
         },
+        media: [],
+        cover_id: null,
         created_at: SAVED_AT,
         updated_at: SAVED_AT,
         ...draftFor(INSTAGRAM_CAPTION, useModel),
@@ -194,6 +286,8 @@ export function fakeApi(initial: {
       recipes = [draft, ...recipes]
       return json(201, draft)
     }
+    const mediaPath = /^\/api\/recipes\/(\d+)\/(media|cover)(?:\/(instagram|\d+))?$/.exec(path)
+    if (mediaPath !== null) return handleMedia(Number(mediaPath[1]), mediaPath[2], mediaPath[3], method, body)
     const id = Number(/^\/api\/recipes\/(\d+)$/.exec(path)?.[1])
     const existing = recipes.find((recipe) => recipe.id === id)
     if (existing === undefined) {

@@ -159,6 +159,11 @@ export default function App() {
     }
   }
 
+  /** A recipe changed outside the editor (its pictures and videos): the new copy replaces the old one. */
+  function handleRecipeChanged(changed: Recipe) {
+    setRecipes((current) => current.map((recipe) => (recipe.id === changed.id ? changed : recipe)))
+  }
+
   function handleEdit(id: number) {
     setMode({ kind: 'edit', recipeId: id })
     setNotice('')
@@ -242,6 +247,7 @@ export default function App() {
       <RecipeView
         recipe={selected}
         titleRef={titleRef}
+        onChange={handleRecipeChanged}
         // key: a new recipe gets fresh buttons, so a delete question left open does not carry over.
         actions={
           <RecipeActions

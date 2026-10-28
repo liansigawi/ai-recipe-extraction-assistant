@@ -1065,11 +1065,171 @@ h4.category-name {
 }
 
 .credit-line a,
-.original-text-source a {
+.original-text-source a,
+.media-viewer a {
   color: var(--color-accent);
 }
 
 .creator-name {
   color: var(--color-text);
   font-weight: 600;
+}
+
+/* Recipe cards: the cover at the start, the text beside it. */
+.recipe-card {
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: start;
+  column-gap: 0.85rem;
+}
+
+.recipe-card-body {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.recipe-card-cover,
+.recipe-card-cover img,
+.recipe-card-cover .media-missing,
+.cover-placeholder {
+  display: block;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.cover-placeholder {
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0.9rem, var(--color-border) 0.95rem, var(--color-border) 1.05rem, transparent 1.1rem),
+    var(--color-page);
+}
+
+/* A missing picture says so, in place of the picture. */
+.media-missing {
+  display: grid;
+  place-items: center;
+  padding: 0.25rem;
+  background: var(--color-page);
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* The gallery: thumbnails in the post's order, wrapping on a narrow screen. */
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.media-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-page);
+  cursor: zoom-in;
+}
+
+.media-thumb-image,
+.media-thumb .media-missing {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-badge,
+.media-cover-badge {
+  position: absolute;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.media-badge {
+  inset-block-end: 0.3rem;
+  inset-inline-start: 0.3rem;
+  background: rgb(0 0 0 / 70%);
+  color: #ffffff;
+}
+
+/* A video that is only on Instagram looks different from one saved here. */
+.media-badge-remote {
+  background: #fff1c2;
+  color: #6b4e00;
+  outline: 1px dashed #6b4e00;
+}
+
+.media-cover-badge {
+  inset-block-start: 0.3rem;
+  inset-inline-end: 0.3rem;
+  background: var(--color-accent);
+  color: #ffffff;
+}
+
+.file-button {
+  position: relative;
+}
+
+.file-button:focus-within {
+  outline: 3px solid var(--color-accent);
+}
+
+.media-message {
+  display: block;
+}
+
+.media-problems {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+/* The viewer: the browser's modal dialog, as large as the screen allows. */
+.media-viewer {
+  width: min(56rem, 100vw - 1rem);
+  max-height: calc(100vh - 1rem);
+  padding: 0.75rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.media-viewer::backdrop {
+  background: rgb(0 0 0 / 70%);
+}
+
+.viewer-stage {
+  display: grid;
+  place-items: center;
+  gap: 0.5rem;
+}
+
+.viewer-media {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 11rem);
+  border-radius: 8px;
+  object-fit: contain;
+  background: #000000;
+}
+
+.viewer-note,
+.viewer-caption {
+  margin: 0.5rem 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.viewer-buttons {
+  justify-content: center;
 }
