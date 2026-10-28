@@ -212,7 +212,7 @@ describe('importing an Instagram post', () => {
     await importLink(user)
     await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
 
-    expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/instagram', body: { url: POST, use_model: true } }])
+    expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/link', body: { url: POST, use_model: true } }])
     const original = screen.getByText('הטקסט המקורי').closest('details')!
     expect(original).toHaveTextContent('כיתוב מהפוסט באינסטגרם')
     expect(original.querySelector('.original-text-body')?.textContent).toBe(INSTAGRAM_CAPTION)
@@ -297,22 +297,83 @@ describe('importing an Instagram post', () => {
     expect(api.changes()).toEqual([])
   })
 
-  it('says that recipe websites are not supported yet, sends nothing, and offers pasting the text', async () => {
-    const { user, api } = await openImport()
-    expect(screen.getByText(/כרגע אפשר לייבא קישורים לפוסטים ולסרטוני Reels ציבוריים באינסטגרם/)).toBeInTheDocument()
-    await user.click(linkBox())
-    await user.paste('https://www.example-recipes.co.il/cake')
-    await user.click(screen.getByRole('button', { name: 'ייבוא מהקישור' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('ייבוא מאתרי מתכונים עוד לא זמין')
-    expect(textBox()).toHaveFocus()
-    expect(api.changes()).toEqual([])
+})
 
-    // The text imports without the website's link (only an Instagram post's is stored with it).
+describe('importing a recipe page from a website', () => {
+  const PAGE = 'https://www.example-recipes.co.il/recipes/orange-cake/'
+
+  async function importPage(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(linkBox())
+    await user.paste(PAGE)
+    await user.click(screen.getByRole('button', { name: 'ייבוא מהקישור' }))
+  }
+
+  it('reads the page through the same field, then opens the draft beside the page\'s recipe data', async () => {
+    const { user, api } = await openImport({ extraction: LOCAL })
+    expect(screen.getByText(/ודפי מתכונים מאתרים/)).toBeInTheDocument() // what the field accepts
+    const release = api.holdNext()
+    await importPage(user)
+    expect(await screen.findByText(/קורא את דף המתכון, ואז המודל המקומי מסדר אותו/)).toBeInTheDocument()
+    release()
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+
+    expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/link', body: { url: PAGE, use_model: true } }])
+    const original = screen.getByText('הטקסט המקורי').closest('details')!
+    expect(original).toHaveTextContent('נתוני המתכון שבדף')
+    expect(original).toHaveTextContent('הקטגוריה נבחרה על ידי qwen3:8b')
+    expect(within(original).getByRole('link', { name: PAGE })).toHaveAttribute('href', PAGE)
+    expect(original).toHaveTextContent('המטבח של רותי')
+  })
+
+  it('a page that cannot be read says why, keeps the link, and offers pasting the recipe with it', async () => {
+    const { user, api } = await openImport()
+    api.answerNextWith(502, { error: { code: 'website_blocked', message: 'Refused (HTTP 403).', details: { url: PAGE } } })
+    await importPage(user)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('האתר סירב לשלוח את הדף למחברת')
+    expect(alert).toHaveTextContent('אפשר להעתיק את המתכון מהדף ולהדביק אותו בתיבה למטה; הקישור יישמר עם המתכון.')
+    expect(linkBox()).toHaveValue(PAGE)
+    expect(textBox()).toHaveFocus()
+
     await user.paste(PASTED)
-    expect(screen.queryByText(/הקישור שלמעלה יישמר עם המתכון/)).not.toBeInTheDocument()
+    expect(screen.getByText(/הקישור שלמעלה יישמר עם המתכון כמקור/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'קריאה עם Claude' }))
     await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
-    expect(api.changes()[0].body).toEqual({ text: PASTED, use_model: true })
+    expect(api.changes()[1].body).toEqual({ text: PASTED, use_model: true, url: PAGE })
+  })
+
+  it.each([
+    ['website_no_recipe', 'הדף נקרא, אבל לא נמצא בו מתכון.'],
+    ['website_incomplete', 'בטקסט שהאתר שולח יש רק חלק מהמתכון'],
+    ['website_ambiguous', 'בדף יש כמה מתכונים, ולא ברור איזה מהם הוא המתכון של הדף.'],
+    ['website_not_found', 'האתר אומר שאין דף כזה.'],
+    ['website_timeout', 'האתר לא ענה בזמן.'],
+  ])('explains %s in Hebrew and offers pasting the text', async (code, message) => {
+    const { user, api } = await openImport()
+    api.answerNextWith(422, { error: { code, message: 'English for the API.', details: { url: PAGE } } })
+    await importPage(user)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(message)
+    expect(alert).toHaveTextContent('אפשר להעתיק את המתכון מהדף')
+  })
+
+  it('an address on this computer or a private network is refused, with the focus on the link', async () => {
+    const { user, api } = await openImport()
+    api.answerNextWith(422, { error: { code: 'website_forbidden_address', message: 'Private.', details: { url: PAGE } } })
+    await importPage(user)
+    expect(await screen.findByRole('alert')).toHaveTextContent('הכתובת מובילה למחשב הזה או לרשת פרטית')
+    expect(linkBox()).toHaveFocus()
+  })
+
+  it('the same page again shows the recipe that has it', async () => {
+    const { user, api } = await openImport()
+    const [cake] = sampleRecipes
+    api.answerNextWith(409, {
+      error: { code: 'duplicate_link', message: 'Here already.', details: { url: PAGE, matches: [{ id: cake.id, title: cake.title, status: 'saved' }] } },
+    })
+    await importPage(user)
+    expect(await screen.findByText('הדף הזה כבר במחברת')).toBeInTheDocument()
   })
 })
 
@@ -334,7 +395,15 @@ describe('the import strip above the gallery', () => {
     await user.click(strip.getByRole('button', { name: 'ייבוא' }))
 
     expect(await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })).toBeInTheDocument()
-    expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/instagram', body: { url: POST, use_model: true } }])
+    expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/link', body: { url: POST, use_model: true } }])
+  })
+
+  it('reads a recipe page at once, the same way', async () => {
+    const { user, api, strip } = await renderGallery()
+    await user.type(strip.getByLabelText('קישור למתכון'), 'www.example-recipes.co.il/cake')
+    await user.click(strip.getByRole('button', { name: 'ייבוא' }))
+    expect(await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })).toBeInTheDocument()
+    expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/link', body: { url: 'www.example-recipes.co.il/cake', use_model: true } }])
   })
 
   it('"ייבוא מתכון" in the top bar moves to the link field', async () => {
@@ -343,16 +412,13 @@ describe('the import strip above the gallery', () => {
     expect(strip.getByLabelText('קישור למתכון')).toHaveFocus()
   })
 
-  it('says what it cannot import yet, and sends nothing', async () => {
+  it('asks for a link, and says when what was typed is not one, sending nothing', async () => {
     const { user, api, strip } = await renderGallery()
     await user.click(strip.getByRole('button', { name: 'ייבוא' }))
     expect(strip.getByText('הדביקו קודם קישור למתכון.')).toBeInTheDocument()
-
-    await user.type(strip.getByLabelText('קישור למתכון'), 'https://www.example-recipes.co.il/cake')
+    await user.type(strip.getByLabelText('קישור למתכון'), 'עוגת שוקולד')
     await user.click(strip.getByRole('button', { name: 'ייבוא' }))
-    expect(strip.getByText(/ייבוא מאתרי מתכונים עוד לא זמין/)).toBeInTheDocument()
-    await user.click(strip.getByRole('button', { name: 'להדבקת הטקסט' }))
-    expect(screen.getByLabelText('טקסט המתכון')).toHaveFocus()
+    expect(strip.getByText('זה לא נראה כמו קישור. קישור מתחיל ב-https://')).toBeInTheDocument()
     expect(api.changes()).toEqual([])
   })
 })

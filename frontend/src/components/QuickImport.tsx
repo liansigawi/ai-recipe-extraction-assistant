@@ -1,31 +1,28 @@
 import { useId, useState, type FormEvent, type Ref } from 'react'
-import { LINK_HELP, linkKind, NOT_A_LINK, WEBSITE_NOT_YET } from '../importLinks'
+import { LINK_HELP, linkKind, NOT_A_LINK } from '../importLinks'
 import Icon from './Icon'
 
 interface QuickImportProps {
   id: string
   inputRef?: Ref<HTMLInputElement>
-  /** An Instagram link: read it now, on the import screen. */
+  /** An Instagram post or a recipe page: read it now, on the import screen. */
   onImportLink: (url: string) => void
   onPasteText: () => void
   onCreate: () => void
 }
 
 // "ייבוא מתכון מקישור" in one row above the gallery: the link, its button, and the other ways to add a
-// recipe. Only Instagram links are imported today; for any other link the strip says so, and offers
-// pasting the recipe's text instead.
+// recipe. Any web link goes on to the import screen, which reads it (the backend chooses how).
 export default function QuickImport({ id, inputRef, onImportLink, onPasteText, onCreate }: QuickImportProps) {
   const fieldId = useId()
   const [url, setUrl] = useState('')
-  const [message, setMessage] = useState<{ tone: 'later' | 'error'; text: string } | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
 
   function submit(event: FormEvent) {
     event.preventDefault()
     const kind = linkKind(url)
-    if (kind === 'instagram') return onImportLink(url.trim())
-    if (kind === 'empty') setMessage({ tone: 'error', text: 'הדביקו קודם קישור למתכון.' })
-    else if (kind === 'website') setMessage({ tone: 'later', text: WEBSITE_NOT_YET })
-    else setMessage({ tone: 'error', text: NOT_A_LINK })
+    if (kind === 'instagram' || kind === 'website') return onImportLink(url.trim())
+    setMessage(kind === 'empty' ? 'הדביקו קודם קישור למתכון.' : NOT_A_LINK)
   }
 
   return (
@@ -69,16 +66,8 @@ export default function QuickImport({ id, inputRef, onImportLink, onPasteText, o
         </button>
         .
       </p>
-      <p id={`${fieldId}-message`} className={message === null ? 'quick-import-message' : `quick-import-message is-${message.tone}`} aria-live="polite">
-        {message?.text}
-        {message?.tone === 'later' && (
-          <>
-            {' '}
-            <button type="button" className="text-button" onClick={onPasteText}>
-              להדבקת הטקסט
-            </button>
-          </>
-        )}
+      <p id={`${fieldId}-message`} className="quick-import-message" aria-live="polite">
+        {message}
       </p>
     </section>
   )

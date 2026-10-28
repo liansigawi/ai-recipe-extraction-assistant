@@ -85,7 +85,7 @@ export interface Issue {
 /** The text a recipe was imported from, exactly as pasted. Read-only. */
 export interface ImportedOriginal {
   /** 'text': pasted by the person; 'instagram': the caption, read from the post. */
-  kind: 'text' | 'instagram'
+  kind: 'text' | 'instagram' | 'website'
   text: string
   /** The model that read it; null: saved without a model. */
   model: string | null
@@ -93,10 +93,13 @@ export interface ImportedOriginal {
   /** The post it came from (also for a caption pasted after reading the post failed). */
   url: string | null
   /** Which public page of the post supplied a caption read automatically. */
-  retrieved_from: 'post_page' | 'embed_view' | null
+  /** What supplied it: a post's page or embed view (Instagram); a page's recipe data or main text (a website). */
+  retrieved_from: 'post_page' | 'embed_view' | 'json_ld' | 'microdata' | 'page_text' | null
   /** Who posted it, as read from the post (never edited; the credit you edit is in the sources). */
   author: Creator | null
   coauthors: Creator[]
+  /** A website's own name, as its page gives it. */
+  site_name?: string | null
 }
 
 /** A file saved on this computer, served at its url. */
@@ -115,7 +118,7 @@ export interface RecipeMediaItem {
   status: 'saved' | 'thumbnail_only'
   file: MediaFileRef | null
   thumbnail: MediaFileRef | null
-  origin: 'instagram' | 'upload'
+  origin: 'instagram' | 'upload' | 'website'
   post_url: string | null
   post_index: number | null
   width: number | null

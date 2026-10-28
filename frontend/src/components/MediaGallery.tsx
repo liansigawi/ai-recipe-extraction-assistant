@@ -231,7 +231,7 @@ function MediaViewer({ title, media, index, coverId, onIndex, onClose, onCover, 
       </div>
       <p className="viewer-caption">
         {itemLabel(item, index, media.length, isCover)}
-        {item.origin === 'upload' ? ' · הועלתה מהמחשב' : ' · מהפוסט'}
+        {item.origin === 'upload' ? ' · הועלתה מהמחשב' : item.origin === 'website' ? ' · מדף המתכון' : ' · מהפוסט'}
         {item.origin === 'instagram' && item.post_url !== null && item.status !== 'thumbnail_only' && (
           <>
             {' · '}

@@ -110,7 +110,34 @@ export function errorMessage(error: unknown): string {
     case 'instagram_caption_incomplete':
       return 'נקראה רק תצוגה מקדימה של הכיתוב, וייתכן שהיא קטועה.'
     case 'duplicate_link':
-      return 'הפוסט הזה כבר במחברת.'
+      return 'הקישור הזה כבר במחברת.'
+    // Recipe websites (backend/app/importers/website.py).
+    case 'website_invalid_url':
+      return 'זה לא נראה כמו כתובת של דף אינטרנט. העתיקו את הכתובת מסרגל הכתובות של הדפדפן (https://...).'
+    case 'website_forbidden_address':
+      return 'הכתובת מובילה למחשב הזה או לרשת פרטית, והמחברת לא קוראת כתובות כאלה. אפשר לייבא רק דפים ציבוריים באינטרנט.'
+    case 'website_blocked':
+      return 'האתר סירב לשלוח את הדף למחברת (יש אתרים שחוסמים קריאה שלא מדפדפן).'
+    case 'website_not_found':
+      return 'האתר אומר שאין דף כזה. בדקו את הקישור.'
+    case 'website_http_error':
+      return 'האתר החזיר שגיאה.'
+    case 'website_unreachable':
+      return 'לא הצלחנו להגיע לאתר. בדקו את הקישור ואת החיבור לאינטרנט.'
+    case 'website_timeout':
+      return 'האתר לא ענה בזמן.'
+    case 'website_too_large':
+      return 'הדף גדול מדי לקריאה.'
+    case 'website_too_many_redirects':
+      return 'האתר העביר את הבקשה שוב ושוב בלי להגיע לדף.'
+    case 'website_not_html':
+      return 'הקישור לא מוביל לדף אינטרנט (למשל לקובץ PDF או לתמונה).'
+    case 'website_no_recipe':
+      return 'הדף נקרא, אבל לא נמצא בו מתכון.'
+    case 'website_incomplete':
+      return 'בטקסט שהאתר שולח יש רק חלק מהמתכון (למשל בלי רשימת המצרכים, שהדף מציג רק בדפדפן). המחברת לא משלימה מתכון בעצמה.'
+    case 'website_ambiguous':
+      return 'בדף יש כמה מתכונים, ולא ברור איזה מהם הוא המתכון של הדף. המחברת לא מערבבת מתכונים.'
     // Pictures and videos (backend/app/media.py).
     case 'unsupported_media':
       return 'אפשר להעלות רק תמונה: JPEG, PNG, WebP או GIF.'
@@ -220,9 +247,11 @@ export function importText(
  * draft for review. Takes a few seconds more than pasted text. When the post cannot be read, the
  * error's details carry the address and any caption that was read (captionFrom below).
  */
-export function importInstagram(url: string, useModel: boolean, allowDuplicate = false): Promise<Recipe> {
+/** Any recipe link: the backend reads an Instagram post with Instagram's importer and any other page with
+ * the website importer (by the host name). */
+export function importLink(url: string, useModel: boolean, allowDuplicate = false): Promise<Recipe> {
   const body = { url, use_model: useModel, ...(allowDuplicate ? { allow_duplicate: true } : {}) }
-  return request('/api/imports/instagram', { method: 'POST', body: JSON.stringify(body) })
+  return request('/api/imports/link', { method: 'POST', body: JSON.stringify(body) })
 }
 
 /** The recipes that already have this post, when an import stopped for that (duplicate_link). */

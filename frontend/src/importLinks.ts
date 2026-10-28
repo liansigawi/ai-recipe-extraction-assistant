@@ -1,14 +1,17 @@
-// Which importer a pasted link goes to. Today only public Instagram posts import; recipe websites
-// are a later milestone, and the page says so instead of sending a link nothing can read yet.
+// What a pasted link is, for the page's own checks and messages. The backend chooses the importer by
+// the host name (POST /api/imports/link): Instagram's for a post or Reel, the website importer for any
+// other page.
 
 export type LinkKind = 'empty' | 'instagram' | 'website' | 'not_a_link'
 
 export function linkKind(text: string): LinkKind {
   const value = text.trim()
   if (value === '') return 'empty'
+  // "example.com/cake", pasted without https://, is a link too (the backend adds it).
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(value) || !/^[^\s/]+\.[^\s/]+/.test(value) ? value : `https://${value}`
   let url: URL
   try {
-    url = new URL(value)
+    url = new URL(withScheme)
   } catch {
     return 'not_a_link'
   }
@@ -16,9 +19,8 @@ export function linkKind(text: string): LinkKind {
   return /(^|\.)instagram\.com$/i.test(url.hostname) ? 'instagram' : 'website'
 }
 
-/** What "ייבוא מתכון מקישור" accepts today. */
-export const LINK_HELP = 'כרגע אפשר לייבא קישורים לפוסטים ולסרטוני Reels ציבוריים באינסטגרם. ייבוא מאתרי מתכונים יתווסף בהמשך.'
-
-export const WEBSITE_NOT_YET = 'ייבוא מאתרי מתכונים עוד לא זמין. בינתיים אפשר להעתיק את המתכון מהאתר ולהדביק את הטקסט.'
+/** What "ייבוא מתכון מקישור" accepts. */
+export const LINK_HELP =
+  'אפשר לייבא פוסטים וסרטוני Reels ציבוריים מאינסטגרם, ודפי מתכונים מאתרים. לא כל אתר נקרא: אם דף לא נקרא, אפשר להדביק את טקסט המתכון.'
 
 export const NOT_A_LINK = 'זה לא נראה כמו קישור. קישור מתחיל ב-https://'

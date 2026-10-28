@@ -13,18 +13,31 @@ interface OriginalTextProps {
 // open/close box: its <summary> line is a button that works with the keyboard.
 export default function OriginalText({ original, open = false, sticky = false }: OriginalTextProps) {
   // Only web addresses become links (the backend stores the post's canonical https address).
-  const postUrl = original.url !== null && original.url.startsWith('https://') ? original.url : null
+  const postUrl = original.url !== null && /^https?:\/\//.test(original.url) ? original.url : null
+  // A page's own recipe data: copied as it was, not read by a model (which chose only the category).
+  const structured = original.retrieved_from === 'json_ld' || original.retrieved_from === 'microdata'
   return (
     <details className={sticky ? 'original-text original-text-sticky' : 'original-text'} open={open}>
       <summary>
         הטקסט המקורי
         <span className="original-text-meta">
           {original.kind === 'instagram' && ' · כיתוב מהפוסט באינסטגרם'}
+          {structured && ' · נתוני המתכון שבדף'}
+          {original.retrieved_from === 'page_text' && ' · הטקסט הראשי של הדף'}
           {original.model !== null ? (
-            <>
-              {' '}
-              · נקרא על ידי <bdi>{original.model}</bdi>
-            </>
+            structured ? (
+              <>
+                {' '}
+                · הקטגוריה נבחרה על ידי <bdi>{original.model}</bdi>
+              </>
+            ) : (
+              <>
+                {' '}
+                · נקרא על ידי <bdi>{original.model}</bdi>
+              </>
+            )
+          ) : structured ? (
+            ''
           ) : (
             ' · נשמר בלי עיבוד'
           )}
@@ -32,15 +45,21 @@ export default function OriginalText({ original, open = false, sticky = false }:
       </summary>
       {postUrl !== null && (
         <p className="original-text-source">
-          {original.kind === 'instagram' ? 'הפוסט: ' : 'הודבק מהפוסט: '}
+          {original.kind === 'instagram' ? 'הפוסט: ' : original.kind === 'website' ? 'הדף: ' : 'הודבק מ: '}
           <a href={postUrl} target="_blank" rel="noopener noreferrer" dir="ltr">
             {postUrl}
           </a>
           {original.retrieved_from === 'embed_view' &&
             ' (נקרא מתצוגת ההטמעה הציבורית של הפוסט, שעלולה לפגר אחרי עריכות אחרונות)'}
+          {original.kind === 'website' && original.site_name && (
+            <>
+              {' · '}
+              <bdi>{original.site_name}</bdi>
+            </>
+          )}
           {original.author !== null && (
             <>
-              {' · פורסם על ידי '}
+              {original.kind === 'website' ? ' · מאת ' : ' · פורסם על ידי '}
               {[original.author, ...original.coauthors].map((person, index) => (
                 <span key={index}>
                   {index > 0 && ', '}

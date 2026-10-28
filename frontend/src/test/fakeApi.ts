@@ -25,6 +25,9 @@ export const AMBIGUOUS: Issue = {
   quote: null,
 }
 
+/** What the fake backend "reads" from any recipe page (rendered from its recipe data). */
+export const WEBSITE_TEXT = 'עוגת תפוזים ושקדים\n\nמצרכים\n200 גרם קמח\n2 ביצים\n\nאופן ההכנה\n1. מערבבים ואופים.'
+
 /** The caption the fake backend "reads" from any Instagram post. */
 export const INSTAGRAM_CAPTION = 'עוגת לימון של סבתא 🍋\n3 ביצים\nמערבבים ואופים 40 דקות.\n#עוגה'
 
@@ -253,7 +256,44 @@ export function fakeApi(initial: {
       recipes = [draft, ...recipes]
       return json(201, draft)
     }
-    if (path === '/api/imports/instagram' && method === 'POST') {
+    if (path === '/api/imports/link' && method === 'POST' && !/instagram\.com/i.test((body as { url: string }).url)) {
+      // A recipe page: read as WEBSITE_TEXT, unless a test queued another answer (answerNextWith).
+      const { url, use_model: useModel } = body as { url: string; use_model: boolean }
+      const draft: Recipe = {
+        id: nextId++,
+        title: 'טיוטה',
+        category: null,
+        subcategory: null,
+        servings: null,
+        ingredient_groups: [],
+        step_groups: [],
+        notes: [],
+        sources: [{ kind: 'website', url, creators: [{ name: 'המטבח של רותי', username: null }] }],
+        is_sample: false,
+        status: 'draft',
+        issues: [],
+        cooked: false,
+        original: {
+          kind: 'website',
+          text: WEBSITE_TEXT,
+          model: useModel ? extraction.model : null,
+          imported_at: SAVED_AT,
+          url,
+          retrieved_from: 'json_ld',
+          author: { name: 'המטבח של רותי', username: null },
+          coauthors: [],
+          site_name: 'המטבח של רותי',
+        },
+        media: [],
+        cover_id: null,
+        created_at: SAVED_AT,
+        updated_at: SAVED_AT,
+        ...draftFor(WEBSITE_TEXT, useModel),
+      }
+      recipes = [draft, ...recipes]
+      return json(201, draft)
+    }
+    if ((path === '/api/imports/instagram' || path === '/api/imports/link') && method === 'POST') {
       // Reads every post as INSTAGRAM_CAPTION, unless a test queued another answer (answerNextWith).
       const { url, use_model: useModel } = body as { url: string; use_model: boolean }
       const draft: Recipe = {

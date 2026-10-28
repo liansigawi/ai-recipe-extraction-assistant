@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ApiError, captionFrom, errorMessage, getExtractionInfo, importInstagram, importText, linkedRecipesFrom } from '../api'
-import { LINK_HELP, linkKind, NOT_A_LINK, WEBSITE_NOT_YET } from '../importLinks'
+import { ApiError, captionFrom, errorMessage, getExtractionInfo, importLink, importText, linkedRecipesFrom } from '../api'
+import { LINK_HELP, linkKind, NOT_A_LINK } from '../importLinks'
 import type { ExtractionInfo, LinkedRecipe, Recipe } from '../types'
 
 const MAX_CHARACTERS = 20_000 // the backend's limit (MAX_IMPORT_CHARACTERS)
@@ -27,8 +27,12 @@ function storeText(text: string): void {
   }
 }
 
-/** What to do next after an Instagram import failed, added to the reason. */
+/** What to do next after a link could not be imported, added to the reason. */
 function fallbackHint(error: unknown, captionInBox: boolean): string {
+  if (error instanceof ApiError && (error.code === 'website_invalid_url' || error.code === 'website_forbidden_address')) return ''
+  if (error instanceof ApiError && error.code.startsWith('website_')) {
+    return 'אפשר להעתיק את המתכון מהדף ולהדביק אותו בתיבה למטה; הקישור יישמר עם המתכון.'
+  }
   if (error instanceof ApiError && error.code === 'instagram_caption_incomplete') {
     return captionInBox
       ? 'הכיתוב החלקי הועתק לתיבה למטה: השוו לפוסט באינסטגרם, השלימו את החסר וקראו אותו משם.'
@@ -73,7 +77,7 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
   const [preview, setPreview] = useState<string | null>(null)
   const [info, setInfo] = useState<ExtractionInfo | null>(null)
   const [infoCheck, setInfoCheck] = useState(0) // changing it asks the backend again ("check again")
-  const [working, setWorking] = useState<'instagram' | 'model' | 'manual' | null>(null)
+  const [working, setWorking] = useState<'link' | 'model' | 'manual' | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Where the message belongs: under the link (reading the post) or under the text box.
   const [errorAt, setErrorAt] = useState<'link' | 'text'>('text')
@@ -84,8 +88,9 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
   const textRef = useRef<HTMLTextAreaElement>(null)
   // Set once the strip's link was sent: React runs effects twice in development, the import only once.
   const started = useRef(false)
-  // The link saved with pasted text: an Instagram post's only (a website's cannot be read or stored yet).
-  const textLink = linkKind(url) === 'instagram' ? url.trim() : ''
+  // The link saved with pasted text, as its source: an Instagram post or a recipe page.
+  const textLink = linkKind(url) === 'instagram' || linkKind(url) === 'website' ? url.trim() : ''
+  const readingWebsite = linkKind(url) === 'website'
 
   // Who reads the text: Claude (sent to Anthropic) or a local model (stays on this computer).
   const local = info?.local ?? false
@@ -97,7 +102,7 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
     else urlRef.current?.focus()
     if (startNow && !started.current) {
       started.current = true
-      void startInstagram()
+      void startLink()
     }
     // Only when the screen opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,7 +140,8 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
     return true
   }
 
-  async function startInstagram(allowDuplicate = anotherCopyOf === url.trim()) {
+  /** "ייבוא מהקישור": an Instagram post or a recipe page; the backend chooses how to read it. */
+  async function startLink(allowDuplicate = anotherCopyOf === url.trim()) {
     if (working !== null) return
     setErrorAt('link')
     setDuplicate(null)
@@ -145,19 +151,14 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
       urlRef.current?.focus()
       return
     }
-    if (kind === 'website') {
-      setError(`${WEBSITE_NOT_YET} הדביקו אותו בתיבה למטה.`)
-      textRef.current?.focus()
-      return
-    }
-    setWorking('instagram')
+    setWorking('link')
     setError(null)
     try {
-      onImported(await importInstagram(url.trim(), modelReady, allowDuplicate))
+      onImported(await importLink(url.trim(), modelReady, allowDuplicate))
     } catch (failure) {
       const matches = linkedRecipesFrom(failure)
       if (matches !== null) {
-        setDuplicate({ matches, again: () => anotherCopy(() => startInstagram(true)) })
+        setDuplicate({ matches, again: () => anotherCopy(() => startLink(true)) })
         setWorking(null)
         return
       }
@@ -167,7 +168,8 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
       setPreview(inBox && incomplete ? caption : null)
       setError([errorMessage(failure), fallbackHint(failure, inBox)].filter(Boolean).join(' '))
       setWorking(null)
-      if (failure instanceof ApiError && failure.code === 'invalid_instagram_url') urlRef.current?.focus()
+      const linkIsWrong = ['invalid_instagram_url', 'website_invalid_url', 'website_forbidden_address']
+      if (failure instanceof ApiError && linkIsWrong.includes(failure.code)) urlRef.current?.focus()
       else textRef.current?.focus()
     }
   }
@@ -243,30 +245,34 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
               setError(null)
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') void startInstagram()
+              if (event.key === 'Enter') void startLink()
             }}
           />
-          <button type="button" className="button-primary" onClick={() => void startInstagram()}>
-            {working === 'instagram' ? 'קורא…' : modelReady ? 'ייבוא מהקישור' : 'ייבוא מהקישור בלי עיבוד'}
+          <button type="button" className="button-primary" onClick={() => void startLink()}>
+            {working === 'link' ? 'קורא…' : modelReady ? 'ייבוא מהקישור' : 'ייבוא מהקישור בלי עיבוד'}
           </button>
         </div>
         <p id={`${id}-url-hint`} className="field-hint">
-          {LINK_HELP} הכיתוב נקרא מהפוסט הציבורי, בלי התחברות לאינסטגרם, ונשמר כפי שהוא לצד הטיוטה, עם הקישור. פוסט פרטי, או כזה
-          שאינסטגרם לא מציג בלי התחברות, אי אפשר לקרוא: אז מדביקים את הכיתוב למטה.
+          {LINK_HELP} מאינסטגרם נקרא הכיתוב של הפוסט הציבורי, בלי התחברות. מאתר נקראים נתוני המתכון שבדף, ואם אין כאלה, הטקסט
+          הראשי שלו. מה שנקרא נשמר כפי שהוא לצד הטיוטה, עם הקישור.
         </p>
         {/* <output> is announced by screen readers when its text changes. */}
         <output className="working-note">
-          {working === 'instagram' &&
-            (modelReady
-              ? `קורא את הכיתוב מהפוסט באינסטגרם, ואז ${local ? 'המודל המקומי' : 'Claude'} מסדר אותו לטיוטה… בדרך כלל עד דקה.`
-              : 'קורא את הכיתוב מהפוסט באינסטגרם…')}
+          {working === 'link' &&
+            (readingWebsite
+              ? modelReady
+                ? `קורא את דף המתכון, ואז ${local ? 'המודל המקומי' : 'Claude'} מסדר אותו לטיוטה… בדרך כלל עד דקה.`
+                : 'קורא את דף המתכון…'
+              : modelReady
+                ? `קורא את הכיתוב מהפוסט באינסטגרם, ואז ${local ? 'המודל המקומי' : 'Claude'} מסדר אותו לטיוטה… בדרך כלל עד דקה.`
+                : 'קורא את הכיתוב מהפוסט באינסטגרם…')}
         </output>
         {error !== null && errorAt === 'link' && (
           <p role="alert" className="form-alert">
             {error}
           </p>
         )}
-        {duplicate !== null && errorAt === 'link' && <DuplicateNotice duplicate={duplicate} onOpen={onOpenRecipe} />}
+        {duplicate !== null && errorAt === 'link' && <DuplicateNotice duplicate={duplicate} onOpen={onOpenRecipe} page={readingWebsite} />}
       </div>
 
       <p className="import-divider">או הדביקו את הטקסט</p>
@@ -330,7 +336,7 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
       <output className="working-note">
         {working === 'model' && (local ? 'המודל המקומי קורא את המתכון… בדרך כלל זה לוקח עד דקה.' : 'Claude קורא את המתכון… בדרך כלל זה לוקח פחות מדקה.')}
       </output>
-      {duplicate !== null && errorAt === 'text' && <DuplicateNotice duplicate={duplicate} onOpen={onOpenRecipe} />}
+      {duplicate !== null && errorAt === 'text' && <DuplicateNotice duplicate={duplicate} onOpen={onOpenRecipe} page={readingWebsite} />}
       {error !== null && errorAt === 'text' && (
         <p role="alert" className="form-alert">
           {error}
@@ -352,13 +358,14 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
   )
 }
 
-/** The post is already in the notebook: open a recipe that has it, or import another copy. Nothing is replaced. */
-function DuplicateNotice({ duplicate, onOpen }: { duplicate: Duplicate; onOpen: (id: number) => void }) {
+/** The post or page is already in the notebook: open a recipe that has it, or import another copy.
+ * Nothing is replaced. */
+function DuplicateNotice({ duplicate, onOpen, page }: { duplicate: Duplicate; onOpen: (id: number) => void; page: boolean }) {
   const { matches, again } = duplicate
   return (
     <div role="alert" className="duplicate-notice">
       <p>
-        <strong>הפוסט הזה כבר במחברת</strong>
+        <strong>{page ? 'הדף הזה כבר במחברת' : 'הפוסט הזה כבר במחברת'}</strong>
         {matches.length === 1 ? ', במתכון:' : `, ב-${matches.length} מתכונים:`}
       </p>
       <ul className="duplicate-list">

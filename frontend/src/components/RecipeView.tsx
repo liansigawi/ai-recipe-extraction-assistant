@@ -173,7 +173,7 @@ function CreditLine({ sources }: { sources: Source[] }) {
         <>
           {credited !== undefined && ' · '}
           <a href={post.url} target="_blank" rel="noreferrer">
-            {post.kind === 'instagram' ? 'לפוסט המקורי באינסטגרם' : 'למקור'}
+            {post.kind === 'instagram' ? 'לפוסט המקורי באינסטגרם' : post.kind === 'website' ? 'לדף המתכון' : 'למקור'}
           </a>
         </>
       )}
