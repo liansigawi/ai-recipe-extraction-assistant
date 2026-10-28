@@ -106,7 +106,7 @@ class RecipeImport(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     recipe_id: Mapped[int] = mapped_column(ForeignKey("recipes.id", ondelete="CASCADE"), unique=True)
-    kind: Mapped[str]  # "text" (pasted) or "instagram" (the caption, read from the post)
+    kind: Mapped[str]  # "text" (pasted), "instagram" (the caption, read from the post) or "website"
     original_text: Mapped[str] = mapped_column(Text)
     model: Mapped[str | None]  # the model that read it; None: saved without a model
     imported_at: Mapped[datetime] = mapped_column(UTCDateTime)
@@ -138,7 +138,7 @@ class RecipeMedia(Base):
         UniqueConstraint("recipe_id", "post_shortcode", "post_index"),
         CheckConstraint("kind IN ('image', 'video')", name="media_kind"),
         CheckConstraint("status IN ('saved', 'thumbnail_only')", name="media_status"),
-        CheckConstraint("origin IN ('instagram', 'upload')", name="media_origin"),
+        CheckConstraint("origin IN ('instagram', 'upload', 'website')", name="media_origin"),
         CheckConstraint("file_id IS NOT NULL OR thumbnail_file_id IS NOT NULL", name="media_has_a_file"),
         # At most one cover per recipe.
         Index("one_cover_per_recipe", "recipe_id", unique=True, sqlite_where=text("is_cover = 1")),
@@ -152,7 +152,7 @@ class RecipeMedia(Base):
     status: Mapped[str]
     file_id: Mapped[int | None] = mapped_column(ForeignKey("media_files.id"))  # the picture or the video
     thumbnail_file_id: Mapped[int | None] = mapped_column(ForeignKey("media_files.id"))  # a video's poster
-    origin: Mapped[str]  # "instagram" or "upload"
+    origin: Mapped[str]  # "instagram", "upload" or "website" (a recipe page's main picture)
     post_url: Mapped[str | None]
     post_shortcode: Mapped[str | None]
     post_index: Mapped[int | None]  # its place in the post, from 0

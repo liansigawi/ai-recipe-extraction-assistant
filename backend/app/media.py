@@ -323,6 +323,20 @@ def attach_upload(session: Session, root: Path, recipe: models.Recipe, data: byt
     return attachment
 
 
+def attach_website_image(session: Session, root: Path, recipe: models.Recipe, page_url: str, data: bytes) -> models.RecipeMedia:
+    """A recipe page's main picture, read from the site (app/importers/website.py): checked by its first
+    bytes and saved once, like any picture. MediaError when it is not a picture that can be saved."""
+    stored = store_bytes(root, data, IMAGES)
+    file = _file_row(session, stored)
+    attachment = models.RecipeMedia(
+        recipe_id=recipe.id, kind="image", status="saved", file_id=file.id, origin="website", post_url=page_url,
+        created_at=utc_now(),
+    )
+    session.add(attachment)
+    session.commit()
+    return attachment
+
+
 def set_cover(session: Session, recipe: models.Recipe, media_id: int | None) -> None:
     """The recipe's cover: one of its pictures or video posters, or None for the default (the first)."""
     session.refresh(recipe, attribute_names=["media"])

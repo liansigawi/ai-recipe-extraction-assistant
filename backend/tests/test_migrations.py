@@ -413,6 +413,36 @@ def test_0010_leaves_every_recipe_unmarked_and_changes_nothing_else(tmp_path):
     assert rows(path, "recipes") == before
 
 
+def test_0011_lets_a_recipe_page_s_picture_in_and_keeps_every_attachment(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.upgrade(alembic_config(connection), "0010")
+    engine.dispose()
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("INSERT INTO media_files (id, sha256, path, content_type, size_bytes, created_at) VALUES (1, 'aa', 'aa/aa.jpg', 'image/jpeg', 3, '2026-10-28')")
+        db.execute("INSERT INTO recipe_media (id, recipe_id, kind, status, file_id, origin, is_cover, created_at) VALUES (1, 1, 'image', 'saved', 1, 'upload', 1, '2026-10-28')")
+        db.commit()
+        before = rows(path, "recipe_media")
+        with pytest.raises(sqlite3.IntegrityError):  # not yet
+            db.execute("INSERT INTO recipe_media (recipe_id, kind, status, file_id, origin, created_at) VALUES (2, 'image', 'saved', 1, 'website', '2026-10-28')")
+    upgrade_database(path)
+    assert rows(path, "recipe_media") == before
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("INSERT INTO recipe_media (recipe_id, kind, status, file_id, origin, post_url, created_at) VALUES (2, 'image', 'saved', 1, 'website', 'https://example.com/', '2026-10-28')")
+        db.commit()
+        with pytest.raises(sqlite3.IntegrityError):  # still one cover per recipe
+            db.execute("INSERT INTO recipe_media (recipe_id, kind, status, file_id, origin, is_cover, created_at) VALUES (1, 'image', 'saved', 1, 'upload', 1, '2026-10-28')")
+        with pytest.raises(sqlite3.IntegrityError):  # and only the known origins
+            db.execute("INSERT INTO recipe_media (recipe_id, kind, status, file_id, origin, created_at) VALUES (2, 'image', 'saved', 1, 'elsewhere', '2026-10-28')")
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.downgrade(alembic_config(connection), "0010")
+    engine.dispose()
+    assert rows(path, "recipe_media") == before  # the website picture's attachment went; the rest stayed
+
+
 def test_0008_turns_each_credit_into_a_name_or_a_username_and_downgrade_turns_it_back(tmp_path):
     path = tmp_path / "recipes.db"
     database_at_0004(path)

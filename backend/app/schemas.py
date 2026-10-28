@@ -194,9 +194,11 @@ class Issue(ContractModel):
     quote: NonEmptyStr | None = None  # the exact words of the original text it is about, if any
 
 
-ImportKind = Literal["text", "instagram"]  # websites and screenshots come later in milestone 5
-# Which public page of the post supplied a caption read automatically (app/importers/instagram.py).
-RetrievedFrom = Literal["post_page", "embed_view"]
+ImportKind = Literal["text", "instagram", "website"]  # screenshots come later
+# What supplied an original read automatically: the post's page or its embed view (Instagram,
+# app/importers/instagram.py); a website's Schema.org recipe data (JSON-LD or microdata), or its main
+# text (app/importers/website.py).
+RetrievedFrom = Literal["post_page", "embed_view", "json_ld", "microdata", "page_text"]
 
 
 class ImportedOriginal(ContractModel):
@@ -204,7 +206,7 @@ class ImportedOriginal(ContractModel):
 
     model_config = ConfigDict(str_strip_whitespace=False)  # returned exactly as stored, edges included
 
-    kind: ImportKind  # "text": pasted by the person; "instagram": the caption, read from the post
+    kind: ImportKind  # "text": pasted; "instagram": the caption, read from the post; "website": a recipe page
     text: str
     model: NonEmptyStr | None  # the model that read it; None: saved without a model
     imported_at: AwareDatetime
@@ -214,6 +216,7 @@ class ImportedOriginal(ContractModel):
     # edits to the credit go to the recipe's sources; these stay as retrieved.
     author: Creator | None = None
     coauthors: list[Creator] = []
+    site_name: str | None = None  # a website's own name, as its page gives it
 
 
 class MediaFileRef(ContractModel):
@@ -234,8 +237,8 @@ class RecipeMediaItem(ContractModel):
     status: Literal["saved", "thumbnail_only"]
     file: MediaFileRef | None  # the picture or the video
     thumbnail: MediaFileRef | None  # a video's poster
-    origin: Literal["instagram", "upload"]
-    post_url: str | None
+    origin: Literal["instagram", "upload", "website"]  # "website": a recipe page's main picture
+    post_url: str | None  # the post, or the recipe page, it came from
     post_index: int | None  # its place in the post, from 0
     width: int | None
     height: int | None
@@ -364,6 +367,15 @@ class InstagramImport(ContractModel):
     allow_duplicate: bool = False
 
 
+class LinkImport(ContractModel):
+    """POST /api/imports/link: any recipe link. The host name chooses the importer: Instagram's for a
+    post or Reel, the website importer for any other page."""
+
+    url: str = Field(min_length=1, max_length=2000)
+    use_model: bool = True  # False: no model (a page's recipe data still fills the draft; its text does not)
+    allow_duplicate: bool = False  # True: import another copy of a link already in the notebook
+
+
 class TextImport(ContractModel):
     """POST /api/imports/text: recipe text the person pasted."""
 
@@ -372,7 +384,7 @@ class TextImport(ContractModel):
 
     text: str = Field(min_length=1, max_length=MAX_IMPORT_CHARACTERS)
     use_model: bool = True  # False: save the text as a draft to fill in by hand, without Claude
-    # The Instagram post the text was copied from, when reading the post itself failed: kept with
+    # The Instagram post or recipe page the text was copied from, when reading it failed: kept with
     # the original and as the recipe's source.
     url: str | None = Field(default=None, max_length=2000)
     # The text is a caption preview that may be cut off, sent unchanged: the draft says so.

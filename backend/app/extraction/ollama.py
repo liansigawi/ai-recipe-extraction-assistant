@@ -20,7 +20,7 @@ from pydantic import ValidationError
 
 from app import schemas
 from app.errors import ApiError
-from app.extraction.output import NO_CATEGORY, ClassificationAnswer, ExtractionOutput, ReferenceLabels, ReferenceOutput
+from app.extraction.output import NO_CATEGORY, Classification, ClassificationAnswer, ExtractionOutput, ReferenceLabels, ReferenceOutput
 from app.extraction.prompt import ModelRequest, build_classification_request, build_request
 from app.extraction.review import is_recipe, make_draft
 
@@ -85,6 +85,15 @@ class OllamaExtractor:
             log.warning("Classification request failed (%s); the recipe stays unclassified.", error)
             return output
         return output.model_copy(update={"classification": answer.classification, "dish": answer.dish})
+
+    def classify_draft(self, draft: schemas.RecipeInput, categories: list[schemas.Category]) -> Classification:
+        """Only the category of a draft that is complete already (a page's own recipe data): the same
+        short request as after labeling. Any failure is the caller's to handle (the draft stays unclassified)."""
+        request = build_classification_request(draft, categories)
+        try:
+            return ClassificationAnswer.model_validate_json(self._chat(request, len(request.user))).classification
+        except ValidationError:
+            raise ApiError(502, "extraction_invalid_output", "The local model's classification did not have the expected shape.") from None
 
     def _chat(self, request: ModelRequest, characters: int) -> str:
         """One request to the model, its answer as text. Tokens add up in last_usage."""

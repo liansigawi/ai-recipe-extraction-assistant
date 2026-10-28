@@ -42,6 +42,7 @@ def to_schema(row: models.Recipe) -> schemas.Recipe:
                 retrieved_from=row.original.retrieved_from,
                 author=(row.original.source_details or {}).get("author"),
                 coauthors=(row.original.source_details or {}).get("coauthors", []),
+                site_name=(row.original.source_details or {}).get("site_name"),
             )
             if row.original
             else None

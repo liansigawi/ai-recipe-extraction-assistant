@@ -13,8 +13,8 @@ from pydantic import ValidationError
 
 from app import schemas
 from app.errors import ApiError
-from app.extraction.output import ExtractionOutput, ReferenceOutput
-from app.extraction.prompt import build_request
+from app.extraction.output import Classification, ClassificationAnswer, ExtractionOutput, ReferenceOutput
+from app.extraction.prompt import build_classification_request, build_request
 
 log = logging.getLogger("uvicorn.error")
 
@@ -29,6 +29,10 @@ class Extractor(Protocol):
     model: str
 
     def extract(self, text: str, categories: list[schemas.Category]) -> ExtractionOutput | ReferenceOutput: ...
+
+    # Also, for a draft taken from a page's own recipe data: only its category (the same rules, the same
+    # existing categories). Optional for stand-ins: the website import works without it, unclassified.
+    # def classify_draft(self, draft: schemas.RecipeInput, categories: list[schemas.Category]) -> Classification: ...
 
 
 class ClaudeExtractor:
@@ -93,3 +97,19 @@ class ClaudeExtractor:
             return answer_type.model_validate_json(self.last_raw)
         except ValidationError:
             raise ApiError(502, "extraction_invalid_output", "Claude's answer did not have the expected shape.") from None
+
+    def classify_draft(self, draft: schemas.RecipeInput, categories: list[schemas.Category]) -> Classification:
+        """Only the category of a draft that is complete already (a page's own recipe data). Any failure
+        is the caller's to handle: the draft then stays unclassified."""
+        request = build_classification_request(draft, categories)
+        response = self._client.messages.create(
+            model=self.model,
+            max_tokens=2_000,
+            system=request.system,
+            messages=[{"role": "user", "content": request.user}],
+            output_config={"format": {"type": "json_schema", "schema": request.schema}},
+        )
+        if response.stop_reason != "end_turn":
+            raise ApiError(502, "extraction_incomplete", f"Claude's classification stopped early ({response.stop_reason}).")
+        text = "".join(block.text for block in response.content if block.type == "text")
+        return ClassificationAnswer.model_validate_json(text).classification

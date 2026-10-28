@@ -961,6 +961,14 @@ def _listed(words: str, listed: str) -> bool:
     return True
 
 
+def content_points(lines: list[str], steps: list[str], source_text: str) -> list[schemas.Issue]:
+    """The checks that need no model, for a draft built without one (a page's own recipe data):
+    ingredients only the steps mention, and what baking needs that the text does not give."""
+    return [_only_in_step_point(words, step) for words, step in ingredient_words.only_in_steps(lines, steps)] + _missing_information(
+        source_text, steps
+    )
+
+
 def _missing_information(source_text: str, steps: list[str]) -> list[schemas.Issue]:
     """What a cook needs to bake and the text does not give: the oven's temperature, the baking time."""
     issues = []

@@ -61,6 +61,7 @@ def test_a_post_becomes_a_draft_with_its_caption_and_address_kept(client, use, r
         "kind": "instagram", "text": SOURCE, "model": "claude-test-model", "imported_at": None,
         "url": POST, "retrieved_from": "post_page",
         "author": {"name": "אופה ביתית", "username": "baker"}, "coauthors": [{"name": None, "username": "friend"}],
+        "site_name": None,
     }
     # The editable source: the post, its author and co-author.
     credit = [{"name": "אופה ביתית", "username": "baker"}, {"name": None, "username": "friend"}]
@@ -153,10 +154,22 @@ def test_pasted_text_after_a_failed_read_keeps_the_post_address(client, use):
     assert draft["sources"] == [{"kind": "instagram", "url": CANONICAL_REEL, "creators": []}]
 
 
-def test_pasted_text_with_an_address_that_is_not_a_post_is_refused(client, use):
+def test_pasted_text_keeps_a_recipe_page_as_its_website_source(client, use):
+    use(StandIn(answer()))
+    draft = client.post("/api/imports/text", json={"text": SOURCE, "url": "https://www.example.com/recipe#top"}).json()
+    assert draft["sources"] == [{"kind": "website", "url": "https://www.example.com/recipe", "creators": []}]
+    assert draft["original"]["kind"] == "text" and draft["original"]["url"] == "https://www.example.com/recipe"
+
+
+@pytest.mark.parametrize(
+    ("url", "code"),
+    [("ftp://example.com/recipe", "website_invalid_url"), ("http://localhost:8000/api", "website_forbidden_address"),
+     ("https://www.instagram.com/ritakadosh_/", "invalid_instagram_url")],
+)
+def test_pasted_text_with_an_address_that_cannot_be_a_source_is_refused(client, use, url, code):
     extractor = use(StandIn(answer()))
-    response = client.post("/api/imports/text", json={"text": SOURCE, "url": "https://example.com/recipe"})
-    assert response.status_code == 422 and response.json()["error"]["code"] == "invalid_instagram_url"
+    response = client.post("/api/imports/text", json={"text": SOURCE, "url": url})
+    assert response.status_code == 422 and response.json()["error"]["code"] == code
     assert extractor.calls == []
 
 
