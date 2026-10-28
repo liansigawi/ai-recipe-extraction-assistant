@@ -8,22 +8,40 @@
 */
 
 :root {
-  --color-page: #faf6f1;
+  /* "גלריה בהירה": near-white page, charcoal text, tomato for actions and links, herb green for "cooked". */
+  --color-page: #fbfaf7;
   --color-surface: #ffffff;
-  --color-text: #2b2118;
-  --color-muted: #6c5f55;
-  --color-border: #e6dbd0;
-  --color-accent: #a8481f;
-  --color-accent-soft: #f7e6da;
+  --color-sunken: #efece6;
+  --color-text: #18191c;
+  --color-muted: #5c6169;
+  --color-border: #e8e4dd;
+  --color-accent: #b4361f;
+  --color-accent-strong: #d4432a;
+  --color-accent-soft: #fde9e4;
   --color-danger: #b3261e;
   --color-danger-soft: #fdecea;
-  --color-success: #2e6b30;
-  --color-success-soft: #e7f3e6;
-  --radius: 10px;
-  --shadow: 0 1px 2px rgb(43 33 24 / 8%), 0 4px 12px rgb(43 33 24 / 6%);
+  --color-success: #1f7a4a;
+  --color-success-soft: #e0f2e7;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgb(24 25 28 / 6%), 0 6px 18px rgb(24 25 28 / 6%);
 
-  /* Segoe UI (Windows), San Francisco (macOS) and Arial all include Hebrew letters. */
-  font-family: system-ui, 'Segoe UI', Arial, sans-serif;
+  /* Each category's color (and a darker one for its drawing and its dot). */
+  --tone-dessert: #f8d9de;
+  --tone-dessert-ink: #a63d55;
+  --tone-meat: #f7dcc6;
+  --tone-meat-ink: #9a4a22;
+  --tone-light: #ddeccf;
+  --tone-light-ink: #44702f;
+  --tone-drink: #d3e7f3;
+  --tone-drink-ink: #286688;
+  --tone-none: #e9e5f3;
+  --tone-none-ink: #574c84;
+  --tone-other: #efe8d2;
+  --tone-other-ink: #6c5b23;
+
+  /* Rubik is bundled with the page (@fontsource-variable/rubik, imported in main.tsx): nothing is
+     loaded from the internet. Segoe UI and Arial, which include Hebrew too, while it loads. */
+  font-family: 'Rubik Variable', 'Segoe UI', system-ui, Arial, sans-serif;
   line-height: 1.6;
   color: var(--color-text);
   background: var(--color-page);
@@ -53,22 +71,6 @@ p {
   outline-offset: 2px;
 }
 
-/* ---- Page layout ----------------------------------------------------------- */
-
-.app {
-  max-width: 72rem;
-  margin-inline: auto;
-  padding: 1.5rem 1rem 3rem;
-}
-
-.app-header {
-  margin-block-end: 1.5rem;
-}
-
-.app-title {
-  font-size: 1.75rem;
-}
-
 /* "Saved" / "Deleted". The element stays in the page even when empty (screen readers watch it),
    so only its padding is removed then. */
 .notice {
@@ -95,24 +97,6 @@ p {
   background: var(--color-danger-soft);
 }
 
-/* One column on narrow screens; list beside the recipe on wide ones. */
-.app-body {
-  display: grid;
-  gap: 1.5rem;
-}
-
-@media (min-width: 56rem) {
-  .app-body {
-    /* minmax(0, 1fr): the recipe column may shrink below its longest word, instead of overflowing. */
-    grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
-    align-items: start;
-  }
-}
-
-.list-heading {
-  font-size: 1.1rem;
-  margin-block-end: 0.75rem;
-}
 
 .empty-state {
   padding: 1.5rem;
@@ -122,60 +106,6 @@ p {
   text-align: center;
 }
 
-/* ---- Recipe list and cards ------------------------------------------------- */
-
-.recipe-list {
-  display: grid;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.recipe-card {
-  display: grid;
-  gap: 0.35rem;
-  width: 100%;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--color-border);
-  border-inline-start: 4px solid transparent;
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  box-shadow: var(--shadow);
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-/* The border-color shorthand sets all four sides, so the hover rule must put the
-   selection bar (the inline-start side) back to transparent for cards not shown. */
-.recipe-card:hover:not([aria-current='true']) {
-  border-color: var(--color-accent);
-  border-inline-start-color: transparent;
-}
-
-.recipe-card[aria-current='true'] {
-  border-color: var(--color-accent);
-  border-inline-start-color: var(--color-accent);
-  background: var(--color-accent-soft);
-}
-
-/* The selected card is tinted with the chip's colour, so give its chip a white pill. */
-.recipe-card[aria-current='true'] .chip {
-  background: var(--color-surface);
-}
-
-.recipe-card-title {
-  font-size: 1.05rem;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.recipe-card-meta {
-  color: var(--color-muted);
-  font-size: 0.875rem;
-}
 
 .chip {
   justify-self: start;
@@ -200,14 +130,15 @@ p {
   overflow-wrap: anywhere;
   padding: 1.5rem;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: 24px;
   background: var(--color-surface);
   box-shadow: var(--shadow);
 }
 
 .recipe-title {
-  font-size: 1.6rem;
-  line-height: 1.3;
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .recipe-facts {
@@ -282,9 +213,9 @@ p {
 .button-primary,
 .add-button,
 .icon-button {
-  padding: 0.4rem 0.9rem;
+  padding: 0.45rem 1rem;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
@@ -298,14 +229,15 @@ p {
 }
 
 .button-primary {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
+  border-color: var(--color-accent-strong);
+  background: var(--color-accent-strong);
   color: #ffffff;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .button-primary:hover {
-  background: #8f3c19;
+  border-color: var(--color-accent);
+  background: var(--color-accent);
 }
 
 .button-danger {
@@ -323,6 +255,7 @@ p {
 .icon-button {
   min-width: 2rem;
   padding: 0.2rem 0.4rem;
+  border-radius: 8px;
   font-size: 0.8rem;
   line-height: 1.4;
 }
@@ -339,25 +272,6 @@ p {
   align-items: center;
 }
 
-/* ---- List header, card tags and sample labels -------------------------------------------- */
-
-.list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  margin-block-end: 0.75rem;
-}
-
-.list-header .list-heading {
-  margin-block-end: 0;
-}
-
-.recipe-card-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
 
 .badge-sample {
   padding: 0.1rem 0.6rem;
@@ -375,14 +289,6 @@ p {
   border-radius: var(--radius);
   background: #f4f1fa;
   font-size: 0.9rem;
-}
-
-.recipe-header {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
 }
 
 .confirm-box {
@@ -917,88 +823,6 @@ h4.category-name {
   border: 0;
 }
 
-/* Search and filters above the recipe list: the search box full width, then the category and the
-   status on one row, which wraps on a narrow screen. */
-.recipe-filters {
-  display: grid;
-  gap: 0.5rem;
-  margin-block-end: 0.75rem;
-}
-
-.filter-search,
-.filter-category {
-  width: 100%;
-  min-width: 0;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid #c9b9a9;
-  border-radius: 6px;
-  background: var(--color-surface);
-  color: inherit;
-  font: inherit;
-}
-
-.filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.filter-category {
-  flex: 1 1 10rem;
-  width: auto;
-}
-
-/* Three radio buttons shown as one segmented control; the real inputs stay for the keyboard. */
-.status-filter {
-  display: flex;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.status-option {
-  position: relative;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-.status-option + .status-option {
-  margin-inline-start: -1px;
-}
-
-.status-option:first-of-type {
-  border-start-start-radius: var(--radius);
-  border-end-start-radius: var(--radius);
-}
-
-.status-option:last-of-type {
-  border-start-end-radius: var(--radius);
-  border-end-end-radius: var(--radius);
-}
-
-.status-option input {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.status-option:has(input:focus-visible) {
-  z-index: 1;
-  outline: 3px solid var(--color-accent);
-}
-
-.status-option-on {
-  z-index: 1;
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
-  font-weight: 600;
-}
 
 .filter-summary {
   display: flex;
@@ -1073,36 +897,6 @@ h4.category-name {
 .creator-name {
   color: var(--color-text);
   font-weight: 600;
-}
-
-/* Recipe cards: the cover at the start, the text beside it. */
-.recipe-card {
-  grid-template-columns: 4.5rem minmax(0, 1fr);
-  align-items: start;
-  column-gap: 0.85rem;
-}
-
-.recipe-card-body {
-  display: grid;
-  gap: 0.35rem;
-  min-width: 0;
-}
-
-.recipe-card-cover,
-.recipe-card-cover img,
-.recipe-card-cover .media-missing,
-.cover-placeholder {
-  display: block;
-  width: 4.5rem;
-  height: 4.5rem;
-  border-radius: 8px;
-  object-fit: cover;
-}
-
-.cover-placeholder {
-  background:
-    radial-gradient(circle at 50% 50%, transparent 0.9rem, var(--color-border) 0.95rem, var(--color-border) 1.05rem, transparent 1.1rem),
-    var(--color-page);
 }
 
 /* A missing picture says so, in place of the picture. */
@@ -1232,4 +1026,1042 @@ h4.category-name {
 
 .viewer-buttons {
   justify-content: center;
+}
+
+/* ==== The gallery design ("גלריה בהירה") ============================================================= */
+
+.icon {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-play {
+  fill: currentColor;
+}
+
+/* ---- The bar on top: always there ---- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--color-border);
+  background: rgb(251 250 247 / 92%);
+  backdrop-filter: blur(10px);
+}
+
+.topbar-inner {
+  display: flex;
+  gap: 0.75rem 1.5rem;
+  align-items: center;
+  max-width: 86rem;
+  margin: 0 auto;
+  padding: 0.7rem clamp(1rem, 3vw, 2.5rem);
+}
+
+.brand {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.brand-button {
+  display: inline-flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.brand-logo {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 12px;
+  background: var(--color-accent-strong);
+  color: #ffffff;
+}
+
+.topbar-search {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: 34rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  background: var(--color-sunken);
+  color: var(--color-muted);
+}
+
+.topbar-search:focus-within {
+  background: var(--color-surface);
+  box-shadow: 0 0 0 2px var(--color-accent-strong);
+}
+
+.topbar-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.topbar-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-inline-start: auto;
+}
+
+.topbar-nav button {
+  padding: 0.4rem 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.topbar-nav button:hover {
+  color: var(--color-text);
+}
+
+.topbar-nav button[aria-current='page'] {
+  background: var(--color-text);
+  color: #ffffff;
+}
+
+.import-button {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.6rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-accent-strong);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.import-button:hover {
+  background: var(--color-accent);
+}
+
+/* ---- The page under the bar ---- */
+.app-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 86rem;
+  margin: 0 auto;
+  padding: 1.25rem clamp(1rem, 3vw, 2.5rem) 4rem;
+}
+
+/* The notice takes no room until it says something (it stays in the page for screen readers). */
+.app-content > .notice {
+  margin: 0;
+}
+
+.app-content > .notice:not(:empty),
+.app-content > .load-error,
+.app-content > .empty-state {
+  margin-block-end: 1rem;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+}
+
+/* Recipes, the editor and the forms read best not too wide. */
+.page-view,
+.page-edit,
+.page-create,
+.page-import,
+.page-categories {
+  width: 100%;
+  max-width: 60rem;
+  margin-inline: auto;
+}
+
+/* ---- "ייבוא מתכון מקישור": one compact strip above the filters ---- */
+.quick-import {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  align-items: center;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+}
+
+.quick-import-title {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.quick-import-title .icon {
+  color: var(--color-accent-strong);
+}
+
+.quick-import-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.quick-import-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.9rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-page);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+}
+
+.quick-import-form input:focus-visible {
+  border-color: var(--color-accent-strong);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.quick-import-form .button-primary {
+  padding-inline: 1.5rem;
+  border-radius: 12px;
+}
+
+.quick-import-help,
+.quick-import-message {
+  grid-column: 2;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.quick-import-message:empty {
+  display: none;
+}
+
+.quick-import-message {
+  justify-self: start;
+  padding: 0.3rem 0.65rem;
+  border-radius: 8px;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.quick-import-message.is-later {
+  background: #fff0c2;
+  color: #6b4e00;
+}
+
+/* ---- Filters above the gallery ---- */
+.recipe-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.recipe-filters fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* The real radio buttons stay (for the keyboard and screen readers), inside their label, unseen. */
+.cooked-option,
+.filter-chip {
+  position: relative;
+}
+
+.cooked-option input,
+.filter-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cooked-option input:focus-visible + span,
+.filter-chip input:focus-visible + span {
+  outline: 3px solid var(--color-accent-strong);
+  outline-offset: 2px;
+}
+
+/* "Already cooked": three wide choices with an icon and a count; the most visible filter. */
+.cooked-filter {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+  max-width: 40rem;
+  padding: 0.35rem !important;
+  border-radius: 18px !important;
+  background: var(--color-sunken);
+}
+
+.cooked-option > span {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 0.75rem;
+  border-radius: 14px;
+  color: var(--color-muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter-count {
+  min-width: 1.6rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 7%);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.cooked-option input:checked + span {
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 12px rgb(0 0 0 / 6%);
+  color: var(--color-text);
+}
+
+.cooked-option-cooked input:checked + span {
+  background: var(--color-success);
+  color: #ffffff;
+}
+
+.cooked-option-cooked input:checked + span .filter-count {
+  background: rgb(255 255 255 / 22%);
+}
+
+.filter-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.category-filter {
+  flex: 1 1 auto;
+}
+
+.chip-scroll,
+.status-filter,
+.subcategory-filter {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Categories in one row that scrolls sideways on a narrow screen (the page itself never does). */
+.chip-scroll {
+  overflow-x: auto;
+  padding-block: 0.2rem;
+  scrollbar-width: none;
+}
+
+.subcategory-filter {
+  flex-wrap: wrap;
+}
+
+.subcategory-filter legend {
+  float: inline-start;
+  margin-inline-end: 0.25rem;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.filter-chip > span {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.35rem 0.95rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filter-chip input:checked + span {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: #ffffff;
+}
+
+.filter-chip.is-small > span {
+  padding: 0.2rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.chip-icon {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-inline-start: -0.45rem;
+  border-radius: 50%;
+}
+
+.chip-icon .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.filter-summary {
+  font-size: 0.9rem;
+}
+
+/* ---- The gallery ---- */
+.recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  gap: 2rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A card: the button that opens the recipe, and beside it (placed on the picture's corner) the badge. */
+.recipe-card {
+  position: relative;
+  height: 100%;
+}
+
+.recipe-card-open {
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.recipe-card-photo {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  margin-bottom: 0.45rem;
+  overflow: hidden;
+  border-radius: 22px;
+  background: var(--color-sunken);
+}
+
+.recipe-card-photo img,
+.recipe-card-photo .media-missing {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 300ms ease;
+}
+
+.recipe-card-open:hover .recipe-card-photo img {
+  transform: scale(1.04);
+}
+
+.recipe-card-open:hover .recipe-card-title {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+.recipe-card-open:focus-visible {
+  outline-offset: 4px;
+  border-radius: 22px;
+}
+
+.recipe-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.recipe-card-meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.recipe-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.5rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.recipe-card-credit {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--color-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recipe-card-video {
+  position: absolute;
+  inset-block-start: 0.7rem;
+  inset-inline-end: 0.7rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 60%);
+  color: #ffffff;
+}
+
+.recipe-card-video .icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.category-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  flex: none;
+  border-radius: 50%;
+}
+
+/* Each category's color and drawing ink: on a missing picture, a filter chip's icon, a card's dot. */
+.tone-dessert {
+  background-color: var(--tone-dessert);
+  color: var(--tone-dessert-ink);
+}
+
+.tone-meat {
+  background-color: var(--tone-meat);
+  color: var(--tone-meat-ink);
+}
+
+.tone-light {
+  background-color: var(--tone-light);
+  color: var(--tone-light-ink);
+}
+
+.tone-drink {
+  background-color: var(--tone-drink);
+  color: var(--tone-drink-ink);
+}
+
+.tone-none {
+  background-color: var(--tone-none);
+  color: var(--tone-none-ink);
+}
+
+.tone-other {
+  background-color: var(--tone-other);
+  color: var(--tone-other-ink);
+}
+
+.category-dot.tone-dessert {
+  background-color: var(--tone-dessert-ink);
+}
+
+.category-dot.tone-meat {
+  background-color: var(--tone-meat-ink);
+}
+
+.category-dot.tone-light {
+  background-color: var(--tone-light-ink);
+}
+
+.category-dot.tone-drink {
+  background-color: var(--tone-drink-ink);
+}
+
+.category-dot.tone-none {
+  background-color: var(--tone-none-ink);
+}
+
+.category-dot.tone-other {
+  background-color: var(--tone-other-ink);
+}
+
+/* No picture yet: the category's drawing on its color, with two soft circles. */
+.placeholder {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-image:
+    radial-gradient(circle at 25% 20%, rgb(255 255 255 / 55%) 0 18%, transparent 19%),
+    radial-gradient(circle at 85% 85%, rgb(255 255 255 / 35%) 0 22%, transparent 23%);
+}
+
+.placeholder-icon {
+  width: 38%;
+  height: 38%;
+  stroke-width: 1.4;
+}
+
+.placeholder-note {
+  position: absolute;
+  inset-block-end: 0.8rem;
+  inset-inline: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  opacity: 0.8;
+}
+
+/* ---- "Already cooked" ---- */
+
+/* On the card: in the picture's top corner, the same place on every card. A button: a click (or Enter,
+   Space, a tap) changes the mark; the rest of the card opens the recipe. */
+.cooked-badge {
+  position: absolute;
+  inset-block-start: 0.7rem;
+  inset-inline-start: 0.7rem;
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.3rem 0.75rem 0.3rem 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 95%);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 14%);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* A larger area to tap than the badge itself, without covering more of the picture. */
+.cooked-badge::before {
+  position: absolute;
+  inset: -6px;
+  content: '';
+}
+
+.cooked-badge:hover {
+  box-shadow: 0 0 0 2px var(--color-success), 0 2px 10px rgb(0 0 0 / 14%);
+}
+
+.cooked-badge:focus-visible {
+  outline: 3px solid var(--color-accent-strong);
+  outline-offset: 2px;
+}
+
+.cooked-badge.is-saving {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.cooked-badge .icon {
+  color: var(--color-muted);
+}
+
+.cooked-badge.is-cooked {
+  background: var(--color-success);
+  color: #ffffff;
+}
+
+.cooked-badge.is-cooked:hover {
+  background: #17603a;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 14%);
+}
+
+.cooked-badge.is-cooked .icon {
+  color: #ffffff;
+  stroke-width: 3;
+}
+
+/* Beside the recipe's title: a large checkbox-like control. */
+.cooked-control {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+}
+
+.cooked-toggle {
+  display: inline-flex;
+  gap: 0.6rem;
+  align-items: center;
+  padding-block: 0.5rem;
+  padding-inline: 0.6rem 1.15rem;
+  border-radius: 999px;
+  background: var(--color-sunken);
+  font-weight: 800;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cooked-toggle:has(input:focus-visible) {
+  outline: 3px solid var(--color-accent-strong);
+  outline-offset: 2px;
+}
+
+.cooked-toggle-box {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-muted);
+}
+
+.cooked-toggle-text {
+  display: grid;
+  line-height: 1.2;
+}
+
+.cooked-toggle-text small {
+  font-size: 0.75rem;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.cooked-toggle.is-cooked {
+  background: var(--color-success);
+  color: #ffffff;
+}
+
+.cooked-toggle.is-cooked .cooked-toggle-box {
+  color: var(--color-success);
+}
+
+.cooked-toggle.is-cooked .icon {
+  stroke-width: 3;
+}
+
+.cooked-status {
+  display: block;
+  min-height: 1.4em;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+/* After a badge click that the filters hide: a note with "ביטול", at the bottom of the screen. */
+.gallery-notice-region {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 1.25rem;
+  z-index: 20;
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding-inline: 1rem;
+  pointer-events: none;
+}
+
+.gallery-notice {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  max-width: 40rem;
+  padding: 0.6rem 0.5rem 0.6rem 1.1rem;
+  padding-inline: 1.1rem 0.5rem;
+  border-radius: 18px;
+  background: var(--color-text);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
+  color: #ffffff;
+  pointer-events: auto;
+}
+
+.gallery-notice.is-error {
+  background: var(--color-danger);
+}
+
+.gallery-notice p {
+  margin: 0;
+}
+
+/* Its own box (not display: contents, which can drop a live region from the accessibility tree). */
+.gallery-notice-status {
+  display: grid;
+  justify-items: center;
+}
+
+.gallery-notice-undo {
+  padding: 0.35rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.gallery-notice-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.gallery-notice button:focus-visible {
+  outline: 3px solid #ffd27a;
+  outline-offset: 2px;
+}
+
+/* ---- One recipe ---- */
+.page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: 1rem;
+}
+
+.back-button {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.35rem 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.back-button:hover {
+  text-decoration: underline;
+}
+
+.recipe-cover {
+  width: 100%;
+  height: clamp(12rem, 40vw, 26rem);
+  margin-block-end: 1.25rem;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--color-sunken);
+}
+
+.recipe-cover img,
+.recipe-cover .media-missing {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Without a picture, the category's drawing in a lower band. */
+.recipe-cover-empty {
+  height: 9rem;
+}
+
+.recipe-cover-empty .placeholder-icon {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+/* The title, and right beside it (or under it, when it is long) the "כבר הכנתי" control. */
+.recipe-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* ---- Narrow screens ---- */
+@media (max-width: 900px) {
+  /* The search moves to a second row of the top bar. */
+  .topbar-inner {
+    flex-wrap: wrap;
+    gap: 0.6rem 0.75rem;
+  }
+
+  .topbar-search {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .quick-import {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quick-import-help,
+  .quick-import-message {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar-inner {
+    gap: 0.6rem 0.5rem;
+    padding: 0.6rem 1rem;
+  }
+
+  /* The name stays for screen readers; the logo shows it. */
+  .brand-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .topbar-nav {
+    margin-inline-start: 0;
+  }
+
+  .topbar-nav button {
+    padding: 0.35rem 0.6rem;
+  }
+
+  .import-button {
+    margin-inline-start: auto;
+    padding: 0.5rem 0.9rem;
+  }
+
+  .app-content {
+    padding-top: 1rem;
+  }
+
+  .quick-import-form {
+    flex-direction: column;
+  }
+
+  .cooked-filter {
+    max-width: none;
+  }
+
+  .cooked-option > span {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.55rem 0.35rem;
+    font-size: 0.9rem;
+  }
+
+  /* Two tiles a row; titles in full. */
+  .recipe-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.4rem 0.85rem;
+  }
+
+  .recipe-card-photo {
+    margin-bottom: 0.3rem;
+    border-radius: 16px;
+  }
+
+  .recipe-card-title {
+    font-size: 1rem;
+  }
+
+  .recipe-card-meta,
+  .recipe-card-foot {
+    font-size: 0.8rem;
+  }
+
+  /* The badge: the same corner, smaller, so it covers little of the picture. */
+  .cooked-badge {
+    inset-block-start: 0.45rem;
+    inset-inline-start: 0.45rem;
+    gap: 0.2rem;
+    padding: 0.15rem 0.5rem 0.15rem 0.55rem;
+    font-size: 0.75rem;
+  }
+
+  .cooked-badge .icon {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+
+  .recipe-card-video {
+    inset-block-start: 0.45rem;
+    inset-inline-end: 0.45rem;
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+
+  .recipe-view {
+    padding: 1rem;
+    border-radius: 18px;
+  }
+
+  .recipe-title {
+    font-size: 1.6rem;
+  }
+}
+
+/* Small phones: the logo, the navigation and "ייבוא מתכון" still share one row. */
+@media (max-width: 400px) {
+  .topbar-inner {
+    gap: 0.6rem 0.35rem;
+    padding-inline: 0.75rem;
+  }
+
+  .brand-logo {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  .topbar-nav button {
+    padding: 0.3rem 0.45rem;
+    font-size: 0.92rem;
+  }
+
+  .import-button {
+    gap: 0.25rem;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.95rem;
+  }
+
+  .app-content {
+    padding-inline: 0.75rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .recipe-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

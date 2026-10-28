@@ -109,12 +109,12 @@ describe('RecipeView', () => {
       sources: [{ kind: 'manual' as const, url: null, creators: [] }],
       updated_at: '2026-10-20T09:30:00Z',
     }
-    render(<RecipeView recipe={recipe} actions={<button type="button">עריכה</button>} />)
+    render(<RecipeView recipe={recipe} toolbar={<button type="button">עריכה</button>} />)
 
     expect(screen.getByText(/הוזן ידנית/)).toBeInTheDocument()
     // <time> keeps the exact moment for machines; the text shows it in the computer's time zone.
     expect(screen.getByText(/עודכן/).querySelector('time')).toHaveAttribute('dateTime', '2026-10-20T09:30:00Z')
-    expect(screen.getByRole('button', { name: 'עריכה' })).toBeInTheDocument() // whatever App passes as actions
+    expect(screen.getByRole('button', { name: 'עריכה' })).toBeInTheDocument() // whatever App passes as the toolbar
   })
 
   it('shows an unclassified English recipe with its text direction set from the content', () => {

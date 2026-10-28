@@ -101,7 +101,8 @@ export function fakeApi(initial: {
       is_sample: existing?.is_sample ?? false,
       status: input.status,
       issues: input.issues,
-      original: existing?.original ?? null, // like the real API: a save never changes the original
+      cooked: existing?.cooked ?? false, // like the real API: a save never changes the mark...
+      original: existing?.original ?? null, // ...or the original
       media: existing?.media ?? [], // ...nor the media
       cover_id: existing?.cover_id ?? null,
       created_at: createdAt,
@@ -232,6 +233,7 @@ export function fakeApi(initial: {
         is_sample: false,
         status: 'draft',
         issues: [],
+        cooked: false,
         original: {
           kind: 'text',
           text,
@@ -267,6 +269,7 @@ export function fakeApi(initial: {
         is_sample: false,
         status: 'draft',
         issues: [],
+        cooked: false,
         original: {
           kind: 'instagram',
           text: INSTAGRAM_CAPTION,
@@ -285,6 +288,12 @@ export function fakeApi(initial: {
       }
       recipes = [draft, ...recipes]
       return json(201, draft)
+    }
+    const cookedPath = /^\/api\/recipes\/(\d+)\/cooked$/.exec(path)
+    if (cookedPath !== null && method === 'PUT') {
+      const recipe = recipes.find((item) => item.id === Number(cookedPath[1]))
+      if (recipe === undefined) return json(404, { error: { code: 'recipe_not_found', message: 'No.', details: null } })
+      return json(200, replace({ ...recipe, cooked: (body as { cooked: boolean }).cooked }))
     }
     const mediaPath = /^\/api\/recipes\/(\d+)\/(media|cover)(?:\/(instagram|\d+))?$/.exec(path)
     if (mediaPath !== null) return handleMedia(Number(mediaPath[1]), mediaPath[2], mediaPath[3], method, body)

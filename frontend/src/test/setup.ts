@@ -8,7 +8,11 @@ afterEach(() => {
   vi.unstubAllGlobals() // put back anything a test replaced, such as fetch (test/fakeApi.ts)
   vi.restoreAllMocks()
   localStorage.clear() // e.g. the import screen's kept text
+  window.history.replaceState(null, '', '/') // the page's place (route.ts) starts at the gallery again
 })
+
+// jsdom lays nothing out, so it cannot scroll: App's scrolling is a no-op here.
+window.scrollTo = () => {}
 
 // jsdom has <dialog> but not its showModal() and close(): enough of them for the media viewer.
 if (typeof HTMLDialogElement !== 'undefined' && typeof HTMLDialogElement.prototype.showModal !== 'function') {

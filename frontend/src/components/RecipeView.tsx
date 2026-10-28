@@ -1,32 +1,42 @@
 import { Fragment, type ReactNode, type Ref } from 'react'
 import { creditedSource, postLink, profileUrl, shownName } from '../credit'
 import { SOURCE_LABELS } from '../labels'
+import { coverOf, pictureUrl } from '../media'
 import type { Creator, IngredientGroup, Recipe, Source, StepGroup } from '../types'
 import CategoryChip from './CategoryChip'
-import MediaGallery from './MediaGallery'
+import MediaGallery, { MediaImage } from './MediaGallery'
 import OriginalText from './OriginalText'
+import Placeholder from './Placeholder'
 
 // Dates in the page's language and the computer's own time zone; the API sends them in UTC.
 const dateFormat = new Intl.DateTimeFormat('he-IL', { dateStyle: 'medium', timeStyle: 'short' })
 
 interface RecipeViewProps {
   recipe: Recipe
-  titleRef?: Ref<HTMLHeadingElement> // lets the parent reach the title element (App scrolls and focuses it)
-  actions?: ReactNode // anything React can show; App passes the edit and delete buttons
+  titleRef?: Ref<HTMLHeadingElement> // lets the parent reach the title element (App focuses it)
+  toolbar?: ReactNode // anything React can show; App passes "back to the recipes", edit and delete
+  cooked?: ReactNode // beside the title: App passes the "כבר הכנתי" control
   onChange?: (recipe: Recipe) => void // after a change to its media (without it, the gallery only shows)
 }
 
 // The cooking view: title and facts, then the ingredients ABOVE the numbered preparation steps.
 // dir="auto" on recipe text lets an English recipe read left to right inside the right-to-left page.
-export default function RecipeView({ recipe, titleRef, actions, onChange }: RecipeViewProps) {
+export default function RecipeView({ recipe, titleRef, toolbar, cooked, onChange }: RecipeViewProps) {
+  const cover = coverOf(recipe)
+  const picture = cover === undefined ? null : pictureUrl(cover)
   return (
     <article className="recipe-view">
+      {toolbar}
+      {/* The card's picture, large (decorative: the gallery below names each picture), or the category's drawing. */}
+      <div className={picture !== null ? 'recipe-cover' : 'recipe-cover recipe-cover-empty'}>
+        {picture !== null ? <MediaImage src={picture} alt="" /> : <Placeholder category={recipe.category} />}
+      </div>
       <div className="recipe-header">
-        {/* tabIndex={-1}: not a Tab stop, but App can move focus here after saving or deleting. */}
+        {/* tabIndex={-1}: not a Tab stop, but App can move focus here after opening or saving. */}
         <h2 ref={titleRef} className="recipe-title" dir="auto" tabIndex={-1}>
           {recipe.title}
         </h2>
-        {actions}
+        {cooked}
       </div>
       <CreditLine sources={recipe.sources} />
       {recipe.is_sample && (

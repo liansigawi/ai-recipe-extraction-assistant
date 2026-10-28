@@ -144,6 +144,8 @@ export interface Recipe extends RecipeContent {
   status: RecipeStatus
   /** What to check before saving a draft. */
   issues: Issue[]
+  /** Whether you have cooked it. Changed only with setCooked, never by saving the recipe. */
+  cooked: boolean
   /** null: typed in by hand. */
   original: ImportedOriginal | null
   /** Its pictures and videos: the post's, in the post's order, then uploads. */

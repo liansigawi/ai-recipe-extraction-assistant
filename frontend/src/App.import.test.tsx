@@ -21,7 +21,8 @@ async function openImport(options: { configured?: boolean; extraction?: Extracti
   const extraction = options.extraction ?? (options.configured === false ? NO_KEY : CLAUDE)
   const api = fakeApi({ recipes: sampleRecipes, categories: sampleCategories, extraction, draftFor: options.draftFor })
   const view = render(<App />)
-  await user.click(await screen.findByRole('button', { name: 'ייבוא מתכון' }))
+  // From the gallery's import strip: "אפשר גם להדביק טקסט של מתכון".
+  await user.click(await screen.findByRole('button', { name: 'להדביק טקסט של מתכון' }))
   // Wait until the panel knows whether and how the model can be used.
   await screen.findByText(
     !extraction.configured ? /אפשר לשמור את הטקסט בלי עיבוד/ : extraction.local ? /ולא נשלח לשום מקום/ : /נשלחים ל-Anthropic/,
@@ -30,7 +31,7 @@ async function openImport(options: { configured?: boolean; extraction?: Extracti
 }
 
 const textBox = () => screen.getByLabelText('טקסט המתכון')
-const linkBox = () => screen.getByLabelText('קישור לפוסט באינסטגרם')
+const linkBox = () => screen.getByLabelText('קישור למתכון')
 
 async function importPasted(user: ReturnType<typeof userEvent.setup>) {
   await user.click(textBox())
@@ -42,7 +43,7 @@ async function importPasted(user: ReturnType<typeof userEvent.setup>) {
 describe('importing pasted text', () => {
   it('sends the text, then opens the draft for review beside the original', async () => {
     const { user, api } = await openImport()
-    expect(linkBox()).toHaveFocus() // the link comes first; the text box is below it
+    expect(textBox()).toHaveFocus() // opened to paste text: the text box has the focus
     await importPasted(user)
 
     expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/text', body: { text: PASTED, use_model: true } }])
@@ -57,10 +58,10 @@ describe('importing pasted text', () => {
     // The points to check.
     expect(screen.getByRole('heading', { name: 'לבדיקה (2)' })).toBeInTheDocument()
     expect(screen.getByText(AMBIGUOUS.message)).toBeInTheDocument()
-    // The draft is in the list, labeled.
-    const card = screen.getByRole('button', { name: /עוגת תפוזים/ })
-    expect(card).toHaveTextContent('טיוטה')
     expect(screen.getByText(/הטיוטה מוכנה/)).toBeInTheDocument()
+    // The draft is in the gallery, labeled.
+    await user.click(screen.getByRole('button', { name: 'מתכונים' }))
+    expect(screen.getByRole('button', { name: /עוגת תפוזים/ })).toHaveTextContent('טיוטה')
   })
 
   it('saves as a recipe only on the explicit button, after the points are handled', async () => {
@@ -83,7 +84,8 @@ describe('importing pasted text', () => {
     const save = api.changes()[1]
     expect(save.method).toBe('PUT')
     expect(save.body).toMatchObject({ title: 'עוגת תפוזים', category_id: 1, status: 'saved', issues: [] })
-    expect(screen.getByRole('button', { name: /עוגת תפוזים/ })).not.toHaveTextContent('טיוטה')
+    expect(screen.getByRole('heading', { level: 2, name: 'עוגת תפוזים' })).toBeInTheDocument()
+    expect(screen.queryByText(/טיוטה מיובאת/)).not.toBeInTheDocument()
     // The original stays with the recipe, closed, in the cooking view.
     expect(screen.getByText('הטקסט המקורי').closest('details')).not.toHaveAttribute('open')
   })
@@ -124,10 +126,9 @@ describe('importing pasted text', () => {
     expect(textBox()).toHaveValue(PASTED)
     expect(api.recipes()).toHaveLength(sampleRecipes.length) // nothing saved
 
-    view.unmount() // a reload: the page starts again from nothing
+    view.unmount() // a reload: the page starts again from nothing, at the address it was at
     render(<App />)
-    await user.click(await screen.findByRole('button', { name: 'ייבוא מתכון' }))
-    expect(textBox()).toHaveValue(PASTED)
+    expect(await screen.findByLabelText('טקסט המתכון')).toHaveValue(PASTED)
   })
 
   it('without an API key, explains and offers to save the text without Claude', async () => {
@@ -158,13 +159,13 @@ describe('importing pasted text', () => {
     await user.click(screen.getByRole('button', { name: 'קריאה עם Claude' }))
     expect(await screen.findByText(/Claude קורא את המתכון/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'ביטול' })) // back to the recipe list
+    await user.click(screen.getByRole('button', { name: 'ביטול' })) // back to the gallery
     release()
 
     expect(await screen.findByText('הטיוטה "עוגת תפוזים" מוכנה לבדיקה ברשימה.')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'עוגת שוקולד עם גנאש' })).toBeInTheDocument() // still here
-    const list = within(within(screen.getByRole('navigation')).getByRole('list'))
-    expect(list.getAllByRole('button')[0]).toHaveTextContent('עוגת תפוזים')
+    expect(screen.queryByRole('heading', { level: 2, name: 'בדיקת טיוטה' })).not.toBeInTheDocument() // still in the gallery
+    const gallery = within(screen.getByRole('region', { name: 'המתכונים' }))
+    expect(gallery.getAllByRole('listitem')[0]).toHaveTextContent('עוגת תפוזים')
   })
 })
 
@@ -292,8 +293,90 @@ describe('importing an Instagram post', () => {
   it('asks for a link before sending anything', async () => {
     const { user, api } = await openImport()
     await user.click(screen.getByRole('button', { name: 'ייבוא מהקישור' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('הדביקו קודם קישור לפוסט באינסטגרם.')
+    expect(screen.getByRole('alert')).toHaveTextContent('הדביקו קודם קישור למתכון.')
     expect(api.changes()).toEqual([])
+  })
+
+  it('says that recipe websites are not supported yet, sends nothing, and offers pasting the text', async () => {
+    const { user, api } = await openImport()
+    expect(screen.getByText(/כרגע אפשר לייבא קישורים לפוסטים ולסרטוני Reels ציבוריים באינסטגרם/)).toBeInTheDocument()
+    await user.click(linkBox())
+    await user.paste('https://www.example-recipes.co.il/cake')
+    await user.click(screen.getByRole('button', { name: 'ייבוא מהקישור' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('ייבוא מאתרי מתכונים עוד לא זמין')
+    expect(textBox()).toHaveFocus()
+    expect(api.changes()).toEqual([])
+
+    // The text imports without the website's link (only an Instagram post's is stored with it).
+    await user.paste(PASTED)
+    expect(screen.queryByText(/הקישור שלמעלה יישמר עם המתכון/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'קריאה עם Claude' }))
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+    expect(api.changes()[0].body).toEqual({ text: PASTED, use_model: true })
+  })
+})
+
+describe('the import strip above the gallery', () => {
+  const POST = 'https://www.instagram.com/p/Cm1mCdCpSzJ/'
+
+  async function renderGallery() {
+    const user = userEvent.setup()
+    const api = fakeApi({ recipes: sampleRecipes, categories: sampleCategories, extraction: CLAUDE })
+    render(<App />)
+    const strip = within(await screen.findByRole('region', { name: 'ייבוא מתכון מקישור' }))
+    return { user, api, strip }
+  }
+
+  it('reads an Instagram link at once and opens the draft for review', async () => {
+    const { user, api, strip } = await renderGallery()
+    await user.click(strip.getByLabelText('קישור למתכון'))
+    await user.paste(POST)
+    await user.click(strip.getByRole('button', { name: 'ייבוא' }))
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })).toBeInTheDocument()
+    expect(api.changes()).toEqual([{ method: 'POST', path: '/api/imports/instagram', body: { url: POST, use_model: true } }])
+  })
+
+  it('"ייבוא מתכון" in the top bar moves to the link field', async () => {
+    const { user, strip } = await renderGallery()
+    await user.click(screen.getByRole('button', { name: 'ייבוא מתכון' }))
+    expect(strip.getByLabelText('קישור למתכון')).toHaveFocus()
+  })
+
+  it('says what it cannot import yet, and sends nothing', async () => {
+    const { user, api, strip } = await renderGallery()
+    await user.click(strip.getByRole('button', { name: 'ייבוא' }))
+    expect(strip.getByText('הדביקו קודם קישור למתכון.')).toBeInTheDocument()
+
+    await user.type(strip.getByLabelText('קישור למתכון'), 'https://www.example-recipes.co.il/cake')
+    await user.click(strip.getByRole('button', { name: 'ייבוא' }))
+    expect(strip.getByText(/ייבוא מאתרי מתכונים עוד לא זמין/)).toBeInTheDocument()
+    await user.click(strip.getByRole('button', { name: 'להדבקת הטקסט' }))
+    expect(screen.getByLabelText('טקסט המתכון')).toHaveFocus()
+    expect(api.changes()).toEqual([])
+  })
+})
+
+describe('the import strip on a phone', () => {
+  it('stays closed until "ייבוא מתכון" opens it, then the link field has the focus', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(max-width: 700px)',
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+    const user = userEvent.setup()
+    fakeApi({ recipes: sampleRecipes, categories: sampleCategories, extraction: CLAUDE })
+    render(<App />)
+    await screen.findByRole('region', { name: 'המתכונים' })
+    const button = screen.getByRole('button', { name: 'ייבוא מתכון' })
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('region', { name: 'ייבוא מתכון מקישור' })).not.toBeInTheDocument()
+
+    await user.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+    expect(within(screen.getByRole('region', { name: 'ייבוא מתכון מקישור' })).getByLabelText('קישור למתכון')).toHaveFocus()
+    await user.click(button)
+    expect(screen.queryByRole('region', { name: 'ייבוא מתכון מקישור' })).not.toBeInTheDocument()
   })
 })
 

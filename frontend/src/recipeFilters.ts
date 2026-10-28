@@ -12,16 +12,22 @@ export type CategoryFilter =
 
 export type StatusFilter = 'all' | 'saved' | 'draft'
 
+/** "Already cooked": every recipe, the ones not cooked yet, or the ones you have. */
+export type CookedFilter = 'all' | 'not_yet' | 'cooked'
+
 export interface RecipeFilters {
   text: string
   category: CategoryFilter
   status: StatusFilter
+  cooked: CookedFilter
 }
 
-export const NO_FILTERS: RecipeFilters = { text: '', category: { kind: 'all' }, status: 'all' }
+export const NO_FILTERS: RecipeFilters = { text: '', category: { kind: 'all' }, status: 'all', cooked: 'all' }
 
 export function isFiltering(filters: RecipeFilters): boolean {
-  return normalizeForSearch(filters.text) !== '' || filters.category.kind !== 'all' || filters.status !== 'all'
+  return (
+    normalizeForSearch(filters.text) !== '' || filters.category.kind !== 'all' || filters.status !== 'all' || filters.cooked !== 'all'
+  )
 }
 
 // Invisible direction marks, which copied Hebrew text often carries.
@@ -64,28 +70,25 @@ function matchesCategory(recipe: Recipe, filter: CategoryFilter): boolean {
   }
 }
 
+function matchesCooked(recipe: Recipe, filter: CookedFilter): boolean {
+  return filter === 'all' || recipe.cooked === (filter === 'cooked')
+}
+
 export function filterRecipes(recipes: Recipe[], filters: RecipeFilters): Recipe[] {
   const words = normalizeForSearch(filters.text).split(' ').filter((word) => word !== '')
   return recipes.filter(
     (recipe) =>
       (filters.status === 'all' || recipe.status === filters.status) &&
+      matchesCooked(recipe, filters.cooked) &&
       matchesCategory(recipe, filters.category) &&
       matchesText(recipe, words),
   )
 }
 
-/** The category filter as a <select> value, and back. */
-export function categoryFilterValue(filter: CategoryFilter): string {
-  if (filter.kind === 'all') return 'all'
-  if (filter.kind === 'unclassified') return 'none'
-  return `${filter.kind === 'category' ? 'c' : 's'}:${filter.id}`
-}
-
-export function categoryFilterFrom(value: string): CategoryFilter {
-  if (value === 'none') return { kind: 'unclassified' }
-  const [kind, id] = value.split(':')
-  if ((kind === 'c' || kind === 's') && Number.isInteger(Number(id))) {
-    return { kind: kind === 'c' ? 'category' : 'subcategory', id: Number(id) }
-  }
-  return { kind: 'all' }
+/** How many recipes each "already cooked" choice would show, with the search and the other filters as
+ * they are: the numbers beside "הכול", "טרם הכנתי" and "כבר הכנתי". */
+export function cookedCounts(recipes: Recipe[], filters: RecipeFilters): Record<CookedFilter, number> {
+  const others = filterRecipes(recipes, { ...filters, cooked: 'all' })
+  const cooked = others.filter((recipe) => recipe.cooked).length
+  return { all: others.length, not_yet: others.length - cooked, cooked }
 }

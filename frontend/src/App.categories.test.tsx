@@ -42,6 +42,7 @@ describe('managing categories', () => {
     ])
     expect(screen.getByRole('heading', { level: 3, name: 'ארוחות בשריות' })).toBeInTheDocument()
     // The chicken recipe's card now carries the new name (same id: it never moved).
+    await user.click(screen.getByRole('button', { name: 'חזרה למתכונים' }))
     const card = screen.getByRole('button', { name: /עוף בסיר עם אורז/ })
     expect(card).toHaveTextContent('ארוחות בשריות')
   })
@@ -101,7 +102,7 @@ describe('managing categories', () => {
     await user.click(screen.getByRole('button', { name: 'עריכת קינוחים' }))
     await user.type(screen.getByLabelText('שם'), ' טעימים')
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
-    await user.click(screen.getByRole('button', { name: /עוף בסיר עם אורז/ }))
+    await user.click(screen.getByRole('button', { name: 'מתכונים' })) // the gallery
     expect(confirm).toHaveBeenCalled()
     expect(screen.getByLabelText('שם')).toHaveValue('קינוחים טעימים') // stayed
   })

@@ -170,6 +170,11 @@ export function chooseCover(recipeId: number, mediaId: number | null): Promise<R
   return request(`/api/recipes/${recipeId}/cover`, { method: 'PUT', body: JSON.stringify({ media_id: mediaId }) })
 }
 
+/** Mark a recipe as cooked (true) or not yet (false). Nothing else about it changes. */
+export function setCooked(recipeId: number, cooked: boolean): Promise<Recipe> {
+  return request(`/api/recipes/${recipeId}/cooked`, { method: 'PUT', body: JSON.stringify({ cooked }) })
+}
+
 export function removeMedia(recipeId: number, mediaId: number): Promise<Recipe> {
   return request(`/api/recipes/${recipeId}/media/${mediaId}`, { method: 'DELETE' })
 }

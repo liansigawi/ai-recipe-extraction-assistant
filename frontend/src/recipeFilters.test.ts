@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  categoryFilterFrom,
-  categoryFilterValue,
+  cookedCounts,
   filterRecipes,
   isFiltering,
   NO_FILTERS,
@@ -76,10 +75,27 @@ describe('filtering recipes', () => {
     expect(titles({ text: 'תמרים', status: 'saved' })).toEqual([])
   })
 
-  it('turns the category filter into a select value and back', () => {
-    for (const filter of [{ kind: 'all' }, { kind: 'unclassified' }, { kind: 'category', id: 3 }, { kind: 'subcategory', id: 10 }] as const) {
-      expect(categoryFilterFrom(categoryFilterValue(filter))).toEqual(filter)
-    }
-    expect(categoryFilterFrom('nonsense')).toEqual({ kind: 'all' })
+})
+
+describe('already cooked', () => {
+  // The cake and the pizza are marked as cooked; nothing else is.
+  const marked = recipes.map((recipe) => ({ ...recipe, cooked: recipe.id === cake.id || recipe.id === pizza.id }))
+  const shown = (filters: Partial<RecipeFilters>) => filterRecipes(marked, { ...NO_FILTERS, ...filters }).map((r) => r.title)
+
+  it('shows the recipes not cooked yet, or the ones cooked', () => {
+    expect(shown({ cooked: 'cooked' })).toEqual([cake.title, pizza.title])
+    expect(shown({ cooked: 'not_yet' })).toEqual([chicken.title, granola.title, 'כדורי תמרים'])
+    expect(isFiltering({ ...NO_FILTERS, cooked: 'not_yet' })).toBe(true)
+  })
+
+  it('combines with the search, the category and the draft filter', () => {
+    expect(shown({ cooked: 'not_yet', category: { kind: 'category', id: 1 } })).toEqual(['כדורי תמרים'])
+    expect(shown({ cooked: 'cooked', status: 'draft' })).toEqual([])
+    expect(shown({ cooked: 'cooked', text: 'פיצה' })).toEqual([pizza.title])
+  })
+
+  it('counts each choice with every other filter as it is', () => {
+    expect(cookedCounts(marked, NO_FILTERS)).toEqual({ all: 5, not_yet: 3, cooked: 2 })
+    expect(cookedCounts(marked, { ...NO_FILTERS, category: { kind: 'category', id: 1 }, cooked: 'cooked' })).toEqual({ all: 2, not_yet: 1, cooked: 1 })
   })
 })

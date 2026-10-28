@@ -1,6 +1,8 @@
 // The entry point: Vite loads this file from index.html.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// The page's font, bundled with it (OFL-1.1): Hebrew and Latin letters, every weight in one file each.
+import '@fontsource-variable/rubik'
 import App from './App.tsx'
 import './index.css'
 

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -13,21 +13,36 @@ const CAKE = 'עוגת שוקולד עם גנאש'
 async function renderApp(recipes = sampleRecipes) {
   const api = fakeApi({ recipes, categories: sampleCategories })
   render(<App />)
-  await screen.findByRole('navigation') // findBy... waits until the first load has finished
+  await screen.findByRole('region', { name: 'המתכונים' }) // findBy... waits until the first load has finished
   return api
 }
 
 const recipeHeading = (name: string) => screen.getByRole('heading', { level: 2, name })
-// The recipe cards: the list inside the navigation area.
-const recipeList = () => within(within(screen.getByRole('navigation')).getByRole('list'))
+// The gallery of recipe cards.
+const gallery = () => within(screen.getByRole('region', { name: 'המתכונים' }))
+const card = (name: string | RegExp) => gallery().getByRole('button', { name: typeof name === 'string' ? new RegExp(name) : name })
+
+async function openRecipe(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(card(name))
+  return recipeHeading(name)
+}
+
+/** What the browser does on its back button: the address changes, then "popstate". */
+function browserBack(address: string) {
+  act(() => {
+    window.history.replaceState(null, '', address)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
+}
 
 describe('loading the notebook', () => {
-  it('shows a loading message, then the recipes from the API', async () => {
+  it('shows a loading message, then the gallery of recipes from the API', async () => {
     const api = fakeApi({ recipes: sampleRecipes, categories: sampleCategories })
     render(<App />)
 
     expect(screen.getByText('טוען את המתכונים…')).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { level: 2, name: CAKE })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'המתכונים' })).toBeInTheDocument()
+    expect(gallery().getAllByRole('listitem')).toHaveLength(sampleRecipes.length)
     expect(api.calls.map((call) => `${call.method} ${call.path}`).sort()).toEqual(['GET /api/categories', 'GET /api/recipes'])
   })
 
@@ -40,80 +55,99 @@ describe('loading the notebook', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('אין חיבור לשרת')
     api.setOffline(false)
     await user.click(screen.getByRole('button', { name: 'נסו שוב' }))
-    expect(await screen.findByRole('heading', { level: 2, name: CAKE })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'המתכונים' })).toBeInTheDocument()
   })
 })
 
 describe('browsing', () => {
-  it('lists every recipe and shows the first one inside the main area', async () => {
+  it('opens on the gallery: a card for every recipe, and no recipe open yet', async () => {
     await renderApp()
 
-    expect(recipeList().getAllByRole('button')).toHaveLength(sampleRecipes.length)
-    const main = screen.getByRole('main')
-    expect(within(main).getByRole('article')).toBeInTheDocument()
-    expect(within(main).getByRole('heading', { level: 2, name: CAKE })).toBeInTheDocument()
+    expect(gallery().getAllByRole('listitem')).toHaveLength(sampleRecipes.length)
+    expect(screen.queryByRole('article')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'מתכונים' })).toHaveAttribute('aria-current', 'page')
   })
 
-  it('shows each card with its category and counts, and labels the invented samples', async () => {
+  it('shows on each card its category, whether it was cooked, its credit, and the invented samples', async () => {
     await renderApp()
 
-    const card = screen.getByRole('button', { name: /עוגת שוקולד/ })
-    expect(card).toHaveTextContent('קינוחים')
-    expect(card).toHaveTextContent('דוגמה')
-    expect(card).toHaveTextContent('9 מצרכים · 7 שלבים')
-    expect(screen.getByRole('button', { name: /Granola/ })).toHaveTextContent('לא מסווג')
+    expect(card(CAKE)).toHaveTextContent('קינוחים')
+    const badge = within(card(CAKE).closest('li')!).getByRole('button', { name: 'כבר הכנתי' })
+    expect(badge).toHaveAttribute('aria-pressed', 'false') // every recipe starts unmarked
+    expect(badge).toHaveTextContent('טרם הכנתי')
+    expect(card(CAKE)).toHaveTextContent('דוגמה')
+    expect(card(/Granola/)).toHaveTextContent('לא מסווג')
+    expect(card(/Granola/)).toHaveTextContent('Example Kitchen') // the credit, short
+  })
+
+  it('opens the recipe whose card was clicked, and "כל המתכונים" goes back to that card', async () => {
+    const user = userEvent.setup()
+    await renderApp()
+
+    const title = await openRecipe(user, 'פיצה מבצק יוגורט')
+    expect(title).toHaveFocus()
+    expect(window.location.hash).toBe(`#/recipes/${sampleRecipes[2].id}`) // the browser's back button can return
     expect(screen.getByRole('main')).toHaveTextContent('הוא לא מבוסס על מתכון אמיתי, וגם לא על הקישורים מאינסטגרם ששלחתם')
+
+    await user.click(screen.getByRole('button', { name: 'כל המתכונים' }))
+    expect(card('פיצה מבצק יוגורט')).toHaveFocus()
+    expect(window.location.hash).toBe('')
   })
 
-  it('shows the recipe whose card was clicked and marks that card as current', async () => {
+  it("the browser's back and forward buttons move between the gallery and a recipe", async () => {
+    const user = userEvent.setup()
+    await renderApp()
+    await openRecipe(user, 'עוף בסיר עם אורז')
+
+    browserBack('/')
+    expect(screen.getByRole('region', { name: 'המתכונים' })).toBeInTheDocument()
+    expect(card('עוף בסיר עם אורז')).toHaveFocus()
+
+    browserBack(`#/recipes/${sampleRecipes[1].id}`) // forward again
+    expect(recipeHeading('עוף בסיר עם אורז')).toHaveFocus()
+  })
+
+  it('a reload stays on the recipe the address names; an unknown one shows the gallery', async () => {
+    window.history.replaceState(null, '', `#/recipes/${sampleRecipes[2].id}`)
+    fakeApi({ recipes: sampleRecipes, categories: sampleCategories })
+    const view = render(<App />)
+    expect(await screen.findByRole('heading', { level: 2, name: 'פיצה מבצק יוגורט' })).toBeInTheDocument()
+    view.unmount()
+
+    window.history.replaceState(null, '', '#/recipes/999')
+    render(<App />)
+    expect(await screen.findByRole('region', { name: 'המתכונים' })).toBeInTheDocument()
+    expect(window.location.hash).toBe('')
+  })
+
+  it('works with the keyboard: Enter and Space open a card', async () => {
     const user = userEvent.setup()
     await renderApp()
 
-    const pizzaCard = screen.getByRole('button', { name: /פיצה מבצק יוגורט/ })
-    await user.click(pizzaCard)
-
-    expect(recipeHeading('פיצה מבצק יוגורט')).toBeInTheDocument()
-    expect(pizzaCard).toHaveAttribute('aria-current', 'true')
-    expect(screen.getByRole('button', { name: /עוגת שוקולד/ })).not.toHaveAttribute('aria-current')
-  })
-
-  it('works with the keyboard alone: Enter and Space both choose a card', async () => {
-    const user = userEvent.setup()
-    await renderApp()
-
-    await user.tab() // the "import" button
-    await user.tab() // the "new recipe" button
-    await user.tab() // the "categories" button
-    await user.tab() // the search box
-    await user.tab() // the category filter
-    await user.tab() // the status filter (one stop for its three choices)
-    await user.tab() // the first card
-    await user.tab() // the second card
+    card('עוף בסיר עם אורז').focus()
     await user.keyboard('{Enter}')
-    expect(recipeHeading('עוף בסיר עם אורז')).toBeInTheDocument()
+    expect(recipeHeading('עוף בסיר עם אורז')).toHaveFocus()
 
-    await user.tab() // the third card
+    await user.click(screen.getByRole('button', { name: 'כל המתכונים' }))
+    await user.tab() // from the chicken's card to its badge
+    await user.tab() // and to the next card
+    expect(card('פיצה מבצק יוגורט')).toHaveFocus()
     await user.keyboard(' ')
     expect(recipeHeading('פיצה מבצק יוגורט')).toBeInTheDocument()
   })
 
-  it('brings the chosen recipe into view only when it is off-screen', async () => {
+  it('a recipe opens at the top of the page, and the gallery comes back where it was scrolled to', async () => {
     const user = userEvent.setup()
-    const scrollIntoView = vi.fn()
-    Element.prototype.scrollIntoView = scrollIntoView // jsdom has no layout, so we provide this
+    const scrollTo = vi.spyOn(window, 'scrollTo')
+    await renderApp()
+    Object.defineProperty(window, 'scrollY', { value: 640, configurable: true })
     try {
-      await renderApp()
-
-      // jsdom reports every element at the top of the screen, i.e. visible: no scrolling.
-      await user.click(screen.getByRole('button', { name: /עוף בסיר/ }))
-      expect(scrollIntoView).not.toHaveBeenCalled()
-
-      // Pretend the title is below the visible area, as on a narrow screen.
-      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: 900, bottom: 940 } as DOMRect)
-      await user.click(screen.getByRole('button', { name: /פיצה מבצק יוגורט/ }))
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' })
+      await openRecipe(user, 'פיצה מבצק יוגורט')
+      expect(scrollTo).toHaveBeenLastCalledWith(0, 0)
+      await user.click(screen.getByRole('button', { name: 'כל המתכונים' }))
+      expect(scrollTo).toHaveBeenLastCalledWith(0, 640)
     } finally {
-      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+      Object.defineProperty(window, 'scrollY', { value: 0, configurable: true })
     }
   })
 
@@ -121,16 +155,18 @@ describe('browsing', () => {
     await renderApp([])
 
     expect(screen.getByText('אין עדיין מתכונים במחברת.')).toBeInTheDocument()
-    expect(screen.getByText(/אין מתכון להצגה/)).toBeInTheDocument()
+    expect(screen.queryByRole('search', { name: 'סינון מתכונים' })).not.toBeInTheDocument()
   })
 })
 
 describe('creating a recipe', () => {
-  it('sends exactly what was typed, then shows the saved recipe first in the list', async () => {
+  const startNewRecipe = (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole('button', { name: 'לכתוב מתכון חדש' }))
+
+  it('sends exactly what was typed, then shows the saved recipe, first in the gallery', async () => {
     const user = userEvent.setup()
     const api = await renderApp()
 
-    await user.click(screen.getByRole('button', { name: 'מתכון חדש' }))
+    await startNewRecipe(user)
     expect(screen.getByLabelText('כותרת')).toHaveFocus()
     await user.type(screen.getByLabelText('כותרת'), 'עוגת תפוזים')
     await user.selectOptions(screen.getByLabelText('קטגוריה'), 'קינוחים')
@@ -170,16 +206,19 @@ describe('creating a recipe', () => {
     ])
     expect(recipeHeading('עוגת תפוזים')).toHaveFocus()
     expect(screen.getByText('מלח').closest('li')).toHaveTextContent('ללא כמות')
-    const firstCard = recipeList().getAllByRole('button')[0]
+    expect(screen.getByRole('checkbox', { name: 'כבר הכנתי' })).not.toBeChecked() // a new recipe starts unmarked
+
+    await user.click(screen.getByRole('button', { name: 'כל המתכונים' }))
+    const firstCard = gallery().getAllByRole('listitem')[0]
     expect(firstCard).toHaveTextContent('עוגת תפוזים')
-    expect(firstCard).toHaveAttribute('aria-current', 'true')
+    expect(card('עוגת תפוזים')).toHaveFocus()
     expect(firstCard).not.toHaveTextContent('דוגמה')
   })
 
   it('offers only the existing categories, or none', async () => {
     const user = userEvent.setup()
     await renderApp()
-    await user.click(screen.getByRole('button', { name: 'מתכון חדש' }))
+    await startNewRecipe(user)
 
     const options = within(screen.getByLabelText('קטגוריה')).getAllByRole('option')
     expect(options.map((option) => option.textContent)).toEqual(['לא מסווג', 'קינוחים', 'בישולים', 'ארוחות קלילות'])
@@ -189,7 +228,7 @@ describe('creating a recipe', () => {
   it('checks the form before sending: a title is required and a quantity must be quoted from its line', async () => {
     const user = userEvent.setup()
     const api = await renderApp()
-    await user.click(screen.getByRole('button', { name: 'מתכון חדש' }))
+    await startNewRecipe(user)
     await user.type(screen.getByLabelText('מצרך 1'), '200 גרם קמח')
     await user.type(screen.getByLabelText('כמות במצרך 1'), '2') // cut out of "200": not the amount
 
@@ -213,7 +252,7 @@ describe('creating a recipe', () => {
   it("shows the server's objection next to the field it is about", async () => {
     const user = userEvent.setup()
     const api = await renderApp()
-    await user.click(screen.getByRole('button', { name: 'מתכון חדש' }))
+    await startNewRecipe(user)
     await user.type(screen.getByLabelText('כותרת'), 'חביתה')
     await user.click(screen.getByRole('button', { name: 'הוספת מצרך' }))
     await user.type(screen.getByLabelText('מצרך 2'), '3 ביצים') // row 1 stays empty and is not sent
@@ -238,7 +277,7 @@ describe('creating a recipe', () => {
   it('keeps what was typed when the server cannot be reached, and says why', async () => {
     const user = userEvent.setup()
     const api = await renderApp()
-    await user.click(screen.getByRole('button', { name: 'מתכון חדש' }))
+    await startNewRecipe(user)
     await user.type(screen.getByLabelText('כותרת'), 'מרק עדשים')
 
     api.setOffline(true)
@@ -256,6 +295,7 @@ describe('editing a recipe', () => {
   it('starts from the saved content, and saving sends the change and nothing else', async () => {
     const user = userEvent.setup()
     const api = await renderApp()
+    await openRecipe(user, CAKE)
     await user.click(screen.getByRole('button', { name: 'עריכה' }))
 
     const title = screen.getByLabelText('כותרת')
@@ -282,15 +322,17 @@ describe('editing a recipe', () => {
       notes: cake.notes,
       sources: cake.sources,
       status: 'saved',
-      issues: [],
+      issues: [], // and never the cooked mark: only its own control changes it
     })
     expect(recipeHeading('עוגת שוקולד מריר')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /עוגת שוקולד מריר/ })).toHaveAttribute('aria-current', 'true')
+    await user.click(screen.getByRole('button', { name: 'כל המתכונים' }))
+    expect(card('עוגת שוקולד מריר')).toHaveFocus()
   })
 
   it('moves an ingredient up with its button', async () => {
     const user = userEvent.setup()
     const api = await renderApp()
+    await openRecipe(user, CAKE)
     await user.click(screen.getByRole('button', { name: 'עריכה' }))
 
     await user.click(screen.getByRole('button', { name: 'הזזת מצרך 2 בקבוצה 1 למעלה' }))
@@ -309,6 +351,7 @@ describe('editing a recipe', () => {
     const user = userEvent.setup()
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const api = await renderApp()
+    await openRecipe(user, CAKE)
 
     await user.click(screen.getByRole('button', { name: 'עריכה' }))
     await user.click(screen.getByRole('button', { name: 'ביטול' }))
@@ -317,9 +360,15 @@ describe('editing a recipe', () => {
 
     await user.click(screen.getByRole('button', { name: 'עריכה' }))
     await user.type(screen.getByLabelText('כותרת'), ' חדשה')
-    await user.click(screen.getByRole('button', { name: /עוף בסיר/ })) // another recipe: asks first
+    await user.click(screen.getByRole('button', { name: 'מתכונים' })) // the gallery: asks first
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(screen.getByLabelText('כותרת')).toHaveValue(`${CAKE} חדשה`) // "stay" keeps the editor
+
+    const editing = window.location.hash
+    browserBack(`#/recipes/${sampleRecipes[0].id}`) // the browser's back button asks too
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(screen.getByLabelText('כותרת')).toHaveValue(`${CAKE} חדשה`)
+    expect(window.location.hash).toBe(editing) // and the address is put back
 
     confirm.mockReturnValue(true)
     await user.click(screen.getByRole('button', { name: 'ביטול' }))
@@ -329,9 +378,10 @@ describe('editing a recipe', () => {
 })
 
 describe('deleting a recipe', () => {
-  it('asks in the page first, then deletes and shows the next recipe', async () => {
+  it('asks in the page first, then deletes and shows the gallery without it', async () => {
     const user = userEvent.setup()
     const api = await renderApp()
+    await openRecipe(user, CAKE)
 
     await user.click(screen.getByRole('button', { name: 'מחיקה' }))
     expect(screen.getByRole('group', { name: /למחוק את המתכון/ })).toBeInTheDocument()
@@ -344,19 +394,21 @@ describe('deleting a recipe', () => {
 
     expect(await screen.findByText('המתכון נמחק.')).toBeInTheDocument()
     expect(api.changes()).toEqual([{ method: 'DELETE', path: '/api/recipes/1', body: undefined }])
-    expect(recipeHeading('עוף בסיר עם אורז')).toHaveFocus()
-    expect(screen.queryByRole('button', { name: /עוגת שוקולד/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'המתכונים' })).toHaveFocus()
+    expect(gallery().queryByRole('button', { name: /עוגת שוקולד/ })).not.toBeInTheDocument()
+    expect(window.location.hash).toBe('')
   })
 
   it('says why a delete failed and keeps the recipe', async () => {
     const user = userEvent.setup()
     const api = await renderApp()
+    await openRecipe(user, CAKE)
     api.answerNextWith(500, { error: { code: 'internal_error', message: 'Something went wrong on the server.', details: null } })
 
     await user.click(screen.getByRole('button', { name: 'מחיקה' }))
     await user.click(screen.getByRole('button', { name: 'כן, למחוק' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('הפעולה נכשלה: Something went wrong on the server.')
-    expect(screen.getByRole('button', { name: /עוגת שוקולד/ })).toBeInTheDocument()
+    expect(recipeHeading(CAKE)).toBeInTheDocument()
   })
 })

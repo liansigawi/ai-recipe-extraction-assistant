@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError, captionFrom, errorMessage, getExtractionInfo, importInstagram, importText, linkedRecipesFrom } from '../api'
+import { LINK_HELP, linkKind, NOT_A_LINK, WEBSITE_NOT_YET } from '../importLinks'
 import type { ExtractionInfo, LinkedRecipe, Recipe } from '../types'
 
 const MAX_CHARACTERS = 20_000 // the backend's limit (MAX_IMPORT_CHARACTERS)
@@ -48,6 +49,12 @@ interface ImportPanelProps {
   onCancel: () => void
   /** Opens a recipe that already has the post (from the duplicate notice). */
   onOpenRecipe: (id: number) => void
+  /** A link from the gallery's import strip... */
+  initialUrl?: string
+  /** ...read at once. */
+  startNow?: boolean
+  /** Start in the text box ("להדביק טקסט של מתכון"). */
+  focusText?: boolean
 }
 
 // An import that stopped because the post is already in the notebook: the recipes that have it, and
@@ -57,9 +64,9 @@ interface Duplicate {
   again: () => void
 }
 
-export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: ImportPanelProps) {
+export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initialUrl = '', startNow = false, focusText = false }: ImportPanelProps) {
   const id = useId()
-  const [url, setUrl] = useState('')
+  const [url, setUrl] = useState(initialUrl)
   // A function given to useState runs once, on the first render: start from the kept text.
   const [text, setText] = useState(readStoredText)
   // A caption preview that may be cut off, put in the box after a failed read: sent unchanged, the draft says so.
@@ -75,6 +82,10 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: Impo
   const [anotherCopyOf, setAnotherCopyOf] = useState<string | null>(null)
   const urlRef = useRef<HTMLInputElement>(null)
   const textRef = useRef<HTMLTextAreaElement>(null)
+  // Set once the strip's link was sent: React runs effects twice in development, the import only once.
+  const started = useRef(false)
+  // The link saved with pasted text: an Instagram post's only (a website's cannot be read or stored yet).
+  const textLink = linkKind(url) === 'instagram' ? url.trim() : ''
 
   // Who reads the text: Claude (sent to Anthropic) or a local model (stays on this computer).
   const local = info?.local ?? false
@@ -82,7 +93,14 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: Impo
   const modelReady = info === null || info.configured
 
   useEffect(() => {
-    urlRef.current?.focus()
+    if (focusText) textRef.current?.focus()
+    else urlRef.current?.focus()
+    if (startNow && !started.current) {
+      started.current = true
+      void startInstagram()
+    }
+    // Only when the screen opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Can imports use the model right now? (An API key for Claude; Ollama running, for a local model.)
@@ -121,9 +139,15 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: Impo
     if (working !== null) return
     setErrorAt('link')
     setDuplicate(null)
-    if (url.trim() === '') {
-      setError('הדביקו קודם קישור לפוסט באינסטגרם.')
+    const kind = linkKind(url)
+    if (kind === 'empty' || kind === 'not_a_link') {
+      setError(kind === 'empty' ? 'הדביקו קודם קישור למתכון.' : NOT_A_LINK)
       urlRef.current?.focus()
+      return
+    }
+    if (kind === 'website') {
+      setError(`${WEBSITE_NOT_YET} הדביקו אותו בתיבה למטה.`)
+      textRef.current?.focus()
       return
     }
     setWorking('instagram')
@@ -155,7 +179,7 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: Impo
     repeat()
   }
 
-  async function start(useModel: boolean, allowDuplicate = url.trim() !== '' && anotherCopyOf === url.trim()) {
+  async function start(useModel: boolean, allowDuplicate = textLink !== '' && anotherCopyOf === textLink) {
     if (working !== null) return
     setErrorAt('text')
     setDuplicate(null)
@@ -173,7 +197,7 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: Impo
     setError(null)
     try {
       const draft = await importText(text, useModel, {
-        url: url.trim(),
+        url: textLink,
         possiblyIncomplete: preview !== null && text === preview,
         allowDuplicate,
       })
@@ -195,12 +219,12 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: Impo
         ייבוא מתכון
       </h2>
       <p className="field-hint">
-        הדביקו קישור לפוסט באינסטגרם, או את טקסט המתכון. מודל שפה יסדר אותו לטיוטה, ואתם תבדקו אותה מול הטקסט המקורי ותשמרו.
+        הדביקו קישור למתכון, או את טקסט המתכון. מודל שפה יסדר אותו לטיוטה, ואתם תבדקו אותה מול הטקסט המקורי ותשמרו.
       </p>
 
       <div className="editor-field">
         <label htmlFor={`${id}-url`} className="field-label">
-          קישור לפוסט באינסטגרם
+          קישור למתכון
         </label>
         <div className="url-row">
           <input
@@ -227,8 +251,8 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: Impo
           </button>
         </div>
         <p id={`${id}-url-hint`} className="field-hint">
-          הכיתוב נקרא מהפוסט הציבורי, בלי התחברות לאינסטגרם, ונשמר כפי שהוא לצד הטיוטה, עם הקישור. פוסט פרטי, או כזה שאינסטגרם
-          לא מציג בלי התחברות, אי אפשר לקרוא: אז מדביקים את הכיתוב למטה.
+          {LINK_HELP} הכיתוב נקרא מהפוסט הציבורי, בלי התחברות לאינסטגרם, ונשמר כפי שהוא לצד הטיוטה, עם הקישור. פוסט פרטי, או כזה
+          שאינסטגרם לא מציג בלי התחברות, אי אפשר לקרוא: אז מדביקים את הכיתוב למטה.
         </p>
         {/* <output> is announced by screen readers when its text changes. */}
         <output className="working-note">
@@ -265,7 +289,7 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe }: Impo
         <p id={`${id}-count`} className={tooLong ? 'field-error' : 'field-hint'}>
           {text.length.toLocaleString('he-IL')} מתוך {MAX_CHARACTERS.toLocaleString('he-IL')} תווים. הטקסט נשמר בדפדפן הזה עד
           שהייבוא מצליח.
-          {url.trim() !== '' && ' הקישור שלמעלה יישמר עם המתכון כמקור.'}
+          {textLink !== '' && ' הקישור שלמעלה יישמר עם המתכון כמקור.'}
         </p>
       </div>
 

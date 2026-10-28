@@ -23,18 +23,31 @@ const withMedia: Recipe = {
 }
 const fromInstagram: Recipe = { ...soup, sources: [{ kind: 'instagram', url: 'https://www.instagram.com/reel/Cm1mCdCpSzJ/', creators: [] }] }
 
-async function renderApp(recipes: Recipe[] = [withMedia, fromInstagram, ...others], options: Parameters<typeof userEvent.setup>[0] = {}) {
+/** The app on the recipes' gallery. */
+async function renderGallery(recipes: Recipe[] = [withMedia, fromInstagram, ...others], options: Parameters<typeof userEvent.setup>[0] = {}) {
   const user = userEvent.setup(options)
   const api = fakeApi({ recipes, categories: sampleCategories })
   render(<App />)
+  await screen.findByRole('region', { name: 'המתכונים' })
+  return { user, api }
+}
+
+/** The app with the first recipe open. */
+async function renderApp(recipes: Recipe[] = [withMedia, fromInstagram, ...others], options: Parameters<typeof userEvent.setup>[0] = {}) {
+  const { user, api } = await renderGallery(recipes, options)
+  await user.click(card(recipes[0].title))
   await screen.findByRole('heading', { level: 2, name: recipes[0].title })
   return { user, api }
 }
 
+// The recipe's own media; and the gallery of recipe cards (on the home page).
 const gallery = () => screen.getByRole('region', { name: 'תמונות וסרטונים' })
 const thumbnails = () => within(gallery()).queryAllByRole('button', { name: /מתוך/ })
-const cardCover = (title: string) =>
-  within(screen.getByRole('navigation')).getByText(title).closest('button')?.querySelector('.recipe-card-cover img, .recipe-card-cover .cover-placeholder')
+const card = (title: string) => within(screen.getByRole('region', { name: 'המתכונים' })).getByRole('button', { name: new RegExp(title) })
+const cardCover = (title: string) => card(title).querySelector('.recipe-card-photo img, .recipe-card-photo .placeholder')
+async function backToGallery(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'כל המתכונים' }))
+}
 
 describe('media helpers', () => {
   it('a video shows its poster; the cover is the recipe cover_id; the post is the Instagram source', () => {
@@ -59,9 +72,9 @@ describe('media helpers', () => {
 
 describe('pictures and videos of a recipe', () => {
   it('the card shows the cover, and a placeholder when there is none', async () => {
-    await renderApp()
+    await renderGallery()
     expect(cardCover(withMedia.title)).toHaveAttribute('src', '/api/media/112')
-    expect(cardCover(fromInstagram.title)).toHaveClass('cover-placeholder')
+    expect(cardCover(fromInstagram.title)).toHaveClass('placeholder') // the category's drawing
   })
 
   it('the gallery keeps the post order and tells a saved video from one only on Instagram', async () => {
@@ -109,12 +122,18 @@ describe('pictures and videos of a recipe', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'קביעה כתמונה ראשית' }))
     expect(api.changes().at(-1)).toEqual({ method: 'PUT', path: `/api/recipes/${withMedia.id}/cover`, body: { media_id: 13 } })
     expect(await within(gallery()).findByText('התמונה הראשית נבחרה.')).toBeInTheDocument()
-    expect(cardCover(withMedia.title)).toHaveAttribute('src', '/api/media/131') // a video's poster can be the cover
     expect(within(thumbnails()[2]).getByText('ראשית')).toBeInTheDocument()
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'סגירה' }))
+    await backToGallery(user)
+    expect(cardCover(withMedia.title)).toHaveAttribute('src', '/api/media/131') // a video's poster can be the cover
 
+    await user.click(card(withMedia.title))
+    await user.click(thumbnails()[2])
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'ביטול הבחירה כתמונה ראשית' }))
     expect(api.changes().at(-1)?.body).toEqual({ media_id: null })
     expect(await within(gallery()).findByText('התמונה הראשית תהיה הראשונה בגלריה.')).toBeInTheDocument()
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'סגירה' }))
+    await backToGallery(user)
     expect(cardCover(withMedia.title)).toHaveAttribute('src', '/api/media/112')
   })
 
@@ -142,6 +161,7 @@ describe('pictures and videos of a recipe', () => {
     expect(new Headers(init?.headers).get('Content-Type')).toBe('image/png') // the file itself is the body
     expect(await within(gallery()).findByText('התמונה נוספה.')).toBeInTheDocument()
     expect(thumbnails()).toHaveLength(1)
+    await backToGallery(user)
     expect(cardCover(soup.title)?.tagName).toBe('IMG')
   })
 
@@ -179,10 +199,9 @@ describe('pictures and videos of a recipe', () => {
     const media = POST_MEDIA.map((item, index) => ({ ...item, id: 70 + index }))
     fakeApi({ recipes: [soup], categories: sampleCategories, draftFor: () => ({ title: 'עוגיות', media, cover_id: 70 }) })
     render(<App />)
-    await screen.findByRole('heading', { level: 2, name: soup.title })
-    await user.click(screen.getByRole('button', { name: 'ייבוא מתכון' }))
-    await user.type(screen.getByLabelText('קישור לפוסט באינסטגרם'), POST)
-    await user.click(screen.getByRole('button', { name: 'ייבוא מהקישור' }))
+    const strip = within(await screen.findByRole('region', { name: 'ייבוא מתכון מקישור' }))
+    await user.type(strip.getByLabelText('קישור למתכון'), POST)
+    await user.click(strip.getByRole('button', { name: 'ייבוא' }))
     expect(await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })).toBeInTheDocument()
     expect(thumbnails()).toHaveLength(3)
     expect(within(gallery()).queryByLabelText('העלאת תמונה')).not.toBeInTheDocument()
