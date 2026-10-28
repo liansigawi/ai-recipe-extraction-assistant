@@ -296,7 +296,7 @@ recipes (`backend/app/seed.py`), once: deleted samples are not added again.
 | Table | Columns | Notes |
 |---|---|---|
 | `categories` | `id`, `name`, `description`, `parent_id` (NULL = top level) | Subcategories are rows whose parent is a top-level category (one level deep). `UNIQUE(id, parent_id)` lets recipes reference the pair. The four starter categories (קינוחים, ארוחות בשריות, ארוחות קלילות, משקאות) and the two dessert subcategories (קינוחים רגילים, קינוחים בריאים) are created with the database; after that only the user manages categories (milestone 6). |
-| `recipes` | `id`, `title`, `category_id`, `subcategory_id`, `servings`, `ingredient_groups` (JSON), `step_groups` (JSON), `notes` (JSON), `is_sample`, `created_at`, `updated_at`, `status`, `issues` (JSON) | Composite foreign key `(subcategory_id, category_id) → categories(id, parent_id)`, so the database rejects a subcategory under the wrong parent. See the enforcement notes below. Times are stored as UTC. `status` is `'draft'` or `'saved'` (a CHECK constraint). |
+| `recipes` | `id`, `title`, `category_id`, `subcategory_id`, `servings`, `ingredient_groups` (JSON), `step_groups` (JSON), `notes` (JSON), `is_sample`, `created_at`, `updated_at`, `status`, `issues` (JSON), `cooked` | Composite foreign key `(subcategory_id, category_id) → categories(id, parent_id)`, so the database rejects a subcategory under the wrong parent. See the enforcement notes below. Times are stored as UTC. `status` is `'draft'` or `'saved'` (a CHECK constraint). `cooked` (0 until you mark it, migration 0010) is separate from both and changed only by its own endpoint. |
 | `recipe_sources` | `id`, `recipe_id`, `position`, `kind`, `url`, `creators` (JSON) | Editable attribution, in order. Deleting a recipe deletes its sources; saving replaces them. |
 | `recipe_imports` | `id`, `recipe_id` (unique), `kind`, `original_text`, `model`, `imported_at`, `url`, `retrieved_from` | The imported original, exactly as pasted or read. `kind` is `text` (pasted) or `instagram` (the caption, read from the post); `url` is the post's canonical address (also for a caption pasted after a failed read); `retrieved_from` is `post_page` or `embed_view` for a caption read automatically. Written once, when the import is saved; saving the recipe never touches it; deleting the recipe deletes it. |
 
@@ -352,6 +352,7 @@ Real relations (categories, sources, files) stay as proper tables with foreign k
 | `GET /api/recipes/{id}` | One recipe; ids are 1 to 2^63−1 | ✅ milestone 3 |
 | `POST /api/recipes` | Create from a `RecipeInput`; returns the stored recipe (201) | ✅ milestone 3 |
 | `PUT /api/recipes/{id}` | Save: replaces the whole recipe; returns it (200) | ✅ milestone 3 |
+| `PUT /api/recipes/{id}/cooked` | `{cooked: true \| false}` → the recipe; nothing else changes (not even `updated_at`); saving a recipe never sets it | ✅ milestone 6 |
 | `DELETE /api/recipes/{id}` | Delete with its sources (204, no body) | ✅ milestone 3 |
 | `GET /api/categories` | Top-level categories with their subcategories, for the picker | ✅ milestone 3 |
 | `POST /api/categories` | A new top-level category, or with `parent_id` a subcategory of a top-level one (201); `category_name_taken` (409) when its siblings have the name, `invalid_parent` (422) | ✅ milestone 6 |
@@ -407,13 +408,13 @@ redirect; a redirect would send the browser past the Vite proxy.
 │   │   │                     choose.py (which one), segments.py (numbered passages), review.py (checks),
 │   │   │                     quantity.py (quantities), ingredient_words.py (ingredients only in the steps)
 │   │   └── importers/        instagram.py (milestone 1); website.py, screenshots.py (milestone 5)
-│   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py … 0009_recipe_media.py
+│   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py … 0010_cooked.py
 │   ├── scripts/              probe_instagram.py: live checks, run by hand
 │   ├── tests/                pytest: offline, fixtures and in-process API calls only; never calls Claude
 │   └── evals/                the extraction quality check, run by hand; cases/ (invented texts), compare.py
 ├── frontend/                 React + TypeScript + Vite
-│   └── src/                  main.tsx, App.tsx, types.ts, api.ts, editorForm.ts, credit.ts, media.ts,
-│                             components/ (MediaGallery: gallery, viewer, uploads), test/
+│   └── src/                  main.tsx, App.tsx, route.ts, types.ts, api.ts, editorForm.ts, recipeFilters.ts,
+│                             importLinks.ts, categoryLook.ts, credit.ts, media.ts, components/, test/
 ├── data/                     git-ignored: recipes.db, media/, instagram-probe/
 └── .github/workflows/        (milestone 7) CI: deterministic checks only
 ```
@@ -427,7 +428,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 3 | ✅ SQLite + SQLAlchemy models, recipe CRUD, editor; the page loads recipes from the API | Controlled forms, `useEffect` + `fetch` with cleanup, loading and error states, `key` to reset state, focus management; SQL behind the ORM, transactions, constraints |
 | 4 | ✅ Pasted text → Claude extraction → strict classification → review → save; migrations | Structured output, validating a model's answer, prompt injection, enforcing the category rule in code; migrations and transactions; `localStorage`; work that finishes after the user moved on |
 | 5 | Instagram importer ✅; website (JSON-LD first), screenshots (ordered, multimodal) | Fallback paths, file uploads, bounded timeouts; running a browser from a server |
-| 6 | Category settings ✅, search and filters ✅, duplicate links ✅, creator credit ✅, pictures and videos ✅; RTL polish, error handling | Composing screens, accessibility, mixed-direction text; files on disk, `<dialog>`, `<video>` |
+| 6 | Category settings ✅, search and filters ✅, duplicate links ✅, creator credit ✅, pictures and videos ✅, photo gallery and "already cooked" ✅; RTL polish, error handling | Composing screens, accessibility, mixed-direction text; files on disk, `<dialog>`, `<video>` |
 | 7 | Regression tests, evaluation set, GitHub Actions, docs; then Docker if useful | Tests vs live checks vs model evaluation |
 
 ## Decisions log
@@ -496,6 +497,11 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-25 (2) | A passage labeled a heading that ends a sentence is a step (or an ingredient); a title passage that is only a label takes the rest of its line; the prompt says a title names the dish and an introduction that mentions it is not one | "מחממים תנור מראש." was a heading (case 18); the title was "ארוחת בוקר של שישי" without the dish (case 14), or an introduction sentence (case 24). |
 | 2026-10-25 (2) | Categories by the user's meaning (migration 0004): sweet desserts, dairy desserts included; generally savory dairy-based meals; generally meat- or poultry-based main dishes; no clear fit stays unclassified. The classification prompt says a category's description decides over its name, and the dish summary names what it is mainly made of | Measured on the same 60 drafts against the re-annotated expectations: 54 right, 5 wrong, 1 unresolved; the user's descriptions with the previous wording 46–49 right; the previous descriptions 44. The name "בישולים" (cooked dishes) had drawn vegetarian dishes. |
 | 2026-10-26 (9) | Media files are content-addressed (sha256) and reference-counted by their attachments; downloads happen right after the post's page is read, before the database is written, and never fail an import | Instagram's media addresses expire, so the files are saved at once and shown from here. Recipe copies share files without copying them, and removing one never breaks another. The database is not held during minutes of downloads. |
+| 2026-10-28 (2) | The home page is a gallery (design direction B, "גלריה בהירה", chosen from two browser previews): a top bar, a compact "ייבוא מתכון מקישור" strip (on a phone, behind its button), the filters, then the cards; one recipe per page | The recipes are the page, not a sidebar. Rubik is bundled (`@fontsource-variable/rubik`), so the page still loads nothing from the internet. |
+| 2026-10-28 (2) | The page's place is kept in the address after "#" (`#/recipes/12`), with `pushState`, without a router library | The browser's back button returns from a recipe to the gallery (essential on a phone), and a reload stays on the recipe. Leaving unsaved changes asks first, the back button included. |
+| 2026-10-28 (2) | "Already cooked" is a boolean of its own (`recipes.cooked`), changed only by `PUT /api/recipes/{id}/cooked`; every existing recipe starts unmarked | It is about you, not the recipe: not a category, not a draft status, not an edit (so "updated" stays). Nothing is guessed from other data. |
+| 2026-10-28 (3) | A card is two sibling buttons: one opens the recipe, the badge (`aria-pressed`) changes the mark; never one inside the other | A button inside a button is invalid and unpredictable for keyboards and screen readers. The badge shows only what was saved (no optimistic change), ignores clicks while saving, and when the filters hide the card a note offers "ביטול" and takes the focus. |
+| 2026-10-28 (2) | A category's drawing and color come from its name (קינוח, בשרי, קליל, משק…) | A category you add looks like its kind without any setting; any other gets the utensils, an unclassified recipe the notebook. |
 | 2026-10-28 | Fetching a post's media keeps the picture the card showed: a cover that was the default (the first picture) is kept as chosen when the post's items come before it | Found in the browser checks: an upload shown on the card would otherwise be replaced by the post's first item, although nothing was chosen. |
 | 2026-10-26 (9) | Uploads are the raw request body, not a multipart form | One picture at a time needs no new dependency (python-multipart); the size limit is checked while reading. |
 | 2026-10-26 (8) | The credit is a list of `{name, username}` (migration 0008); an import fills it from the post's data (`user.full_name`, `user.username`, `coauthor_producers`), and keeps that as read in `recipe_imports.source_details` | The person recognizes creators by name and handle; the handle gives the profile link. Retrieved data, not the model, says who made it. Editing the credit (when a post credits someone else) never changes what was retrieved. |
@@ -515,6 +521,15 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-20 | No compact-JSON request, although it is about 30% faster | Measured on the 20 cases: more wrong quantities in both modes (references 16 instead of 11) and fewer drafts without corrections (8 instead of 10). Quality first. |
 
 ## Known limitations
+
+- **"Already cooked" is a yes or no.** No date, no count, no rating; a later version could add them
+  next to it without changing the mark.
+- **A category's drawing follows its name.** Renaming "קינוחים" to something without "קינוח" gives
+  its recipes the general utensils drawing and color.
+- **Filters are not remembered.** The search and the filters start empty after a reload (the open
+  recipe is remembered, in the address).
+- **Importing from recipe websites is not available yet.** The link field says so and offers pasting
+  the text; a website's link is not stored with pasted text (only an Instagram post's is).
 
 - **Categories cannot be deleted or moved yet.** A subcategory stays under the category it was created
   in; removing a category needs a decision about its recipes (milestone 6).

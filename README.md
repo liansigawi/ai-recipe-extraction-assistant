@@ -7,10 +7,12 @@ collection that supports Hebrew and right-to-left text.
 > **Status: milestones 5 and 6 in progress.** A FastAPI backend with a SQLite database and a React +
 > TypeScript frontend run locally. You can **paste recipe text or an Instagram post's link** and have
 > a model (a local one through Ollama, or Claude) turn it into a draft, review the draft beside the
-> original text, and save it explicitly; or create, edit and delete recipes by hand. You can **manage
-> your categories and subcategories**, **search and filter** the list, and the app **warns about a
-> post you already have**. An imported post keeps its **creator's credit** and its **pictures and
-> videos**, saved on this computer; you can add pictures of your own to any recipe. A new database
+> original text, and save it explicitly; or create, edit and delete recipes by hand. The recipes are a
+> **gallery of photos** (a drawing of the category for those without one); you can **mark what you
+> have already cooked**, **search and filter** the gallery, **manage your categories and
+> subcategories**, and the app **warns about a post you already have**. An imported post keeps its
+> **creator's credit** and its **pictures and videos**, saved on this computer; you can add pictures of
+> your own to any recipe. A new database
 > starts with four categories, two dessert subcategories and **four invented sample recipes**, labeled
 > "דוגמה". Next on the roadmap: reading recipes from screenshots, importing from recipe websites, and
 > scaling quantities.
@@ -136,15 +138,33 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
 
 ### What you can do in the page
 
-- **Browse:** the list shows every recipe, newest first; click a card to open it.
-- **Search and filter:** above the list, the search box finds recipes by their title or an ingredient
-  line (every word you type, anywhere; niqqud, case and ׳/' marks do not matter). The category menu
-  shows one category, with all its subcategories and its recipes without one ("קינוחים"), one
-  subcategory ("↳ קינוחים בריאים"), or the unclassified recipes ("לא מסווג"). "הכל / מתכונים / טיוטות"
-  shows everything, saved recipes only, or drafts only. They all combine; "ניקוי" clears them, and the
-  line under them says how many recipes match. Searching runs in the page, on the recipes already
-  loaded: no request and no model.
-- **Create:** "מתכון חדש" opens an empty form. Only the title is required. Type each ingredient
+- **Browse:** the home page is a gallery of every recipe, newest first: its cover picture (a video's
+  still too), or, without one, its category's drawing on its category's color; its title, category,
+  credit, "טיוטה" and "דוגמה" labels, and whether you cooked it. Click a card to open the recipe;
+  **"כל המתכונים"** (or the browser's back button) returns to the gallery, where you were. The
+  address shows which recipe is open (`#/recipes/12`), so a reload stays on it. Phones show two cards a
+  row.
+- **The top bar** is always there: the notebook's name (back to the gallery), the search, "מתכונים",
+  "קטגוריות", and **"ייבוא מתכון"**. On a wide screen "ייבוא מתכון מקישור" is a strip above the
+  gallery (the button moves to its link field); on a phone the strip opens from the button.
+- **Already cooked:** every card says **"✓ כבר הכנתי"** (green) or **"טרם הכנתי"**, always in the
+  picture's top corner. **The badge is a button**: a click, a tap, or Enter/Space on it changes the
+  mark right there, in either direction, without opening the recipe (the rest of the card opens it).
+  If the active filter then hides the card ("טרם הכנתי", say), a note at the bottom says so and offers
+  **"ביטול"**. If saving fails, a message says why and the badge keeps the saved mark. In a recipe, the
+  **"כבר הכנתי"** control beside the title marks it, or clears the mark; it is saved at once, and
+  **"ביטול"** under it undoes the change. Every recipe starts
+  unmarked, including the ones you already had: nothing is guessed. The mark is separate from the
+  category and from the draft status, and saving a recipe never changes it.
+- **Search and filter:** the search box finds recipes by their title or an ingredient line (every word
+  you type, anywhere; niqqud, case and ׳/' marks do not matter). Above the gallery: **"הכול /
+  טרם הכנתי / כבר הכנתי"**, each with how many recipes it would show; the categories, with the same
+  drawing and color as the cards (choosing one shows its subcategories, e.g. "קינוחים בריאים"), and
+  "לא מסווג"; and "הכול / מתכונים / טיוטות" (everything, saved recipes only, or drafts only). They all
+  combine; "ניקוי" clears them, and the line under them says how many recipes match. Searching runs in
+  the page, on the recipes already loaded: no request and no model. Typing a search on a recipe's page
+  goes back to the gallery with the results.
+- **Create:** "לכתוב מתכון חדש", in the import strip, opens an empty form. Only the title is required. Type each ingredient
   line as written, and copy its amount into the quantity box ("200 גרם" from "200 גרם קמח"); leave
   the quantity empty when the recipe gives none. The form refuses a quantity that is not in its line.
 - **Edit:** "עריכה" opens the recipe in the same form. Rows can be added, moved (▲ ▼) and removed (✕).
@@ -156,8 +176,8 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
   classifies new imports by. Renaming never moves a recipe (the id stays); a recipe's category is
   changed in its editor. Subcategories are one level deep, and a name must be new among its
   siblings. Deleting a category is not offered yet.
-- **Pictures and videos:** a card shows the recipe's cover picture (a plain placeholder when it has
-  none). In the recipe, "תמונות וסרטונים" shows them in the post's order, then your own; click one to
+- **Pictures and videos:** a card shows the recipe's cover picture, and the recipe's page shows it
+  large at the top. In the recipe, "תמונות וסרטונים" shows them in the post's order, then your own; click one to
   see it large ("הקודם", "הבא", or the arrow keys; Escape closes). A video plays only when you press
   play, with the usual controls. "קביעה כתמונה ראשית" makes a picture, or a video's still, the
   card's cover; "ביטול הבחירה כתמונה ראשית" goes back to the first picture. "הסרה מהמתכון" asks
@@ -166,14 +186,16 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
   outline) was not saved here: its still is, with a link to watch it in the post; a video marked
   "▶ סרטון" is saved and plays offline. A file that is missing from the media folder shows
   "התמונה לא נמצאה" in its place.
-- Leaving the form with unsaved changes (another recipe, cancel, closing the tab) asks first.
+- Leaving the form with unsaved changes (another page, cancel, the browser's back button, closing the
+  tab) asks first.
 
 ### Import a recipe from pasted text
 
 Needs an API key: see [Connect the Claude API](#connect-the-claude-api). Without one, you can still
 save the text as a draft and fill it in yourself.
 
-1. **"ייבוא מתכון"** (import a recipe): paste a recipe into **"טקסט המתכון"**, for example an
+1. **"להדביק טקסט של מתכון"**, in the import strip above the gallery (on a phone, press "ייבוא
+   מתכון" first): paste a recipe into **"טקסט המתכון"**, for example an
    Instagram caption or text copied from a website, and press **"קריאה עם Claude"** (or **"קריאה עם
    המודל המקומי"**). It usually takes less than a minute.
 2. The draft opens for **review**. At the top is the original text exactly as you pasted it (it
@@ -203,10 +225,16 @@ once deleted, they are not added again.
 
 ### Import a recipe from an Instagram link
 
-1. **"ייבוא מתכון"**, paste the address of a public post or Reel into **"קישור לפוסט באינסטגרם"**
-   (for example `https://www.instagram.com/p/DPbKEn-CnUt/`; `/reel/...` addresses and addresses with
-   `?igsh=...` work too), and press **"ייבוא מהקישור"**. It usually takes under a minute: a few
-   seconds to read the post, then the same extraction as for pasted text (with Ollama, on this computer).
+1. Paste the address of a public post or Reel into **"ייבוא מתכון מקישור"** above the gallery (on a
+   phone, press "ייבוא מתכון" first), for example `https://www.instagram.com/p/DPbKEn-CnUt/`
+   (`/reel/...` addresses and addresses with `?igsh=...` work too), and press **"ייבוא"**. The import
+   screen opens and reads it at once; it usually takes under a minute: a few seconds to read the post,
+   then the same extraction as for pasted text (with Ollama, on this computer). The import screen has
+   the same field, "קישור למתכון", with "ייבוא מהקישור".
+
+   The field is meant for any recipe link, but today it imports **Instagram posts and Reels only**: a
+   link to a recipe website gets "ייבוא מאתרי מתכונים עוד לא זמין", nothing is sent, and the page
+   offers pasting the recipe's text instead (importing from websites is a later milestone).
 2. The draft opens for review exactly like a pasted one. "הטקסט המקורי" says it is the post's
    caption, links to the post, and shows the full caption exactly as read. Under the title, the
    **credit**: the creator's display name and Instagram username as the post's data gives them ("מאת
@@ -262,9 +290,10 @@ copy the post's address. Instagram can change its pages at any time; pasting the
 ### Check that recipes are kept after a restart
 
 1. Create a recipe, and edit another one (for example, change a sample's title). Note the time in
-   "עודכן" (last saved) under the title.
+   "עודכן" (last saved) under the title. Mark a recipe "כבר הכנתי".
 2. Stop both servers with Ctrl+C, then start them again with the same commands.
-3. Reload http://localhost:5173. The new recipe and the edit are still there, with the same "עודכן" time.
+3. Reload http://localhost:5173. The new recipe, the edit and the mark are still there, with the same
+   "עודכן" time (marking a recipe does not change it).
 
 You can also look inside the database while the backend is stopped, with any SQLite viewer (for
 example the "SQLite Viewer" extension in VS Code): `data/recipes.db` has the tables `recipes`,
@@ -553,16 +582,21 @@ The project keeps these separate and reports which one was run:
 │       ├── App.tsx                  loads the notebook from the API; what is shown; save and delete
 │       ├── api.ts                   every call to the backend, and its error messages
 │       ├── editorForm.ts            the editor's form state, checks and conversions (no React)
-│       ├── recipeFilters.ts         search and filters for the recipe list (no React)
+│       ├── recipeFilters.ts         search and filters for the gallery, "already cooked" and its counts (no React)
+│       ├── route.ts                 the page's place in the address (#/recipes/12): back button and reload
+│       ├── importLinks.ts           which importer a link goes to (Instagram today), and what to say otherwise
+│       ├── categoryLook.ts          each category's drawing and color, and its label
+│       ├── useNarrowScreen.ts       phone-sized or not (the import strip opens from its button on a phone)
 │       ├── credit.ts                the creator credit: profile links, reading and writing "name @username"
 │       ├── media.ts                 which picture a recipe or item shows, its Instagram post, a fetch's report
 │       ├── types.ts                 the recipe contract in TypeScript
 │       ├── labels.ts                display names, e.g. for source kinds
 │       ├── index.css                styles (right-to-left aware)
-│       ├── components/              RecipeList, RecipeCard, RecipeView, RecipeActions, RecipeEditor
-│       │                            (with IngredientsEditor, StepsEditor, RowButtons, FieldError), CategoryChip,
-│       │                            ImportPanel, ReviewIssues, OriginalText, CategoryManager, RecipeFilters,
-│       │                            MediaGallery (the gallery, the viewer, uploads)
+│       ├── components/              TopBar, QuickImport (the import strip), RecipeFilters, RecipeList (the
+│       │                            gallery), RecipeCard, Placeholder, CookedControl (badge and control), Icon,
+│       │                            RecipeView, RecipeActions, RecipeEditor (with IngredientsEditor,
+│       │                            StepsEditor, RowButtons, FieldError), CategoryChip, ImportPanel,
+│       │                            ReviewIssues, OriginalText, CategoryManager, MediaGallery
 │       ├── test/                    test setup, the fake API, sample recipes as test data
 │       └── *.test.ts(x)             Vitest + Testing Library tests
 └── data/                            local data (git-ignored)
