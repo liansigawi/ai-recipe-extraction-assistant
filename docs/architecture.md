@@ -283,8 +283,39 @@ normalized the same way): the original is `kind: "text"` with that address, and 
 the post. With `possibly_incomplete: true` (a preview sent unchanged) the draft starts with a
 `caption_incomplete` point.
 
-**Not yet:** websites and screenshots (milestone 5) will fetch a source first and then use the same
-extraction and checks.
+## Import flow (a recipe website)
+
+```text
+POST /api/imports/link {url, use_model, allow_duplicate}
+  the host name decides: instagram.com -> import_instagram (above, unchanged); anything else ->
+  1. website.check_url: http/https, a host name, ports 80/443, no user:password, never localhost,
+     .local/.internal names or a private/loopback/link-local/shared address (literal or resolved).
+  2. duplicate check by website.page_key (host without www, path without the final "/", query
+     without tracking parameters), before anything is fetched; again with the page's own address.
+  3. WebReader.page: one GET, no redirects followed blindly (each hop re-checked, at most 5), the
+     address actually connected to checked before anything is read, 3 MB, 30 s, HTML only, an
+     honest User-Agent, no cookies, no scripts run.
+  4. website.analyze: Schema.org Recipe from JSON-LD (any shape: @graph, lists, HowToSection,
+     HowToStep, strings with numbering) or microdata; one recipe, or the one the page's heading names,
+     else "ambiguous" (never merged). A bot-check page is "blocked".
+  5a. recipe data -> structured_draft: its words as they are (HTML and list numbering removed),
+      quantities by quantity.py, review points that need no model (ingredients only in the steps,
+      baking information); the model's classify_draft only chooses an existing category.
+  5b. no recipe data -> website.main_text (navigation, comments, ads, related posts removed, but
+      never the main content's own element or the layout wrappers around it, whatever their names;
+      the recipe card or the article first) -> the same extraction as pasted text; a draft with no
+      ingredient lines or no steps is refused as incomplete (nothing half-filled is saved).
+  6. create_import: kind "website", the page's address, retrieved_from json_ld / microdata /
+     page_text, the text read (or the recipe data rendered as text), and source_details: author,
+     site name, picture address, the raw recipe data. The source is the page, with its author.
+  7. the main picture: WebReader.image (the same checks, 20 MB) -> media.attach_website_image
+     (origin "website"); a failure is a media_incomplete review point, never a failed import.
+```
+
+**The pasted fallback** takes a website's address too: `POST /api/imports/text` with `url` keeps it as
+the original's address and the recipe's `website` source.
+
+**Not yet:** screenshots will fetch nothing and send the images to the model.
 
 ## Data model (milestones 3 and 4)
 
@@ -298,10 +329,10 @@ recipes (`backend/app/seed.py`), once: deleted samples are not added again.
 | `categories` | `id`, `name`, `description`, `parent_id` (NULL = top level) | Subcategories are rows whose parent is a top-level category (one level deep). `UNIQUE(id, parent_id)` lets recipes reference the pair. The four starter categories (קינוחים, ארוחות בשריות, ארוחות קלילות, משקאות) and the two dessert subcategories (קינוחים רגילים, קינוחים בריאים) are created with the database; after that only the user manages categories (milestone 6). |
 | `recipes` | `id`, `title`, `category_id`, `subcategory_id`, `servings`, `ingredient_groups` (JSON), `step_groups` (JSON), `notes` (JSON), `is_sample`, `created_at`, `updated_at`, `status`, `issues` (JSON), `cooked` | Composite foreign key `(subcategory_id, category_id) → categories(id, parent_id)`, so the database rejects a subcategory under the wrong parent. See the enforcement notes below. Times are stored as UTC. `status` is `'draft'` or `'saved'` (a CHECK constraint). `cooked` (0 until you mark it, migration 0010) is separate from both and changed only by its own endpoint. |
 | `recipe_sources` | `id`, `recipe_id`, `position`, `kind`, `url`, `creators` (JSON) | Editable attribution, in order. Deleting a recipe deletes its sources; saving replaces them. |
-| `recipe_imports` | `id`, `recipe_id` (unique), `kind`, `original_text`, `model`, `imported_at`, `url`, `retrieved_from` | The imported original, exactly as pasted or read. `kind` is `text` (pasted) or `instagram` (the caption, read from the post); `url` is the post's canonical address (also for a caption pasted after a failed read); `retrieved_from` is `post_page` or `embed_view` for a caption read automatically. Written once, when the import is saved; saving the recipe never touches it; deleting the recipe deletes it. |
+| `recipe_imports` | `id`, `recipe_id` (unique), `kind`, `original_text`, `model`, `imported_at`, `url`, `retrieved_from`, `source_details` (JSON) | The imported original, exactly as pasted or read. `kind` is `text` (pasted), `instagram` (the caption, read from the post) or `website`; `url` is the post's or page's address (also for text pasted after a failed read); `retrieved_from` is `post_page` or `embed_view` for a caption, `json_ld`, `microdata` or `page_text` for a page. `source_details`: who posted it as read (and for a page its site name, picture address and raw recipe data). `model` for a page's recipe data is the model that chose only its category. Written once, when the import is saved; saving the recipe never touches it; deleting the recipe deletes it. |
 
 | `media_files` | `id`, `sha256` (unique), `path`, `content_type`, `size_bytes`, `created_at` | A picture or video under `<data folder>/media/`, at `<2 hex>/<sha256>.<ext>`: the same bytes are one file. Its type comes from its first bytes. Deleted (row and file) only when no attachment uses it. |
-| `recipe_media` | `id`, `recipe_id`, `kind` (image/video), `status` (saved/thumbnail_only), `file_id`, `thumbnail_file_id`, `origin` (instagram/upload), `post_url`, `post_shortcode`, `post_index`, `width`, `height`, `is_cover`, `created_at` | A recipe's picture or video: the post's items in the post's order, then uploads. `UNIQUE(recipe_id, post_shortcode, post_index)`: fetching again adds nothing twice. At most one cover per recipe (a partial unique index). A video that could not be saved keeps its poster (`thumbnail_only`). Deleted with its recipe. |
+| `recipe_media` | `id`, `recipe_id`, `kind` (image/video), `status` (saved/thumbnail_only), `file_id`, `thumbnail_file_id`, `origin` (instagram/upload/website, migration 0011), `post_url`, `post_shortcode`, `post_index`, `width`, `height`, `is_cover`, `created_at` | A recipe's picture or video: the post's items in the post's order, then uploads and a recipe page's main picture (`post_url` is the page). `UNIQUE(recipe_id, post_shortcode, post_index)`: fetching again adds nothing twice. At most one cover per recipe (a partial unique index). A video that could not be saved keeps its poster (`thumbnail_only`). Deleted with its recipe. |
 
 Planned: screenshots for extraction (the next milestone) will add their own table.
 
@@ -366,7 +397,8 @@ Real relations (categories, sources, files) stay as proper tables with foreign k
 | `POST /api/recipes/{id}/media/instagram` | Fetch the media of the recipe's own Instagram post (or `{url}`) → `{recipe, report}`; nothing else about the recipe changes, nothing is added twice | ✅ milestone 6 |
 | `PUT /api/recipes/{id}/cover` | `{media_id}` or `{media_id: null}` (the first picture) → the recipe | ✅ milestone 6 |
 | `DELETE /api/recipes/{id}/media/{media_id}` | Remove an attachment → the recipe; its file stays while another recipe uses it | ✅ milestone 6 |
-| `POST /api/imports/link`, `/screenshots` | A website's address or ordered images → the same draft flow | planned |
+| `POST /api/imports/link` | Any recipe link: an Instagram post → the Instagram import; any other page → the website import (above) (201). `website_<reason>` errors with `details.url`: `invalid_url`, `forbidden_address` (422); `blocked`, `not_found`, `http_error`, `unreachable` (502); `timeout` (504); `not_html`, `too_large`, `no_recipe`, `incomplete`, `ambiguous` (with `details.recipes`) (422); `duplicate_link` (409) | ✅ first version |
+| `POST /api/imports/screenshots` | Ordered images → the same draft flow | planned |
 | `GET /api/files/{id}` | Serve a stored source image | planned (milestone 5) |
 
 Error codes the page branches on: `recipe_not_found` (404), `invalid_request` (422, with the invalid
@@ -500,6 +532,9 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-28 (2) | The home page is a gallery (design direction B, "גלריה בהירה", chosen from two browser previews): a top bar, a compact "ייבוא מתכון מקישור" strip (on a phone, behind its button), the filters, then the cards; one recipe per page | The recipes are the page, not a sidebar. Rubik is bundled (`@fontsource-variable/rubik`), so the page still loads nothing from the internet. |
 | 2026-10-28 (2) | The page's place is kept in the address after "#" (`#/recipes/12`), with `pushState`, without a router library | The browser's back button returns from a recipe to the gallery (essential on a phone), and a reload stays on the recipe. Leaving unsaved changes asks first, the back button included. |
 | 2026-10-28 (2) | "Already cooked" is a boolean of its own (`recipes.cooked`), changed only by `PUT /api/recipes/{id}/cooked`; every existing recipe starts unmarked | It is about you, not the recipe: not a category, not a draft status, not an edit (so "updated" stays). Nothing is guessed from other data. |
+| 2026-10-28 (4) | Recipe websites: the page's Schema.org recipe data is copied word for word into the draft, and the model only classifies it; without recipe data the page's main text goes through the usual extraction | The site's own data is the most faithful source: nothing to mis-copy, and seconds instead of a minute. The model is still the only one choosing a category, by the same rules. |
+| 2026-10-28 (4) | One link endpoint chooses the importer by the host name; the website reader checks every address (before connecting and after), sends an honest User-Agent and runs no scripts | Pasting any link must never reach this computer or the home network (SSRF). Sites that block such readers are reported as blocking, not worked around; pasting the text always works. |
+| 2026-10-28 (4) | A page-text draft with no ingredient lines or no steps is refused as incomplete, and a bot-check page as blocked | Seen live: a page whose ingredient lists are drawn by its scripts, and a site that answered with a robot check. A half recipe saved as a draft looks complete enough to trust. |
 | 2026-10-28 (3) | A card is two sibling buttons: one opens the recipe, the badge (`aria-pressed`) changes the mark; never one inside the other | A button inside a button is invalid and unpredictable for keyboards and screen readers. The badge shows only what was saved (no optimistic change), ignores clicks while saving, and when the filters hide the card a note offers "ביטול" and takes the focus. |
 | 2026-10-28 (2) | A category's drawing and color come from its name (קינוח, בשרי, קליל, משק…) | A category you add looks like its kind without any setting; any other gets the utensils, an unclassified recipe the notebook. |
 | 2026-10-28 | Fetching a post's media keeps the picture the card showed: a cover that was the default (the first picture) is kept as chosen when the post's items come before it | Found in the browser checks: an upload shown on the card would otherwise be replaced by the post's first item, although nothing was chosen. |
@@ -521,6 +556,14 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-20 | No compact-JSON request, although it is about 30% faster | Measured on the 20 cases: more wrong quantities in both modes (references 16 instead of 11) and fewer drafts without corrections (8 instead of 10). Quality first. |
 
 ## Known limitations
+
+- **Website imports are a first version.** Tested on the pages in
+  [website-import.md](website-import.md); other sites may fail in other ways. Not supported: pages that
+  build their content with scripts (refused as incomplete or as having no recipe), sites that block
+  readers that are not browsers or show a robot check (reported as blocking), pages behind a login or
+  a paywall, several recipes on one page without one named (refused as ambiguous), a site's other
+  pictures and its videos (only the main picture is saved), and ingredient groups (Schema.org lists
+  ingredients without them: they come as one list). Pasting the recipe's text works for all of them.
 
 - **"Already cooked" is a yes or no.** No date, no count, no rating; a later version could add them
   next to it without changing the mark.

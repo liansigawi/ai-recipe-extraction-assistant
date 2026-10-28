@@ -14,8 +14,9 @@ collection that supports Hebrew and right-to-left text.
 > **creator's credit** and its **pictures and videos**, saved on this computer; you can add pictures of
 > your own to any recipe. A new database
 > starts with four categories, two dessert subcategories and **four invented sample recipes**, labeled
-> "דוגמה". Next on the roadmap: reading recipes from screenshots, importing from recipe websites, and
-> scaling quantities.
+> "דוגמה". The same link field also imports **recipe pages from websites** (a first version: see
+> [docs/website-import.md](docs/website-import.md) for what was tested and what is not supported). Next on
+> the roadmap: reading recipes from screenshots, and scaling quantities.
 > Milestone 1 (Instagram feasibility) is documented in
 > [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
 > contract are in [docs/architecture.md](docs/architecture.md), and the original requirements are
@@ -232,9 +233,8 @@ once deleted, they are not added again.
    then the same extraction as for pasted text (with Ollama, on this computer). The import screen has
    the same field, "קישור למתכון", with "ייבוא מהקישור".
 
-   The field is meant for any recipe link, but today it imports **Instagram posts and Reels only**: a
-   link to a recipe website gets "ייבוא מאתרי מתכונים עוד לא זמין", nothing is sent, and the page
-   offers pasting the recipe's text instead (importing from websites is a later milestone).
+   The same field takes a link to a **recipe page on a website** too (next section); the backend
+   chooses the importer by the address's host name.
 2. The draft opens for review exactly like a pasted one. "הטקסט המקורי" says it is the post's
    caption, links to the post, and shows the full caption exactly as read. Under the title, the
    **credit**: the creator's display name and Instagram username as the post's data gives them ("מאת
@@ -286,6 +286,38 @@ What it never does: log in, use your browser's cookies, disguise itself, or retr
 one post that you paste, at human pace. Private posts and posts Instagram shows only to logged-in
 visitors cannot be read. Share links (`instagram.com/share/...`) are not supported yet: open them and
 copy the post's address. Instagram can change its pages at any time; pasting the caption always works.
+
+### Import a recipe from a website
+
+Paste the page's address into **"ייבוא מתכון מקישור"** (or into "קישור למתכון" on the import screen)
+and press **"ייבוא"**. Any address that is not Instagram's goes to the website importer:
+
+1. **The page's own recipe data first.** Most recipe sites describe their recipe for search engines
+   (Schema.org Recipe, as JSON-LD or microdata). When the page has it, the draft is made from it
+   **word for word**: the title, the ingredient lines (each with the amount it writes, by the same rules
+   as every import), the steps in their sections, the servings, and the times as one note. No model
+   writes any of it; the model only chooses an **existing** category (or none). This takes seconds.
+2. **Otherwise the page's main text**, without its menus, sidebars, sharing buttons, ads, related posts
+   and comments (as far as the page's markup shows them), goes through the same extraction as pasted
+   text, with the same review points.
+3. The draft opens for review. "הטקסט המקורי" says which it was ("נתוני המתכון שבדף" or "הטקסט הראשי
+   של הדף"), links to the page, and shows exactly what was read. The **credit** is the page's author
+   (from its recipe data or its metadata), else the site's name; it is editable like any credit. The
+   page's **main picture** (its recipe data's, else the picture the page declares) is saved like any
+   picture and becomes the cover; if it cannot be saved the draft is still created, with a review point.
+
+**When a page cannot give a reliable recipe**, nothing is saved, the link stays in its field, and the
+page says why in Hebrew and offers pasting the recipe's text (the link is then kept as its source): the
+site refused (some sites block readers that are not browsers, or show an "are you a robot?" check), the
+page does not exist, is not a web page, sends almost no text (it builds itself with scripts), has only
+part of the recipe in its text (for example the ingredient list is drawn by scripts), has several
+recipes and none is clearly its own, or has no recipe. **The same page again** (with or without "www.",
+a final "/" or tracking parameters) is noticed before it is read, as for Instagram posts.
+
+What it never does: read an address on this computer or a private network (every address and every
+redirect is checked, before connecting and after), pretend to be a browser, run the page's scripts,
+merge recipes, or fill in anything the page does not say. One page per import: at most 3 MB, 5
+redirects, 30 seconds.
 
 ### Check that recipes are kept after a restart
 
