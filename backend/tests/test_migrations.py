@@ -288,7 +288,8 @@ def test_0005_renames_in_place_adds_the_drinks_and_keeps_every_recipe(tmp_path):
     ]
     assert [description for _, _, description in categories] == list(STARTER.values())
     # 0006 then adds two columns to the originals; their first six are untouched.
-    assert rows(path, "recipes") == recipes and [row[:6] for row in rows(path, "recipe_imports")] == originals
+    # 0010 adds "cooked" as the last column of recipes (0 for all): every earlier column is untouched.
+    assert [row[:-1] for row in rows(path, "recipes")] == recipes and [row[:6] for row in rows(path, "recipe_imports")] == originals
     # 0008 then rewrites each credit as {"name", "username"}: every other column is untouched.
     assert [row[:5] for row in rows(path, "recipe_sources")] == [row[:5] for row in sources]
     assert len(list(tmp_path.glob(f"recipes.backup-*-before-{head_revision()}.db"))) == 1
@@ -347,7 +348,8 @@ def test_0007_adds_the_dessert_subcategories_and_changes_no_recipe(tmp_path):
     upgrade_database(path)
     # Ids after the four top-level categories, as a new database gives them (app/seed.py).
     assert subcategories_of(path) == [(5, "קינוחים", "קינוחים רגילים", 1), (6, "קינוחים", "קינוחים בריאים", 1)]
-    assert rows(path, "recipes") == recipes  # the dessert stays without a subcategory until you choose one
+    # The dessert stays without a subcategory until you choose one (0010 adds "cooked" last).
+    assert [row[:-1] for row in rows(path, "recipes")] == recipes
     with closing(sqlite3.connect(path)) as db:
         descriptions = dict(db.execute("SELECT name, description FROM categories WHERE parent_id = 1").fetchall())
     from app.sample_data import STARTER_SUBCATEGORIES
@@ -390,6 +392,25 @@ def test_downgrading_0007_keeps_a_subcategory_that_has_recipes(tmp_path):
 def test_a_new_database_starts_with_the_dessert_subcategories(client):
     categories = client.get("/api/categories").json()
     assert [(sub["id"], sub["name"]) for sub in categories[0]["subcategories"]] == [(5, "קינוחים רגילים"), (6, "קינוחים בריאים")]
+
+
+def test_0010_leaves_every_recipe_unmarked_and_changes_nothing_else(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.upgrade(alembic_config(connection), "0009")
+    engine.dispose()
+    before = rows(path, "recipes")
+    upgrade_database(path)
+    after = rows(path, "recipes")
+    assert [row[:-1] for row in after] == before  # the new column comes last
+    assert [row[-1] for row in after] == [0] * len(before)
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.downgrade(alembic_config(connection), "0009")
+    engine.dispose()
+    assert rows(path, "recipes") == before
 
 
 def test_0008_turns_each_credit_into_a_name_or_a_username_and_downgrade_turns_it_back(tmp_path):

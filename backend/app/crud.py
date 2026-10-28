@@ -31,6 +31,7 @@ def to_schema(row: models.Recipe) -> schemas.Recipe:
         is_sample=row.is_sample,
         status=row.status,
         issues=row.issues,
+        cooked=row.cooked,
         original=(
             schemas.ImportedOriginal(
                 kind=row.original.kind,
@@ -289,6 +290,16 @@ def update_recipe(session: Session, recipe_id: int, data: schemas.RecipeInput) -
     # UPDATE recipes SET ... WHERE id = ?; DELETE/INSERT recipe_sources ...; COMMIT
     session.commit()
     session.expire(row)  # reload the category names after a category change
+    return get_recipe(session, recipe_id)
+
+
+def set_cooked(session: Session, recipe_id: int, cooked: bool) -> schemas.Recipe:
+    """Mark a recipe as cooked, or not yet. Its content and "updated" time stay as they are: this is
+    about you, not an edit of the recipe."""
+    row = _load(session, recipe_id)
+    row.cooked = cooked
+    # UPDATE recipes SET cooked = ? WHERE id = ?; COMMIT
+    session.commit()
     return get_recipe(session, recipe_id)
 
 

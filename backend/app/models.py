@@ -66,6 +66,8 @@ class Recipe(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
     status: Mapped[str] = mapped_column(default="saved", server_default="saved")  # 'draft' or 'saved'
     issues: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default="[]")
+    # Whether you have cooked it: yours to mark, separate from the category and the draft status.
+    cooked: Mapped[bool] = mapped_column(default=False, server_default=text("0"))
 
     # Read-only shortcuts to the category rows (the ids above are what we write).
     category: Mapped[Category | None] = relationship(

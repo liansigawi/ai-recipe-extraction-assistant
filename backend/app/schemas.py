@@ -24,7 +24,7 @@ Fidelity rules this shape encodes (docs/brief.md, section 6):
 import re
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 # Invisible characters that can sit at the edges of copied text: zero-width space,
 # joiners and direction marks (U+200B-U+200F), the Arabic letter mark, bidi
@@ -262,6 +262,8 @@ class Recipe(RecipeContent):
     is_sample: bool = False  # True for the built-in examples, which were invented for the project
     status: RecipeStatus = "saved"
     issues: list[Issue] = []  # what to check before saving a draft
+    # Whether you have cooked it. Changed only with PUT /api/recipes/{id}/cooked, never by saving.
+    cooked: bool = False
     original: ImportedOriginal | None = None  # None: typed in by hand
     # Its pictures and videos: the post's in their order, then uploads. cover_id: the one shown on the
     # recipe's card: the chosen cover, else the first with a picture (None: nothing to show).
@@ -404,6 +406,12 @@ class ExtractionInfo(ContractModel):
     local: bool  # True: the text stays on this computer
     # Why it is not ready, for the import screen.
     problem: Literal["no_api_key", "ollama_unreachable", "ollama_model_missing"] | None = None
+
+
+class CookedChoice(ContractModel):
+    """PUT /api/recipes/{id}/cooked: whether you have cooked the recipe."""
+
+    cooked: StrictBool
 
 
 class CoverChoice(ContractModel):
