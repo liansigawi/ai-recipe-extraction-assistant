@@ -70,12 +70,12 @@ def report_issue(report: "MediaReport") -> schemas.Issue | None:
         return schemas.Issue(kind="media_incomplete", message="בנתוני הפוסט לא נמצאו תמונות או סרטונים לשמירה.")
     if not report.failed and not report.thumbnails_only:
         return None
-    parts = [f"מהפוסט נשמרו כאן {report.saved} מתוך {report.found} התמונות והסרטונים."]
+    parts = [f"מהפוסט נשמרו כאן במלואם {report.saved} מתוך {report.found} התמונות והסרטונים."]
     if report.thumbnails_only:
         parts.append(
-            "סרטון אחד נשמר רק כתמונה, עם קישור לצפייה בפוסט."
+            "סרטון אחד נשמר רק כתמונה מתוכו, עם קישור לצפייה בפוסט."
             if report.thumbnails_only == 1
-            else f"{report.thumbnails_only} סרטונים נשמרו רק כתמונה, עם קישור לצפייה בפוסט."
+            else f"{report.thumbnails_only} סרטונים נשמרו רק כתמונה מתוכם, עם קישור לצפייה בפוסט."
         )
     if report.failed:
         parts.append("פריט אחד לא נשמר." if report.failed == 1 else f"{report.failed} פריטים לא נשמרו.")

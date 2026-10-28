@@ -99,9 +99,10 @@ def fetch_post_media(
     """Read the recipe's post again and save its pictures and videos here, in the post's order.
 
     Nothing else about the recipe changes: not its title, ingredients, steps, categories, credit or
-    cover. Items it already has are not added again; a video saved only as its poster is tried again.
-    No duplicate check: this is the recipe the post belongs to."""
+    the picture on its card. Items it already has are not added again; a video saved only as its poster
+    is tried again. No duplicate check: this is the recipe the post belongs to."""
     recipe = crud.load_recipe(session, recipe_id)
+    shown = crud.get_recipe(session, recipe_id).cover_id  # the card's picture now
     url = data.url or instagram_url_of(recipe)
     if url is None:
         raise ApiError(422, "no_instagram_source", "The recipe has no Instagram post to take media from.")
@@ -118,6 +119,11 @@ def fetch_post_media(
         raise ApiError(status_code, f"instagram_{retrieval.outcome}", message, {"url": ref.canonical_url})
     report = media.attach_post_media(session, root, crud.load_recipe(session, recipe_id), ref, retrieval.media, transport)
     session.expire_all()
+    if shown is not None and crud.get_recipe(session, recipe_id).cover_id != shown:
+        # It was the cover by default (the first picture), and the post's items now come before it:
+        # it stays on the card, now as the chosen cover.
+        media.set_cover(session, crud.load_recipe(session, recipe_id), shown)
+        session.expire_all()
     return MediaFetchResult(recipe=crud.get_recipe(session, recipe_id), report=report.schema())
 
 

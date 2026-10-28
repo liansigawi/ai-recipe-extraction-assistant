@@ -119,6 +119,18 @@ def test_fetching_media_for_an_existing_recipe_changes_nothing_else_and_adds_not
     assert len(again["recipe"]["media"]) == 4
 
 
+def test_fetching_media_keeps_the_picture_the_card_showed(client, reads, downloads):
+    recipe = own_recipe(client)
+    upload = client.post(f"/api/recipes/{recipe['id']}/media", content=PNG, headers=ORIGIN).json()["media"][0]
+    assert not upload["is_cover"]  # the cover only by default: the first (and only) picture
+    reads(found(media=ITEMS))
+    downloads(EVERYTHING)
+    after = client.post(f"/api/recipes/{recipe['id']}/media/instagram", json={}).json()["recipe"]
+    assert after["media"][0]["origin"] == "instagram"  # the post's items come first...
+    assert after["cover_id"] == upload["id"]  # ...but the card still shows the upload
+    assert [m["is_cover"] for m in after["media"]] == [False, False, False, True]
+
+
 def test_fetching_media_is_not_stopped_by_the_duplicate_check(client, use, reads, downloads):
     use(StandIn(answer()))
     reads(found(media=ITEMS))
