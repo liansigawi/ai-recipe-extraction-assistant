@@ -10,8 +10,10 @@ collection that supports Hebrew and right-to-left text.
 > original text, and save it explicitly; or create, edit and delete recipes by hand. You can **manage
 > your categories and subcategories**, **search and filter** the list, and the app **warns about a
 > post you already have**. An imported post keeps its **creator's credit** and its **pictures and
-> videos**, saved on this computer; you can add pictures of your own to any recipe. A new database starts with four categories, two dessert subcategories and
-> **four invented sample recipes**, labeled "דוגמה". Importing from websites and screenshots comes later.
+> videos**, saved on this computer; you can add pictures of your own to any recipe. A new database
+> starts with four categories, two dessert subcategories and **four invented sample recipes**, labeled
+> "דוגמה". Next on the roadmap: reading recipes from screenshots, importing from recipe websites, and
+> scaling quantities.
 > Milestone 1 (Instagram feasibility) is documented in
 > [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
 > contract are in [docs/architecture.md](docs/architecture.md), and the original requirements are

@@ -290,10 +290,28 @@ a poster in `image_versions2`. The embed view has the older shape (`display_url`
 servers (`*.fbcdn.net`) and downloaded with a plain HTTP client, no cookies, at once: their addresses
 expire.
 
-Formats seen live: reels (`Cm1mCdCpSzJ`, `DPbKEn-CnUt`, `DANUmOOIcRM`: one video with its poster), a
-mixed carousel (`CLJ5G9rDi1a`: video, image, video), a photo carousel (`DQbcFZziKTW`: 14 images). A
-single-image post was not found among the posts available; it is tested with fixtures of the same
-shape (`media_type` 1 at the top).
+Formats seen live in the post data: reels (`Cm1mCdCpSzJ`, `DPbKEn-CnUt`, `DANUmOOIcRM`: one video
+with its poster), a mixed carousel (`CLJ5G9rDi1a`: video, image, video), a photo carousel
+(`DQbcFZziKTW`: 14 images). A single-image post was not found among the posts available; it is tested
+with fixtures of the same shape (`media_type` 1 at the top).
+
+**Verified live through the page (2026-10-28)**, on a separate test database and media folder, in
+Microsoft Edge, with the app's own code; five post reads in about 25 minutes, none blocked:
+
+| Post | Format | What was checked | Result |
+|---|---|---|---|
+| `CLJ5G9rDi1a` | Mixed carousel | A new import: credit, media, cover, video playback | Credit "Shayna Gershovitz \| שיינא (@shaynzzz)" from the post's data; video, image, video saved in order (5 files with the posters, 5.3 MB); the draft in 23 s including the local model. The video plays only when asked, seeks (byte ranges), 720×900. |
+| `DQbcFZziKTW` | Photo carousel (14 images) | Media for an existing recipe typed in by hand, with an edited credit and an upload as its cover | 14 images in 4.9 s; title, ingredients, steps, notes, categories, credit and status unchanged, no new recipe, the upload still the cover. Fetching again: "14 כבר היו במתכון", nothing added. A normal import of the same link still gets the duplicate warning. |
+| `Cm1mCdCpSzJ` | Reel | A partial download, then a retry | With the test backend refusing videos over 300 KB (the real 150 MB limit, lowered for the check; the post and the download were real), the video was refused: the draft opened with the review point and the video's still, and was saved as a recipe; the viewer showed the still, "הסרטון עצמו לא נשמר במחשב הזה" and a link to the post. After a restart with the normal limits, "שליפת מדיה מהפוסט" saved the video (31.6 s, 720×1280), which then played. |
+
+Also checked: a picture uploaded to a sample recipe without any link; choosing a video's still as the
+cover; removing a picture (its file was deleted, as no other recipe used it); everything still there
+after a page reload and after two backend restarts; a 390 px wide screen without sideways scrolling.
+
+**Tested with fixtures only** (no live case): a single-image post; the embed view's media shape; an
+image over 20 MB; a post over 400 MB or past 180 s; a refused or failing address for each item; a
+file that is not what it claims (the type is read from its first bytes); more than 20 items; two
+recipes sharing one file.
 
 ## Re-running the probe
 

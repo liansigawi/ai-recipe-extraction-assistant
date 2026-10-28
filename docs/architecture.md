@@ -21,7 +21,8 @@ FastAPI backend (uvicorn, bound to 127.0.0.1:8000)
    │                   The model is the Claude API or a local model through Ollama (RECIPES_EXTRACTOR).
    ├─ importers/       FETCH source content only: instagram (milestone 1, used by the app since
    │                   milestone 5); website, screenshots (planned, milestone 5). No AI.
-   └─ files            (planned, milestone 5) Uploaded screenshots under data/uploads/, paths in the database.
+   └─ media            Pictures and videos under data/media/ (one file per content, shared, removed
+                       when unused); which belong to which recipe in the database (milestone 6).
           │
           ├─► Anthropic API (external, from milestone 4): only the pasted text and the category list.
           └─► or Ollama on 127.0.0.1:11434 (this computer): the same request, nothing leaves the machine.
@@ -495,6 +496,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-25 (2) | A passage labeled a heading that ends a sentence is a step (or an ingredient); a title passage that is only a label takes the rest of its line; the prompt says a title names the dish and an introduction that mentions it is not one | "מחממים תנור מראש." was a heading (case 18); the title was "ארוחת בוקר של שישי" without the dish (case 14), or an introduction sentence (case 24). |
 | 2026-10-25 (2) | Categories by the user's meaning (migration 0004): sweet desserts, dairy desserts included; generally savory dairy-based meals; generally meat- or poultry-based main dishes; no clear fit stays unclassified. The classification prompt says a category's description decides over its name, and the dish summary names what it is mainly made of | Measured on the same 60 drafts against the re-annotated expectations: 54 right, 5 wrong, 1 unresolved; the user's descriptions with the previous wording 46–49 right; the previous descriptions 44. The name "בישולים" (cooked dishes) had drawn vegetarian dishes. |
 | 2026-10-26 (9) | Media files are content-addressed (sha256) and reference-counted by their attachments; downloads happen right after the post's page is read, before the database is written, and never fail an import | Instagram's media addresses expire, so the files are saved at once and shown from here. Recipe copies share files without copying them, and removing one never breaks another. The database is not held during minutes of downloads. |
+| 2026-10-28 | Fetching a post's media keeps the picture the card showed: a cover that was the default (the first picture) is kept as chosen when the post's items come before it | Found in the browser checks: an upload shown on the card would otherwise be replaced by the post's first item, although nothing was chosen. |
 | 2026-10-26 (9) | Uploads are the raw request body, not a multipart form | One picture at a time needs no new dependency (python-multipart); the size limit is checked while reading. |
 | 2026-10-26 (8) | The credit is a list of `{name, username}` (migration 0008); an import fills it from the post's data (`user.full_name`, `user.username`, `coauthor_producers`), and keeps that as read in `recipe_imports.source_details` | The person recognizes creators by name and handle; the handle gives the profile link. Retrieved data, not the model, says who made it. Editing the credit (when a post credits someone else) never changes what was retrieved. |
 | 2026-10-26 (7) | Duplicate Instagram links are checked on the server, before anything is fetched, for links and for pasted text with a link; the same post is the same shortcode; a match stops the import with the list of recipes, and `allow_duplicate` imports another copy | Enforced where the import happens, so no client can skip it and nothing is fetched twice by accident; never an overwrite and never a block. Both places a link can live count: the read-only original and the editable sources. |
@@ -564,6 +566,25 @@ redirect; a redirect would send the browser past the Vite proxy.
 - **Reference mode with Claude is untested here.** Its schema has one property per passage, named
   by the passage's opening words; no API key was available to check it against the Claude API.
   If it fails, `RECIPES_EXTRACTION_MODE=text` restores the earlier request.
+
+- **Pictures and videos:**
+  - Each post format was verified live except a single-image post, which is tested with fixtures only
+    ([instagram-feasibility.md](instagram-feasibility.md#pictures-and-videos-2026-10-26)).
+  - Fetching for an existing recipe reads the post again, with the same limits as an import: a
+    private, deleted or login-only post, or Instagram asking to wait, stops it with a message, and
+    nothing is retried automatically.
+  - Videos are kept as Instagram serves them (MP4), without conversion. Edge, Chrome and Firefox on
+    Windows play them; a browser without H.264 support (some Linux builds of Chromium) shows only the
+    still. Instagram gives no caption file, so the videos have no captions; the post's text is in
+    "הטקסט המקורי".
+  - A video's size is known only while it downloads: up to three of its addresses are tried, and a
+    video over 150 MB keeps only its still, with a link to the post. Long reels take disk space (the
+    browser check's three posts and two uploads: 22 files, 18.6 MB).
+  - Uploads are pictures only, one file per request, and come after the post's items; the order cannot
+    be changed. Stories, highlights and share links (`instagram.com/share/...`) are not supported.
+  - Changing a recipe's Instagram source does not remove media fetched from the earlier post; "הסרה
+    מהמתכון" removes items one by one. A fetch cannot be cancelled.
+  - Back up `media/` together with `recipes.db` (README, "Settings and where data lives").
 
 ## Notes for upcoming milestones
 
