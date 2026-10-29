@@ -561,6 +561,11 @@ def _main_block(soup: BeautifulSoup) -> Tag | None:
     return soup.find("main") or soup.find("h1")
 
 
+def _text_outside_links(tag: Tag) -> int:
+    """How much text a block has of its own: related posts and share bars are mostly links."""
+    return len(tag.get_text(" ", strip=True)) - sum(len(link.get_text(" ", strip=True)) for link in tag.find_all("a"))
+
+
 def main_text(html: str, title: str | None) -> tuple[str, bool]:
     """The page's main text as lines, without its navigation, comments, advertisements and the like;
     whether it was cut at MAX_TEXT_CHARACTERS."""
@@ -578,11 +583,19 @@ def main_text(html: str, title: str | None) -> tuple[str, bool]:
     # wrappers can carry a noise word (seen live: "penci_is_nosidebar" and "theiaStickySidebar" around a whole post).
     block = _main_block(soup)
     around = {id(tag) for tag in (block, *block.parents)} if block is not None else set()
+    for comments in [tag for tag in soup.find_all(True) if id(tag) not in around and "comment" in _classes(tag).lower()]:
+        if not comments.decomposed and comments.name not in ("html", "body", "main", "article"):
+            comments.decompose()  # first: never content, however long
+    # Inside it, a block that holds most of its text is a wrapper of the content too, whatever its
+    # name (the recipe in a "print" area, a page builder's "widget" boxes).
+    content = _text_outside_links(block) if block is not None and block.name != "h1" else 0
     for tag in soup.find_all(True):
         if tag.decomposed or tag.name in ("html", "body", "main", "article") or id(tag) in around:
             continue
         classes = _classes(tag)
         if classes and NOISE.search(classes) and not RECIPE_CONTAINER.search(classes):
+            if any(parent is block for parent in tag.parents) and _text_outside_links(tag) * 2 > content:
+                continue
             tag.decompose()
     candidates = [tag for tag in soup.find_all(True) if not tag.decomposed and RECIPE_CONTAINER.search(_classes(tag))]
     articles = soup.find_all("article")

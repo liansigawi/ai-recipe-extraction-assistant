@@ -305,8 +305,9 @@ POST /api/imports/link {url, use_model, allow_duplicate}
   5a. recipe data -> structured_draft: its words as they are (HTML and list numbering removed),
       quantities by quantity.py, review points that need no model (ingredients only in the steps,
       baking information); the model's classify_draft only chooses an existing category.
-  5b. no recipe data -> website.main_text (navigation, comments, ads, related posts removed, but
-      never the main content's own element or the layout wrappers around it, whatever their names;
+  5b. no recipe data -> website.main_text (comments, navigation, ads, related posts removed, but
+      never the main content's own element or the layout wrappers around it, whatever their names,
+      nor a block inside it that holds most of its text, such as a "print" area around the recipe;
       the recipe card or the article first) -> the same extraction as pasted text; a draft with no
       ingredient lines or no steps is refused as incomplete (nothing half-filled is saved).
   6. create_import: kind "website", the page's address, retrieved_from json_ld / microdata /
@@ -543,6 +544,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-28 (4) | One link endpoint chooses the importer by the host name; the website reader checks every address (before connecting and after), sends an honest User-Agent and runs no scripts | Pasting any link must never reach this computer or the home network (SSRF). Sites that block such readers are reported as blocking, not worked around; pasting the text always works. |
 | 2026-10-28 (4) | A page-text draft with no ingredient lines or no steps is refused as incomplete, and a bot-check page as blocked | Seen live: a page whose ingredient lists are drawn by its scripts, and a site that answered with a robot check. A half recipe saved as a draft looks complete enough to trust. |
 | 2026-10-28 (5) | The local model's time limit is for the whole import (both requests together), 300 s by default, and a repeated identical import shares the running one | The limit was 600 s for each request, so one import could wait 20 minutes. 300 s is above the worst normal case on an 8 GB GPU (the whole 8k working memory at ~40 tokens a second is about 3.5 minutes). When it runs out the connection closes and Ollama stops generating (seen in its log: "cancel task"), so a retry never runs beside the old generation; a repeat sent while an import runs (a reload) gets that import's draft instead of a second one. The limit is clock time, time asleep included, and Ollama's answer is streamed so the clock is checked at every piece: a 17-minute import seen on 2026-10-28 was the laptop asleep (the model needed about 45 s), and the socket's own wait does not count time asleep, so the late answer was accepted after waking. Now an import whose time ran out while the computer slept stops at the first piece after waking and saves nothing (the page shows the timeout message). A page's own recipe data does not depend on the model: if only its category request runs out, it is saved unclassified, as when the model is unavailable. |
+| 2026-10-28 (5) | Inside a page's main content, a block named like noise (print, widget, share...) that holds most of the content's own text is part of it; comments are removed first and never count | The name rule removed a recipe wrapped in a "print" area, and a page builder's "widget" boxes. Measuring the text outside links keeps related posts and share bars (mostly links) out; removing comments first keeps a long comment section from outweighing the recipe. |
 | 2026-10-28 (3) | A card is two sibling buttons: one opens the recipe, the badge (`aria-pressed`) changes the mark; never one inside the other | A button inside a button is invalid and unpredictable for keyboards and screen readers. The badge shows only what was saved (no optimistic change), ignores clicks while saving, and when the filters hide the card a note offers "ביטול" and takes the focus. |
 | 2026-10-28 (2) | A category's drawing and color come from its name (קינוח, בשרי, קליל, משק…) | A category you add looks like its kind without any setting; any other gets the utensils, an unclassified recipe the notebook. |
 | 2026-10-28 | Fetching a post's media keeps the picture the card showed: a cover that was the default (the first picture) is kept as chosen when the post's items come before it | Found in the browser checks: an upload shown on the card would otherwise be replaced by the post's first item, although nothing was chosen. |
@@ -579,8 +581,6 @@ redirect; a redirect would send the browser past the Vite proxy.
   its recipes the general utensils drawing and color.
 - **Filters are not remembered.** The search and the filters start empty after a reload (the open
   recipe is remembered, in the address).
-- **Importing from recipe websites is not available yet.** The link field says so and offers pasting
-  the text; a website's link is not stored with pasted text (only an Instagram post's is).
 
 - **Categories cannot be deleted or moved yet.** A subcategory stays under the category it was created
   in; removing a category needs a decision about its recipes (milestone 6).

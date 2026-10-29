@@ -321,12 +321,37 @@ SIDEBAR = '<div class="sidebar widget-area"><h3>מתכונים פופולריי�
 )
 def test_the_main_text_inside_layout_wrappers_named_for_a_sidebar_keeps_its_lines_and_sections(layout):
     result = analyze(layout.format(recipe=RECIPE_IN_PARAGRAPHS, sidebar=SIDEBAR))
-    assert [line for line in result.text.splitlines() if line] == [
-        "קרם וניל בכוסות", "הקדמה קצרה על הקינוח.",
-        "לקרם:", '500 מ"ל חלב', "3 כפות סוכר", "2 כפות קורנפלור", "לציפוי:", "100 גרם שוקולד מריר",
-        "אופן ההכנה:", "קרם:", "מחממים את החלב עם הסוכר.", "מוסיפים קורנפלור ומבשלים עד להסמכה.",
-        "ציפוי:", "ממיסים את השוקולד ויוצקים מעל הקרם.", "הערות:", "נשמר במקרר עד 3 ימים.",
-    ]  # nothing from the sidebar or the share buttons
+    assert [line for line in result.text.splitlines() if line] == RECIPE_LINES  # nothing from the sidebar or the share buttons
+
+
+RECIPE_LINES = [
+    "קרם וניל בכוסות", "הקדמה קצרה על הקינוח.",
+    "לקרם:", '500 מ"ל חלב', "3 כפות סוכר", "2 כפות קורנפלור", "לציפוי:", "100 גרם שוקולד מריר",
+    "אופן ההכנה:", "קרם:", "מחממים את החלב עם הסוכר.", "מוסיפים קורנפלור ומבשלים עד להסמכה.",
+    "ציפוי:", "ממיסים את השוקולד ויוצקים מעל הקרם.", "הערות:", "נשמר במקרר עד 3 ימים.",
+]
+LONG_COMMENTS = '<div class="comments-area">' + "<p>איזה מתכון מעולה, הכנתי פעמיים והוספתי קינמון!</p>" * 12 + "</div>"
+
+
+@pytest.mark.parametrize(
+    "inner",
+    [
+        # The recipe inside a block meant for printing, with the print button in it.
+        '<div class="recipe-print-area"><div class="print-button"><a href="#">הדפסת המתכון</a></div>{recipe}</div>',
+        # A page builder's boxes: every block of the post is a "widget".
+        '<div class="elementor-widget-container">{recipe}</div>',
+    ],
+    ids=["print-area", "page-builder-widget"],
+)
+def test_a_block_named_like_noise_that_holds_most_of_the_content_is_kept_and_real_noise_beside_it_is_not(inner):
+    page = (
+        '<article class="post"><h1>קרם וניל בכוסות</h1><div class="entry-content elementor-widget-theme-post-content">'
+        + inner.format(recipe=RECIPE_IN_PARAGRAPHS)
+        + '<div class="related-posts"><h3>אולי יעניין אתכם</h3><p><a href="/cookies">עוגיות שוקולד</a></p></div>'
+        + LONG_COMMENTS  # longer than the recipe, and still left out
+        + "</div></article>"
+    )
+    assert [line for line in analyze(page).text.splitlines() if line] == RECIPE_LINES
 
 
 def test_a_bot_check_instead_of_the_page_is_recognized_and_not_read_as_text():

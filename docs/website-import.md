@@ -37,7 +37,9 @@ windows-1255 page, JSON-LD in an `@graph`, as a list, with `HowToSection`s, HTML
 numbered steps in one string, microdata, two recipes (one named by the page's heading, or none:
 ambiguous), recipe data without ingredients or steps, a blog page's navigation/ads/related
 posts/comments, a post inside layout wrappers named for a sidebar (oogio.net's theme, and the common
-`content-sidebar-wrap`) with ingredient groups as `<br>` lines and `<h1>` section headings, a cut very long page, the canonical address, the picture failing or not being a
+`content-sidebar-wrap`) with ingredient groups as `<br>` lines and `<h1>` section headings, the recipe
+inside a "print" area or a page builder's "widget" box (with related posts and a long comment section
+beside it, both left out), a cut very long page, the canonical address, the picture failing or not being a
 picture, a model that cannot classify, and imports without a model.
 
 ## Limits
@@ -54,10 +56,12 @@ picture, a model that cannot classify, and imports without a model.
 - **The text extraction is a heuristic**: it removes what the page's markup calls navigation,
   comments, ads, sharing and related posts. The element that holds the main content (the largest
   recipe or post container, else the largest article, else `<main>`, else the heading) and the
-  wrappers around it are never removed, whatever their names. A noise-named block *inside* the
-  content (say, the recipe wrapped in a "print" block) is still removed, and small clutter can stay
-  (a view counter, captions, a run-together tag list); the model leaves those out. The review screen
-  shows exactly what was read.
+  wrappers around it are never removed, whatever their names; nor is a block inside it that holds
+  most of its text outside links (the recipe in a "print" area, a page builder's "widget" box).
+  Still removed: a recipe split over *several* such boxes that each hold less than half of the text
+  (some page builders do that), and a recipe inside a block named for comments. Small clutter can
+  stay (a view counter, captions, a run-together tag list); the model leaves those out. The review
+  screen shows exactly what was read.
 - **The local model's time**: one import waits for the model at most `RECIPES_OLLAMA_TIMEOUT_SECONDS`
   (300 s by default, both of its requests together, in clock time: time asleep counts); then the
   request is stopped and nothing is saved. An import seen taking 17 minutes on 2026-10-28 was the
