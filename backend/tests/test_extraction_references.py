@@ -8,6 +8,7 @@ import json
 import httpx2
 import pytest
 
+from app.errors import ApiError
 from app.extraction.ollama import OllamaExtractor
 from app.extraction.output import ReferenceOutput, reference_schema
 from app.extraction.prompt import (
@@ -591,6 +592,100 @@ def test_the_local_extractor_labels_without_categories_then_asks_for_the_categor
     assert output.classification.category_id == 1 and output.dish == "a sweet drink"
     assert extractor.last_usage == {"input_tokens": 3000, "output_tokens": 240}
     assert make_draft(output, DRINK, CATEGORIES).ingredient_groups[0].ingredients[0].text == "חצי תמר מג׳הול"
+
+
+class Clock:
+    """time.monotonic for the extractor, moved forward by the fake Ollama as if it took that long."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+
+def timed_model(monkeypatch, *seconds_per_chat: float | Exception):
+    """A fake Ollama whose chat requests take the given seconds (or raise); records each request's read timeout."""
+    clock = Clock()
+    monkeypatch.setattr("app.extraction.ollama.time", clock)
+    timeouts: list[float] = []
+    steps = list(seconds_per_chat)
+    replies = [answer().model_dump(exclude={"dish", "classification"}), {"dish": "a sweet drink", "classification": DESSERTS}]
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/api/show":
+            return httpx2.Response(200, json={"capabilities": ["completion"]})
+        timeouts.append(request.extensions["timeout"]["read"])
+        step = steps.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        clock.now += step
+        message = {"role": "assistant", "content": json.dumps(replies.pop(0), ensure_ascii=False)}
+        return httpx2.Response(200, json={"message": message, "done_reason": "stop", "prompt_eval_count": 1500, "eval_count": 120})
+
+    client = httpx2.Client(transport=httpx2.MockTransport(handle))
+    extractor = OllamaExtractor(base_url="http://127.0.0.1:11434", model="qwen3:8b", context_tokens=8192, timeout=300, client=client)
+    return extractor, timeouts
+
+
+def test_one_time_limit_covers_the_whole_import_each_request_gets_what_is_left(monkeypatch):
+    extractor, timeouts = timed_model(monkeypatch, 250, 2)
+    output = extractor.extract(DRINK, CATEGORIES)
+    assert timeouts == [300, 50]  # the labels took 250 of the 300 seconds
+    assert output.classification.category_id == 1
+
+
+def test_when_the_time_is_up_the_request_stops_and_the_error_gives_the_limit(monkeypatch):
+    extractor, timeouts = timed_model(monkeypatch, httpx2.ReadTimeout("no answer"))
+    with pytest.raises(ApiError) as caught:
+        extractor.extract(DRINK, CATEGORIES)
+    assert (caught.value.status_code, caught.value.code, caught.value.details) == (504, "extraction_timeout", {"seconds": 300})
+    assert "300 seconds" in caught.value.message and "nothing was saved" in caught.value.message
+    assert len(timeouts) == 1  # no second request after the time ran out
+
+
+@pytest.mark.parametrize(
+    "seconds",
+    [
+        (301,),  # the labels came after the limit (say, the computer slept through the request)
+        (250, 60),  # the labels came in time, the category after the limit
+    ],
+    ids=["labels-late", "category-late"],
+)
+def test_nothing_the_model_answers_after_the_limit_is_used_and_nothing_is_kept(monkeypatch, seconds):
+    extractor, timeouts = timed_model(monkeypatch, *seconds)
+    with pytest.raises(ApiError) as caught:
+        extractor.extract(DRINK, CATEGORIES)
+    assert caught.value.code == "extraction_timeout"
+    assert len(timeouts) == len(seconds)
+
+
+def test_a_computer_that_sleeps_past_the_limit_stops_the_answer_at_the_first_piece_after_waking(monkeypatch):
+    clock = Clock()
+    monkeypatch.setattr("app.extraction.ollama.time", clock)
+    whole = json.dumps(answer().model_dump(exclude={"dish", "classification"}), ensure_ascii=False)
+    pieces = [whole[i : i + 40] for i in range(0, len(whole), 40)]
+    read: list[int] = []
+
+    def stream():
+        for n, piece in enumerate(pieces):
+            if n == 2:
+                clock.now += 15 * 60  # asleep for 15 minutes: past the 300 s limit
+            read.append(n)
+            yield (json.dumps({"message": {"role": "assistant", "content": piece}, "done": False}) + "\n").encode()
+        yield (json.dumps({"done": True, "done_reason": "stop", "prompt_eval_count": 1500, "eval_count": 120}) + "\n").encode()
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/api/show":
+            return httpx2.Response(200, json={"capabilities": ["completion"]})
+        return httpx2.Response(200, content=stream())
+
+    client = httpx2.Client(transport=httpx2.MockTransport(handle))
+    extractor = OllamaExtractor(base_url="http://127.0.0.1:11434", model="qwen3:8b", context_tokens=8192, timeout=300, client=client)
+    with pytest.raises(ApiError) as caught:
+        extractor.extract(DRINK, CATEGORIES)
+    assert caught.value.code == "extraction_timeout"
+    assert read == [0, 1, 2] and len(pieces) > 3  # stopped at the first piece after waking; the rest never read
 
 
 def test_if_the_category_request_fails_the_recipe_is_imported_unclassified():

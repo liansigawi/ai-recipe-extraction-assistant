@@ -173,10 +173,14 @@ ImportPanel ── POST /api/imports/text {text, use_model} ──► app/api/im
   2. segments.py cuts the text into numbered passages; prompt.py builds the request.
      claude.py (or ollama.py): one request, with structured output (the JSON schema of
      extraction/output.py: one required role per passage, category ids limited to the existing
-     ones), a 16,000-token answer limit, a timeout (120 s; 600 s locally) and, for Claude, two
-     automatic retries for temporary errors. The local model's first request has no categories
-     in it (roles and "is this a recipe" only); a second, short request then asks the category
-     of the finished draft (one retry on a server error; if it fails, the draft is unclassified).
+     ones), a 16,000-token answer limit, a timeout (Claude: 120 s a request; locally: 300 s of
+     clock time for the whole import, both requests together, time asleep included; the answer is
+     streamed and the clock checked at every piece, and when the time is up the connection closes,
+     Ollama stops generating and nothing is saved) and, for Claude, two automatic retries for
+     temporary errors. The local model's first request has no categories in it (roles and "is
+     this a recipe" only); a second, short request then asks the category of the finished draft
+     (one retry on a server error; if it fails, the draft is unclassified, unless the import's
+     time is up: then nothing is saved).
   3. review.py: copies each labeled passage from the original, checks every other part of the
      answer and builds a draft with issues (below).
   4. crud.create_import: checks the category ids against the database again, then saves the
@@ -406,7 +410,10 @@ fields in `details`), `unknown_category` and `subcategory_not_in_category` (422,
 `details`), and `forbidden_origin` (403). Imports add `not_a_recipe` (422),
 `extraction_not_configured` and `extraction_busy` (503), `extraction_timeout` (504), and
 `extraction_auth_failed`, `extraction_unreachable`, `extraction_refused`, `extraction_incomplete`,
-`extraction_invalid_output`, `extraction_failed` (502).
+`extraction_invalid_output`, `extraction_failed` (502). A local `extraction_timeout` carries the limit
+in `details.seconds`. The same import request sent again while it is still running (after a reload,
+from a second tab) shares that run (`app/api/shared_runs.py`): one generation, one draft, the same
+answer for both.
 
 Every failing response from the app uses one shape (`backend/app/errors.py`), including FastAPI's own
 404, 405 and 422 errors and unexpected server errors (500, with no internal details). `/docs`
@@ -535,6 +542,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-28 (4) | Recipe websites: the page's Schema.org recipe data is copied word for word into the draft, and the model only classifies it; without recipe data the page's main text goes through the usual extraction | The site's own data is the most faithful source: nothing to mis-copy, and seconds instead of a minute. The model is still the only one choosing a category, by the same rules. |
 | 2026-10-28 (4) | One link endpoint chooses the importer by the host name; the website reader checks every address (before connecting and after), sends an honest User-Agent and runs no scripts | Pasting any link must never reach this computer or the home network (SSRF). Sites that block such readers are reported as blocking, not worked around; pasting the text always works. |
 | 2026-10-28 (4) | A page-text draft with no ingredient lines or no steps is refused as incomplete, and a bot-check page as blocked | Seen live: a page whose ingredient lists are drawn by its scripts, and a site that answered with a robot check. A half recipe saved as a draft looks complete enough to trust. |
+| 2026-10-28 (5) | The local model's time limit is for the whole import (both requests together), 300 s by default, and a repeated identical import shares the running one | The limit was 600 s for each request, so one import could wait 20 minutes. 300 s is above the worst normal case on an 8 GB GPU (the whole 8k working memory at ~40 tokens a second is about 3.5 minutes). When it runs out the connection closes and Ollama stops generating (seen in its log: "cancel task"), so a retry never runs beside the old generation; a repeat sent while an import runs (a reload) gets that import's draft instead of a second one. The limit is clock time, time asleep included, and Ollama's answer is streamed so the clock is checked at every piece: a 17-minute import seen on 2026-10-28 was the laptop asleep (the model needed about 45 s), and the socket's own wait does not count time asleep, so the late answer was accepted after waking. Now an import whose time ran out while the computer slept stops at the first piece after waking and saves nothing (the page shows the timeout message). A page's own recipe data does not depend on the model: if only its category request runs out, it is saved unclassified, as when the model is unavailable. |
 | 2026-10-28 (3) | A card is two sibling buttons: one opens the recipe, the badge (`aria-pressed`) changes the mark; never one inside the other | A button inside a button is invalid and unpredictable for keyboards and screen readers. The badge shows only what was saved (no optimistic change), ignores clicks while saving, and when the filters hide the card a note offers "ביטול" and takes the focus. |
 | 2026-10-28 (2) | A category's drawing and color come from its name (קינוח, בשרי, קליל, משק…) | A category you add looks like its kind without any setting; any other gets the utensils, an unclassified recipe the notebook. |
 | 2026-10-28 | Fetching a post's media keeps the picture the card showed: a cover that was the default (the first picture) is kept as chosen when the post's items come before it | Found in the browser checks: an upload shown on the card would otherwise be replaced by the post's first item, although nothing was chosen. |

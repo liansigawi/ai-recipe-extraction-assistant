@@ -5,11 +5,13 @@ offline. (conftest.py also makes sure no test can create a real Claude client.)
 """
 
 import sqlite3
+import threading
+import time
 from contextlib import closing
 
 import pytest
 
-from app.api.imports import get_extractor_factory
+from app.api.imports import IMPORTS_UNDER_WAY, get_extractor_factory
 from app.errors import ApiError
 from app.extraction.output import ExtractionOutput
 from app.sample_data import STARTER_CATEGORIES, STARTER_SUBCATEGORIES
@@ -151,6 +153,47 @@ def test_when_extraction_fails_nothing_is_saved_and_the_error_says_why(client, u
     assert response.status_code == error.status_code
     assert response.json()["error"]["code"] == error.code
     assert recipe_count(client) == before
+
+
+TIMED_OUT = ApiError(504, "extraction_timeout", "The local model did not finish within 300 seconds.", {"seconds": 300})
+
+
+@pytest.mark.parametrize("result", ["draft", "timeout"])
+def test_the_same_import_sent_again_while_it_runs_gets_the_same_answer_and_no_second_draft(client, use, result):
+    started, release = threading.Event(), threading.Event()
+
+    class Slow(StandIn):
+        def extract(self, text, categories):
+            started.set()
+            release.wait(5)
+            return super().extract(text, categories)
+
+    model = use(Slow(answer() if result == "draft" else TIMED_OUT))
+    before = recipe_count(client)
+    responses: list = []
+    send = lambda: responses.append(client.post("/api/imports/text", json={"text": SOURCE}))  # noqa: E731
+    first = threading.Thread(target=send)
+    first.start()
+    assert started.wait(5)
+    repeat = threading.Thread(target=send)  # say, after the page was reloaded
+    repeat.start()
+    deadline = time.monotonic() + 5
+    while IMPORTS_UNDER_WAY.waiting() == 0:
+        assert time.monotonic() < deadline
+        time.sleep(0.005)
+    release.set()
+    first.join(5)
+    repeat.join(5)
+    assert len(model.calls) == 1  # one generation
+    if result == "draft":
+        assert [response.status_code for response in responses] == [201, 201]
+        assert responses[0].json()["id"] == responses[1].json()["id"]
+        assert recipe_count(client) == before + 1  # one draft
+    else:  # the time ran out: both get the message, and no draft is saved, then or later
+        assert [response.status_code for response in responses] == [504, 504]
+        assert responses[0].json()["error"] == responses[1].json()["error"]
+        assert responses[0].json()["error"]["details"] == {"seconds": 300}
+        assert recipe_count(client) == before
 
 
 def test_text_that_is_not_a_recipe_is_refused_and_not_saved(client, use):

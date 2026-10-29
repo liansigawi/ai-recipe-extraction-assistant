@@ -159,6 +159,18 @@ def test_a_page_whose_text_is_not_a_recipe_says_so_and_keeps_the_address(client,
     assert client.get("/api/recipes").json()[0]["original"] is None  # nothing saved: still the samples
 
 
+def test_when_the_model_runs_out_of_time_nothing_is_saved_and_the_error_keeps_the_link_and_the_limit(client, use, site):
+    use(Classifier(ApiError(504, "extraction_timeout", "The local model did not finish within 300 seconds.", {"seconds": 300})))
+    blog = "https://blog.example.com/orange-cake"
+    site({blog: html(BLOG)})
+    before = len(client.get("/api/recipes").json())
+    response = link(client, blog)
+    assert response.status_code == 504
+    assert response.json()["error"]["code"] == "extraction_timeout"
+    assert response.json()["error"]["details"] == {"seconds": 300, "url": blog}
+    assert len(client.get("/api/recipes").json()) == before
+
+
 def test_a_page_whose_text_gives_steps_but_no_ingredients_is_not_saved_half_filled(client, use, site):
     use(Classifier(answer(ingredient_groups=[])))
     blog = "https://blog.example.com/orange-cake"

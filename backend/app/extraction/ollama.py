@@ -13,6 +13,8 @@ the model's answer in that shape; `options.num_ctx` sets the model's working mem
 import json
 import logging
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import httpx2
@@ -52,7 +54,10 @@ class OllamaExtractor:
         self.mode = mode  # "references" (labeled passages) or "text" (copied wording)
         self._base_url = base_url
         self._context_tokens = context_tokens
+        # For one import, all its requests together, in clock time: time asleep counts (time.monotonic is
+        # Windows' QueryPerformanceCounter, which goes on during sleep; measured on 2026-10-28).
         self._timeout = timeout
+        self._deadline = 0.0  # when the current import's time is up (time.monotonic)
         self._client = client  # tests pass one with a fake transport
         self.last_usage: dict[str, int] = {}  # tokens of the latest request, for the quality check
         self.last_raw: str | None = None  # the model's answer exactly as received, for tracing
@@ -60,6 +65,7 @@ class OllamaExtractor:
     def extract(self, text: str, categories: list[schemas.Category]) -> ExtractionOutput | ReferenceOutput:
         self.last_usage = {}
         self.last_raw = None
+        self._deadline = time.monotonic() + self._timeout
         # In references mode the first request labels the passages and recognizes a recipe without
         # seeing the categories (prompt.REFERENCE_LABELING_PROMPT); the category is asked afterwards.
         request = build_request(text, categories, self.mode, classify=False)
@@ -77,11 +83,14 @@ class OllamaExtractor:
 
     def _classify(self, output: ReferenceOutput, text: str, categories: list[schemas.Category]) -> ReferenceOutput:
         """Ask for the category from the finished draft alone (a separate, short request). If that
-        request fails, the recipe stays unclassified, for the person to classify."""
+        request fails, the recipe stays unclassified, for the person to classify; but when the import's
+        time is up, the import ends there and nothing is kept (no draft after the limit)."""
         request = build_classification_request(make_draft(output, text, categories), categories)
         try:
             answer = ClassificationAnswer.model_validate_json(self._chat(request, len(text)))
         except (ApiError, ValidationError) as error:
+            if isinstance(error, ApiError) and error.code == "extraction_timeout":
+                raise
             log.warning("Classification request failed (%s); the recipe stays unclassified.", error)
             return output
         return output.model_copy(update={"classification": answer.classification, "dish": answer.dish})
@@ -89,6 +98,7 @@ class OllamaExtractor:
     def classify_draft(self, draft: schemas.RecipeInput, categories: list[schemas.Category]) -> Classification:
         """Only the category of a draft that is complete already (a page's own recipe data): the same
         short request as after labeling. Any failure is the caller's to handle (the draft stays unclassified)."""
+        self._deadline = time.monotonic() + self._timeout
         request = build_classification_request(draft, categories)
         try:
             return ClassificationAnswer.model_validate_json(self._chat(request, len(request.user))).classification
@@ -104,7 +114,7 @@ class OllamaExtractor:
                 {"role": "user", "content": request.user},
             ],
             "format": request.schema,
-            "stream": False,
+            "stream": True,  # read piece by piece, so the clock can be checked as the answer comes (_answer)
             # Stop at the end of the working memory. By default Ollama then drops the oldest half
             # (the instructions and the text) and goes on: a model repeating itself once ran for
             # 28,000 tokens, until the timeout, instead of stopping at 8,192.
@@ -116,7 +126,7 @@ class OllamaExtractor:
             body["think"] = False  # a reasoning model would spend its working memory thinking aloud
 
         started = time.monotonic()
-        data = self._send("POST", "/api/chat", body, self._timeout).json()
+        data = self._answer(body)
         prompt_tokens = data.get("prompt_eval_count", 0)
         output_tokens = data.get("eval_count", 0)
         self.last_usage = {
@@ -138,20 +148,62 @@ class OllamaExtractor:
     def _capabilities(self) -> list[str]:
         """What the model can do ("completion", "thinking", "vision"...); empty if Ollama cannot say."""
         try:
-            response = self._send("POST", "/api/show", {"model": self.model}, 30)
+            response = self._send("POST", "/api/show", {"model": self.model}, min(30, self._time_left()))
         except ApiError as error:
             if error.code == "extraction_model_missing":
                 raise
             return []
         return list(response.json().get("capabilities") or [])
 
+    def _answer(self, body: dict[str, Any]) -> dict[str, Any]:
+        """The model's answer, read as Ollama streams it, with the clock checked at every piece. A socket's
+        wait does not count time asleep, so a computer that slept past the limit would otherwise accept the
+        whole late answer after waking; this stops at the first piece after the limit instead: the
+        connection closes, Ollama stops generating, and nothing from the late answer is used."""
+        for attempt in (1, 2):
+            try:
+                with self._stream(body) as response:
+                    if response.status_code >= 500 and attempt == 1:
+                        # Ollama's GPU runner crashed twice in about 350 requests ("CUDA error: unknown
+                        # error"); the next request reloads the model and works, so one more try spares an error.
+                        log.warning("Ollama answered HTTP %s; trying once more.", response.status_code)
+                        continue
+                    if response.status_code != 200:
+                        response.read()
+                        self._refuse(response)
+                    content, last = [], {}
+                    for line in response.iter_lines():
+                        self._time_left()  # raises once the time is up
+                        if line.strip():
+                            last = json.loads(line)
+                            if last.get("error"):
+                                raise ApiError(502, "extraction_failed", f"Ollama stopped with an error: {str(last['error'])[:200]}")
+                            content.append((last.get("message") or {}).get("content") or "")
+                    return {**last, "message": {"role": "assistant", "content": "".join(content)}}
+            except httpx2.TimeoutException:
+                raise self._out_of_time() from None
+            except httpx2.HTTPError:
+                raise self._unavailable() from None
+        raise AssertionError("unreachable")
+
+    @contextmanager
+    def _stream(self, body: dict[str, Any]) -> Iterator[httpx2.Response]:
+        # The socket waits at most the time left (a backstop: that wait does not count time asleep).
+        url, timeout = self._base_url + "/api/chat", self._time_left()
+        if self._client is not None:
+            with self._client.stream("POST", url, json=body, timeout=timeout) as response:
+                yield response
+        else:
+            with new_client() as client, client.stream("POST", url, json=body, timeout=timeout) as response:
+                yield response
+
     def _send(self, method: str, path: str, body: dict[str, Any], timeout: float) -> httpx2.Response:
         response = self._request(method, path, body, timeout)
-        if response.status_code >= 500 and path == "/api/chat":
-            # Ollama's GPU runner crashed twice in about 350 requests ("CUDA error: unknown error");
-            # the next request reloads the model and works, so one more try spares the person an error.
-            log.warning("Ollama answered HTTP %s; trying once more.", response.status_code)
-            response = self._request(method, path, body, timeout)
+        self._refuse(response)
+        return response
+
+    def _refuse(self, response: httpx2.Response) -> None:
+        """Raise the error for an answer that is not 200."""
         if response.status_code == 404:
             raise ApiError(
                 503, "extraction_model_missing", f"Ollama does not have the model {self.model}. Run: ollama pull {self.model}"
@@ -160,7 +212,6 @@ class OllamaExtractor:
             raise self._out_of_memory()
         if response.status_code != 200:
             raise ApiError(502, "extraction_failed", f"Ollama answered with an error (HTTP {response.status_code}).")
-        return response
 
     def _request(self, method: str, path: str, body: dict[str, Any], timeout: float) -> httpx2.Response:
         try:
@@ -169,13 +220,27 @@ class OllamaExtractor:
             with new_client() as client:
                 return client.request(method, self._base_url + path, json=body, timeout=timeout)
         except httpx2.TimeoutException:
-            raise ApiError(
-                504, "extraction_timeout", "The local model did not answer in time (RECIPES_OLLAMA_TIMEOUT_SECONDS)."
-            ) from None
+            raise self._out_of_time() from None
         except httpx2.HTTPError:
-            raise ApiError(
-                503, "extraction_local_unavailable", "Ollama is not running on this computer. Start the Ollama app."
-            ) from None
+            raise self._unavailable() from None
+
+    def _unavailable(self) -> ApiError:
+        return ApiError(503, "extraction_local_unavailable", "Ollama is not running on this computer. Start the Ollama app.")
+
+    def _time_left(self) -> float:
+        left = self._deadline - time.monotonic()
+        if left <= 0:
+            raise self._out_of_time()
+        return left
+
+    def _out_of_time(self) -> ApiError:
+        return ApiError(
+            504,
+            "extraction_timeout",
+            f"The local model did not finish within {self._timeout:g} seconds (RECIPES_OLLAMA_TIMEOUT_SECONDS). "
+            "Its request was stopped and nothing was saved.",
+            {"seconds": self._timeout},
+        )
 
     def _out_of_memory(self) -> ApiError:
         return ApiError(

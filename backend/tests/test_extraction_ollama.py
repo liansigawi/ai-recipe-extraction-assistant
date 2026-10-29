@@ -59,7 +59,7 @@ def test_the_request_has_the_rules_the_schema_and_the_text_as_data():
     assert (show_path, show) == ("/api/show", {"model": "qwen3:8b"})
     assert chat_path == "/api/chat"
     assert chat["model"] == "qwen3:8b"
-    assert chat["stream"] is False
+    assert chat["stream"] is True  # read piece by piece, the clock checked at each (time asleep counts)
     assert chat["think"] is False  # this model can think; for extraction it should not
     assert chat["options"] == {"num_ctx": 12_288, "temperature": 0}
     assert chat["shift"] is False  # stop when the working memory is full, never drop the instructions

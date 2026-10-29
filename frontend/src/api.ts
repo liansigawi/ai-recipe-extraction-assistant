@@ -49,6 +49,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T
 }
 
+/** "5 דקות", "דקה", "90 שניות". */
+function durationText(seconds: number): string {
+  if (seconds % 60 !== 0) return `${seconds} שניות`
+  return seconds === 60 ? 'דקה' : `${seconds / 60} דקות`
+}
+
 /** A message for the page about any failed call. */
 export function errorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) {
@@ -81,8 +87,12 @@ export function errorMessage(error: unknown): string {
       return 'Ollama לא פועל במחשב הזה. הפעילו את Ollama (מתפריט התחל) ונסו שוב.'
     case 'extraction_model_missing':
       return `המודל המקומי עוד לא הורד ל-Ollama (${error.message}).`
-    case 'extraction_timeout':
-      return 'המודל לא ענה בזמן. נסו שוב.'
+    case 'extraction_timeout': {
+      // The local model's limit comes with the error (RECIPES_OLLAMA_TIMEOUT_SECONDS); Claude's does not.
+      const seconds = (error.details as { seconds?: unknown } | null)?.seconds
+      const within = typeof seconds === 'number' ? `בתוך ${durationText(seconds)}` : 'בזמן'
+      return `המודל לא סיים לקרוא את המתכון ${within}, ולכן הייבוא נעצר ושום דבר לא נשמר. מה שהדבקתם או קישרתם נשאר כאן: אפשר לנסות שוב.`
+    }
     case 'extraction_refused':
     case 'extraction_incomplete':
     case 'extraction_invalid_output':

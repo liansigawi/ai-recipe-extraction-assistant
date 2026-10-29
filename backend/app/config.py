@@ -52,8 +52,10 @@ class Settings(BaseSettings):
     # Hebrew caption needed about 4,850. 8k keeps qwen3:8b entirely on an 8 GB GPU (6.2 GB, measured
     # on an RTX 5060 Laptop); more spills part of the model to the CPU, which is slower.
     ollama_context_tokens: int = Field(default=8_192, ge=4_096, le=131_072)
-    # A local model is slower than the API, especially the first time (it is loaded into memory).
-    ollama_timeout_seconds: float = Field(default=600, gt=0, le=3_600)
+    # The longest one import waits for the local model, all its requests together; then the request is
+    # stopped (Ollama stops generating) and nothing is saved. A recipe usually takes under a minute on
+    # an 8 GB GPU; filling the whole working memory (8k tokens) at ~40 tokens a second takes about 3.5.
+    ollama_timeout_seconds: float = Field(default=300, gt=0, le=3_600)
 
     @property
     def database_path(self) -> Path:

@@ -392,7 +392,7 @@ with `ollama ps` that the model runs on the GPU: `100% GPU` is fast; a CPU share
 | `RECIPES_EXTRACTOR` | `claude` | `ollama`: read imported text with a local model. |
 | `RECIPES_OLLAMA_MODEL` | `qwen3:8b` | The Ollama model to use (`ollama list` shows what you have). |
 | `RECIPES_OLLAMA_CONTEXT_TOKENS` | `8192` | The model's working memory for one import. 8k fits qwen3:8b entirely in 8 GB and is enough for long captions (one needed about 4,850). For longer texts the import says it ran out; raise it, and part of the model moves to the CPU. |
-| `RECIPES_OLLAMA_TIMEOUT_SECONDS` | `600` | How long one local import may take. |
+| `RECIPES_OLLAMA_TIMEOUT_SECONDS` | `300` | The longest one local import waits for the model (all its requests together, in clock time: if the computer sleeps past it, the import stops when it wakes). Then the request is stopped, Ollama stops generating, nothing is saved, and the page says so; what you pasted or linked stays, to try again. A recipe usually takes under a minute on an 8 GB GPU. |
 | `RECIPES_OLLAMA_URL` | `http://127.0.0.1:11434` | Where Ollama runs. Only addresses on this computer are accepted. |
 | `RECIPES_EXTRACTION_MODE` | `references` | How the model answers (below). `text`: it retypes the recipe, the first approach, kept for comparison. Applies to Claude too. |
 

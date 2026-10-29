@@ -58,7 +58,11 @@ picture, a model that cannot classify, and imports without a model.
   content (say, the recipe wrapped in a "print" block) is still removed, and small clutter can stay
   (a view counter, captions, a run-together tag list); the model leaves those out. The review screen
   shows exactly what was read.
-- **The local model's speed**: once, with the laptop on battery, the model generated 1.75 tokens a
-  second instead of about 40, and one page took 17 minutes; the same request took under a minute
-  before and after. A very slow import says more about the computer at that moment than about the page.
+- **The local model's time**: one import waits for the model at most `RECIPES_OLLAMA_TIMEOUT_SECONDS`
+  (300 s by default, both of its requests together, in clock time: time asleep counts); then the
+  request is stopped and nothing is saved. An import seen taking 17 minutes on 2026-10-28 was the
+  laptop going to sleep three seconds after the import started (Windows' power log: asleep 15:54:48
+  to 16:10:38); the model itself needed about 45 seconds. If the computer sleeps past the limit, the
+  import stops as soon as it wakes and the page says the time ran out; try again. A page's own recipe
+  data is still saved (only its category comes from the model), unclassified if that request ran out.
 - Login pages, paywalls and pages over 3 MB are not read.

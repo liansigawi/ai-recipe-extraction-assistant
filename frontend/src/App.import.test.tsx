@@ -181,6 +181,24 @@ describe('importing with a local model (Ollama)', () => {
     expect(api.changes()[0].body).toEqual({ text: PASTED, use_model: true })
   })
 
+  it('when the model runs out of time, says so with the limit, keeps the text and can try again', async () => {
+    const { user, api } = await openImport({ extraction: LOCAL })
+    await user.click(textBox())
+    await user.paste(PASTED)
+    api.answerNextWith(504, { error: { code: 'extraction_timeout', message: 'English for the API.', details: { seconds: 300 } } })
+    await user.click(screen.getByRole('button', { name: 'קריאה עם המודל המקומי' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'המודל לא סיים לקרוא את המתכון בתוך 5 דקות, ולכן הייבוא נעצר ושום דבר לא נשמר.',
+    )
+    expect(textBox()).toHaveValue(PASTED)
+    await user.click(screen.getByRole('button', { name: 'קריאה עם המודל המקומי' }))
+    await screen.findByRole('heading', { level: 2, name: 'בדיקת טיוטה' })
+    expect(api.changes().map((change) => change.body)).toEqual([
+      { text: PASTED, use_model: true },
+      { text: PASTED, use_model: true },
+    ])
+  })
+
   it('explains when Ollama is not running, and checks again on request', async () => {
     const { user, api } = await openImport({ extraction: { ...LOCAL, configured: false, problem: 'ollama_unreachable' } })
     expect(screen.getByText(/Ollama לא פועל במחשב הזה/)).toBeInTheDocument()

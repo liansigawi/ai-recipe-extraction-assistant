@@ -12,10 +12,11 @@ then reviews it in the editor and saves it explicitly. If anything fails before 
 nothing is saved and the page keeps the pasted text.
 """
 
+import functools
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx2
 
@@ -23,6 +24,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app import crud, media
+from app.api.shared_runs import SharedRuns
 from app.config import load_settings
 from app.db import get_session
 from app.errors import ERROR_RESPONSES, ApiError, ErrorResponse
@@ -82,6 +84,21 @@ SessionDep = Annotated[Session, Depends(get_session)]
 ExtractorFactory = Callable[[], Extractor]
 
 
+IMPORTS_UNDER_WAY = SharedRuns()
+
+
+def shared_when_repeated(endpoint: Callable[..., Recipe]) -> Callable[..., Recipe]:
+    """The same import sent again while it is still running shares that run: one generation on the
+    model, one draft, the same answer for both (app/api/shared_runs.py)."""
+
+    @functools.wraps(endpoint)
+    def run(data: TextImport | InstagramImport | LinkImport, *args: Any, **kwargs: Any) -> Recipe:
+        key = f"{endpoint.__name__} {data.model_dump_json()}"
+        return IMPORTS_UNDER_WAY.run(key, lambda: endpoint(data, *args, **kwargs))
+
+    return run
+
+
 def get_extractor_factory() -> ExtractorFactory:
     """FastAPI dependency: how to get an extractor. Tests replace it with a stand-in.
 
@@ -114,6 +131,7 @@ def extraction_info() -> ExtractionInfo:
 
 
 @router.post("/imports/text", status_code=status.HTTP_201_CREATED, responses=IMPORT_ERRORS)
+@shared_when_repeated
 def import_text(
     data: TextImport,
     session: SessionDep,
@@ -155,6 +173,7 @@ CAPTION_INCOMPLETE = Issue(
 
 
 @router.post("/imports/instagram", status_code=status.HTTP_201_CREATED, responses=INSTAGRAM_ERRORS)
+@shared_when_repeated
 def import_instagram(
     data: InstagramImport,
     session: SessionDep,
@@ -190,7 +209,7 @@ def import_instagram(
         draft, model = _draft(retrieval.caption, data.use_model, session, new_extractor)
     except ApiError as error:
         # The caption was read: hand it back, so the page can keep it for another try or for saving by hand.
-        raise ApiError(error.status_code, error.code, error.message, details) from None
+        raise ApiError(error.status_code, error.code, error.message, _merged(error.details, details)) from None
     # The credit comes from the post's data (the account and its display name), never from the model.
     people = [person for person in (retrieval.author, *retrieval.coauthors) if person is not None]
     creators = [Creator(name=person.full_name, username=person.username) for person in people]
@@ -208,6 +227,7 @@ def import_instagram(
 
 
 @router.post("/imports/link", status_code=status.HTTP_201_CREATED, responses=LINK_ERRORS)
+@shared_when_repeated
 def import_link(
     data: LinkImport,
     session: SessionDep,
@@ -224,6 +244,11 @@ def import_link(
         request = InstagramImport(url=data.url, use_model=data.use_model, allow_duplicate=data.allow_duplicate)
         return import_instagram(request, session, new_extractor, retrieve, media_folder, transport)
     return _import_website(data, session, new_extractor, reader, media_folder)
+
+
+def _merged(details: Any, more: dict[str, Any]) -> dict[str, Any]:
+    """An error's own details (say, the model's time limit) with the import's (the address, the caption)."""
+    return {**details, **more} if isinstance(details, dict) else more
 
 
 def _website_error(error: WebsiteError, url: str) -> ApiError:
@@ -277,7 +302,7 @@ def _import_website(data: LinkImport, session: Session, new_extractor: Extractor
         except ApiError as error:
             if error.code == "not_a_recipe":
                 raise ApiError(422, "website_no_recipe", "The page's text was read, but the model found no recipe in it.", details) from None
-            raise ApiError(error.status_code, error.code, error.message, details) from None
+            raise ApiError(error.status_code, error.code, error.message, _merged(error.details, details)) from None
         if data.use_model and (not any(group.ingredients for group in draft.ingredient_groups) or not any(group.steps for group in draft.step_groups)):
             # A recipe page whose text has no ingredient lines, or no steps: the page shows them some
             # other way (seen live: lists drawn by the page's scripts, absent from the page it sends).
