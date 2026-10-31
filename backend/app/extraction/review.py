@@ -20,7 +20,11 @@ Nothing the model says is taken on trust:
   database's own category names;
 - quotes must be words from the original text; others are removed;
 - servings need evidence: a passage that says it is the yield. A passage the model rejected as
-  not part of the recipe (an instruction inside the text) never supplies a value.
+  not part of the recipe (an instruction inside the text) never supplies a value;
+- an ingredient that the text (or a screenshot's line wrapping) breaks over two lines is joined
+  only on a clear sign: a number whose unit starts the next line, a "+" or an open bracket, a
+  remark in brackets, a name cut after "גבינת" or "חמאת", a line ending in "ללא" or "עם". A line
+  that only might go on the one before ("מופשר") stays as written and is flagged (_wrapped).
 """
 
 import re
@@ -32,7 +36,9 @@ from app import schemas
 from app.errors import ApiError
 from app.extraction import ingredient_words
 from app.extraction.output import Classification, ExtractionOutput, ReferenceLabels, ReferenceOutput
-from app.extraction.quantity import find_quantity
+from app.extraction.ingredient_words import HEBREW as INGREDIENT_WORDS
+from app.extraction.ingredient_words import mentions_ingredient
+from app.extraction.quantity import ends_with_unit, find_quantity, quantity_unclear, starts_with_amount, starts_with_unit
 from app.extraction.segments import Segment, ends_with_colon, passage_key, passage_text, segment_text
 
 MAX_MODEL_ISSUES = 20
@@ -565,8 +571,17 @@ def build_draft_from_references(
             groups = ingredient_groups if role == "ingredient" else step_groups
             if not groups:
                 groups.append({"heading": None, "items": []})
-            current = [segment.id, segment.id]
-            groups[-1]["items"].append(current)
+            before = groups[-1]["items"][-1] if role == "ingredient" and previous == "ingredient" and groups[-1]["items"] else None
+            next_line = before is not None and before[1] == segment.id - 1 and segment.line == segments[before[1] - 1].line + 1
+            line_before = passage_text(source_text, segments, before[0], before[1]) if next_line else ""
+            if next_line and _wrapped(line_before, segment.text(source_text)):
+                before[1] = segment.id  # one ingredient that the screen (or the text) broke over two lines
+                current = before
+            else:
+                current = [segment.id, segment.id]
+                groups[-1]["items"].append(current)
+                if next_line and _maybe_continues(segment.text(source_text)):
+                    issues.append(_maybe_continued(line_before, segment.text(source_text)))
         elif role in ("tip", "info"):  # a note
             if last_note is not None and last_note[1] == segment.id - 1 and _note_goes_on(source_text, segments, segment):
                 last_note[1] = segment.id  # "זמן הכנה:" and "50 דקות", or a tip that goes on to the next line
@@ -602,6 +617,8 @@ def build_draft_from_references(
             text = _line(_without_final_period(text_of(first, last, keep_labels=first in purpose_items)))
             if text:
                 ingredients.append({"text": text, "quantity": find_quantity(text)})
+                if quantity_unclear(text):
+                    issues.append(_unclear_amount(text))
         if ingredients:
             ingredient_list.append({"name": _group_name(source_text, segments, group["heading"]), "ingredients": ingredients})
 
@@ -814,6 +831,60 @@ def _labels(output: ReferenceOutput, source_text: str, segments: list[Segment]) 
 
 def _group_name(source_text: str, segments: list[Segment], heading: int | None) -> str | None:
     return _heading(passage_text(source_text, segments, heading, heading)) if heading is not None else None
+
+
+# Words that only begin an ingredient's name ("גבינת" in "גבינת שמנת", "חמאת" in "חמאת בוטנים", "אגוזי" in "אגוזי
+# מלך"): Hebrew's construct forms, ending in ת (not the plural ות) or in י. A line that ends with one is cut off.
+# Not a unit ("גרם" in "גרם מסאלה"), not a word that is an ingredient by itself ("שמנת").
+_NAME_STARTS = frozenset(
+    name.split()[0]
+    for name in INGREDIENT_WORDS
+    if " " in name
+    and name.split()[0] not in INGREDIENT_WORDS
+    and not starts_with_unit(name.split()[0])
+    and re.search(r"(?<!ו)ת$|י$", name.split()[0])
+)
+# Words that cannot end a line of an ingredient: what they join or qualify is on the next line.
+_JOINING_WORDS = frozenset({"ללא", "בלי", "עם", "של", "או", "וגם", "גם", "כמו", "לפי", "בתוספת", "and", "or", "with", "of", "without", "plus"})
+_LAST_NUMBER = re.compile(r"(?:^|[\s+])\d+(?:[.,/]\d+)?\s*$")
+_REMARK_ONLY = re.compile(r"^\s*\([^()]*\)\s*[.,;]?\s*$")
+
+
+def _wrapped(before: str, line: str) -> bool:
+    """Is this line the rest of the ingredient line before it? Only on a clear sign; never by closeness alone."""
+    before, line = before.rstrip(), line.strip()
+    last_word = re.sub(r"[^\w'\"׳״]+$", "", before).split()[-1:] or [""]
+    if _LAST_NUMBER.search(before) and starts_with_unit(line) and (starts_with_amount(before) or "+" in before.split()[-1]):
+        return True  # "15 ביסקוויטים טחונים+100" / "גרם חמאה מומסת": the number's unit is on the next line
+    if re.search(r"\+\s*$", before) or (re.search(r"\+\s*\S+\s*$", before) and ends_with_unit(before)):
+        return True  # "כוס סוכר+כוס" / "מים"
+    if _REMARK_ONLY.match(line) or before.count("(") > before.count(")"):
+        return True  # "80 גרם פודינג וניל" / "(קופסה אחת)"
+    if last_word[0] in _NAME_STARTS and not starts_with_amount(line):
+        return True  # "1 מיכל גבינת" / "שמנת (200 גרם)"
+    return last_word[0].lower() in _JOINING_WORDS  # "קוביית שוקולד מריר ללא" / "סוכר"
+
+
+def _maybe_continues(line: str) -> bool:
+    """One word, no amount, no known ingredient ("מופשר"): perhaps the end of the line before, perhaps not."""
+    words = re.sub(r"[^\w\s'\"׳״-]", " ", line).split()
+    return len(words) == 1 and find_quantity(line) is None and not mentions_ingredient(line) and not line.strip().endswith(":")
+
+
+def _maybe_continued(before: str, line: str) -> schemas.Issue:
+    return schemas.Issue(
+        kind="unclear_text",
+        message=f'ייתכן שהשורה "{_short(line)}" היא המשך של "{_short(before)}" (שורה ששבירת השורות פיצלה). השוו למקור.',
+        quote=_short(line, 300),
+    )
+
+
+def _unclear_amount(text: str) -> schemas.Issue:
+    return schemas.Issue(
+        kind="unclear_text",
+        message=f'לא ברור איזה מהמספרים בשורה "{_short(text)}" הוא הכמות, ולכן הכמות נשארה ריקה. השלימו מהמקור.',
+        quote=_short(text, 300),
+    )
 
 
 def _quantity(quantity: str | None, text: str, issues: list[schemas.Issue]) -> str | None:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.extraction.quantity import find_quantity
+from app.extraction.quantity import find_quantity, quantity_unclear
 
 
 @pytest.mark.parametrize(
@@ -88,6 +88,35 @@ def test_the_quantity_is_always_a_span_of_the_line():
     for line in ["3 כוסות קמח", "בצל אחד גדול", "מיץ מחצי לימון", "1 (400 g) can tomatoes", "כוס וחצי קמח"]:
         quantity = find_quantity(line)
         assert quantity is not None and quantity in line
+
+
+@pytest.mark.parametrize(
+    ("line", "quantity"),
+    [
+        # 13. A unit first and the line's only number last (text read from a screenshot can come out so).
+        ("גרם עוגיות טחונות 120", "120"),
+        ("גרם גבינה לבנה 550 5%", "550"),  # the percentage is not the amount
+        ("כפות אוכמניות (קפואות או טריות) 2", "2"),
+        ("שיני שום 2", "2"),
+        ("כוסות קמח כוסמין מלא 2.5", "2.5"),
+        # ...but not a container's size, a pan's size, a number with its own unit, or a number mid-line.
+        ("קופסת טונה 160", "קופסת"),
+        ("כוס סוכר לתבנית בקוטר 24", "כוס"),
+        ("כוס קמח (140 גרם)", "כוס"),
+        ("כוס מים חמים, 250 מ\"ל", "כוס"),
+        ("כף שמן זית לכל 4 מנות", "כף"),
+        ("כוס חלב 3%", "כוס"),
+        ("כוס חלב", "כוס"),
+    ],
+)
+def test_an_amount_written_after_the_ingredient_whose_unit_starts_the_line(line: str, quantity: str):
+    assert find_quantity(line) == quantity
+    assert not quantity_unclear(line)
+
+
+def test_two_numbers_after_a_unit_are_not_guessed_between():
+    assert find_quantity("גרם קמח 120 150") is None
+    assert quantity_unclear("גרם קמח 120 150")
 
 
 def test_words_that_only_contain_an_amount_are_not_amounts():

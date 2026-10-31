@@ -35,3 +35,10 @@ follow them, so the quantity can later be scaled by changing only that span of t
     "לפי הטעם") are not amounts.
 12. **"a" or "an"** counts as an amount only before a unit or portion word ("a pinch", "a can");
     "an onion" has no quantity.
+13. **A unit first and the amount last:** when a line starts with a measure or portion unit and its
+    only number with no unit after it ends the line, that number is the amount: "120" in "גרם
+    עוגיות טחונות 120", "550" in "גרם גבינה לבנה 550 5%" (text read from a screenshot can come
+    out so). Only the number is the span: the line is never reordered. Not after a container
+    ("קופסת" in "קופסת טונה 160": the number may be its size), not a size ("בקוטר 24"), not a
+    number with its own unit ("כוס" in "כוס קמח (140 גרם)"). With two such numbers ("גרם קמח 120
+    150") the amount is not guessed: no quantity, and the draft says which line to check.

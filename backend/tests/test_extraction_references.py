@@ -160,6 +160,56 @@ def ingredient_texts(draft) -> list[str]:
     return [i.text for g in draft.ingredient_groups for i in g.ingredients]
 
 
+WRAPPED = """עוגת גבינה פירורים
+15 ביסקוויטים טחונים+100
+גרם חמאה מומסת
+1 מיכל גבינת
+שמנת (200 גרם)
+80 גרם פודינג וניל
+(קופסה אחת)
+1/2 כפית חמאת בוטנים, קוביית שוקולד ללא
+סוכר
+חצי חבילת שיערות קדאיף
+מופשר
+2 כפות שמן
+מלח
+סוכר 100 גרם
+קמח
+גרם קמח 120 150
+1 מיכל גבינת
+
+שמנת
+מערבבים הכול ואופים."""
+
+
+def by_line(source: str) -> list[str]:
+    """Title on the first line, a step on the last, every other line an ingredient (as the model labeled them)."""
+    segments = segment_text(source)
+    last = segments[-1].line
+    return ["title" if s.line == 0 else "step" if s.line == last else "ingredient" for s in segments]
+
+
+def test_an_ingredient_line_that_the_screen_wrapped_is_joined_only_on_a_clear_sign():
+    draft = draft_for(WRAPPED, by_line(WRAPPED))
+    assert [(i.text, i.quantity) for g in draft.ingredient_groups for i in g.ingredients] == [
+        ("15 ביסקוויטים טחונים+100 גרם חמאה מומסת", "15"),  # the number's unit on the next line
+        ("1 מיכל גבינת שמנת (200 גרם)", "1"),  # "גבינת" cannot end a name
+        ("80 גרם פודינג וניל (קופסה אחת)", "80 גרם"),  # a remark in brackets
+        ("1/2 כפית חמאת בוטנים, קוביית שוקולד ללא סוכר", "1/2 כפית"),  # "ללא" cannot end a line
+        ("חצי חבילת שיערות קדאיף", "חצי חבילת"),
+        ("מופשר", None),  # perhaps the end of the line before: kept as written, flagged below
+        ("2 כפות שמן", "2 כפות"),  # neighbours, not one ingredient
+        ("מלח", None),
+        ("סוכר 100 גרם", "100 גרם"),
+        ("קמח", None),
+        ("גרם קמח 120 150", None),  # which number is the amount is not guessed
+        ("1 מיכל גבינת", "1"),  # a blank line between: never joined (another image, another paragraph)
+        ("שמנת", None),
+    ]
+    flagged = [issue.quote for issue in draft.issues if issue.kind == "unclear_text"]
+    assert flagged == ["מופשר", "גרם קמח 120 150"]
+
+
 def test_the_recipe_is_copied_from_the_original_exactly():
     draft = draft_of(answer())
     assert ingredient_texts(draft) == ["חצי תמר מג׳הול", "שוט אספרסו", "כוס חלב ש״ש", "2-3 קוביות קרח"]
