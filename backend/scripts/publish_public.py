@@ -4,7 +4,7 @@ to the same address, and check that address. docs/public-notebook.md explains th
 From the project root:
 
     .\\publish-notebook.cmd               export, build, publish and check
-    .\\publish-notebook.cmd --add 18      first add saved recipe 18 to the selection
+    .\\publish-notebook.cmd --add 18 19   first add saved recipes 18 and 19 to the selection
     .\\publish-notebook.cmd --remove 12   first take recipe 12 out of the selection
     .\\publish-notebook.cmd --list        every recipe: can it be published, is it chosen
     .\\publish-notebook.cmd --no-deploy   export and build only (then `npm run preview:public` in frontend/)
@@ -84,29 +84,31 @@ def wrangler(*args: str) -> list[str]:
 # --- The selection -----------------------------------------------------------------------------------
 
 
-def change_selection(folder: Path, database_path: Path, add: int | None, remove: int | None) -> Selection:
-    """--add and --remove: the selection file, changed and written back."""
+def change_selection(folder: Path, database_path: Path, add: list[int], remove: list[int]) -> Selection:
+    """--add and --remove: the selection file, changed and written back. All of them, or none if one is refused."""
     path = folder / "selection.json"
     selection = read_selection(path)
-    if add is not None and add not in selection.recipes:
-        engine = open_read_only(database_path)
-        try:
-            with Session(engine) as session:
-                recipe = crud.get_recipe(session, add)
-        except ApiError:
-            raise ExportError(f"The notebook has no recipe {add}.") from None
-        finally:
-            engine.dispose()
-        why = publishable(recipe)
-        if why is not None:
-            raise ExportError(f"Recipe {add} cannot be published: {why}.")
-        selection.recipes.append(add)
-    if remove is not None:
-        if remove not in selection.recipes:
-            raise ExportError(f"Recipe {remove} is not in the selection.")
-        selection.recipes.remove(remove)
-        if remove in selection.show_processing:
-            selection.show_processing.remove(remove)
+    engine = open_read_only(database_path)
+    try:
+        with Session(engine) as session:
+            for recipe_id in add:
+                try:
+                    recipe = crud.get_recipe(session, recipe_id)
+                except ApiError:
+                    raise ExportError(f"The notebook has no recipe {recipe_id}.") from None
+                why = publishable(recipe)
+                if why is not None:
+                    raise ExportError(f"Recipe {recipe_id} cannot be published: {why}.")
+                if recipe_id not in selection.recipes:
+                    selection.recipes.append(recipe_id)
+    finally:
+        engine.dispose()
+    for recipe_id in remove:
+        if recipe_id not in selection.recipes:
+            raise ExportError(f"Recipe {recipe_id} is not in the selection.")
+        selection.recipes.remove(recipe_id)
+        if recipe_id in selection.show_processing:
+            selection.show_processing.remove(recipe_id)
     path.write_text(json.dumps(selection.model_dump(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return selection
 
@@ -313,8 +315,8 @@ def publish(folder: Path, *, deploy_site: bool = True, project: str | None = Non
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Export, build and publish the public, read-only notebook.")
-    parser.add_argument("--add", type=int, metavar="ID", help="add this saved recipe to the selection first")
-    parser.add_argument("--remove", type=int, metavar="ID", help="take this recipe out of the selection first")
+    parser.add_argument("--add", type=int, nargs="+", default=[], metavar="ID", help="add these saved recipes to the selection first")
+    parser.add_argument("--remove", type=int, nargs="+", default=[], metavar="ID", help="take these recipes out of the selection first")
     parser.add_argument("--list", action="store_true", help="list every recipe, whether it can be published and whether it is chosen")
     parser.add_argument("--no-deploy", action="store_true", help="export and build only")
     parser.add_argument("--project", help=f"the Cloudflare Pages project, at the first publication only (default: {DEFAULT_PROJECT})")
@@ -332,7 +334,7 @@ def main(argv: list[str] | None = None) -> int:
             chosen = read_selection(folder / "selection.json") if (folder / "selection.json").exists() else None
             print("\n".join(list_candidates(settings.database_path, chosen)))
             return 0
-        if args.add is not None or args.remove is not None:
+        if args.add or args.remove:
             selection = change_selection(folder, settings.database_path, args.add, args.remove)
             print(f"Selection: {selection.recipes} (comparison pages: {selection.show_processing})")
         publish(folder, deploy_site=not args.no_deploy, project=args.project)

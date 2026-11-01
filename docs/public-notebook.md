@@ -26,7 +26,7 @@ notebook as it was (the message says so). Your edits to a chosen recipe appear a
 | Command | What it does |
 |---|---|
 | `.\publish-notebook.cmd` | export, build, check, publish, check the address |
-| `.\publish-notebook.cmd --add 18` | adds saved recipe 18 to the selection, then publishes |
+| `.\publish-notebook.cmd --add 18` | adds saved recipe 18 to the selection, then publishes (several: `--add 18 19 20`) |
 | `.\publish-notebook.cmd --remove 12` | takes recipe 12 out of the selection, then publishes |
 | `.\publish-notebook.cmd --list` | every recipe: can it be published, is it in the selection |
 | `.\publish-notebook.cmd --no-deploy` | export, build and check only; then `npm run preview:public` in `frontend/` shows it at http://localhost:4173 |
@@ -38,7 +38,8 @@ notebook as it was (the message says so). Your edits to a chosen recipe appear a
 1. Save it in the notebook as usual (a draft cannot be published: open it, check it, "שמירה כמתכון").
 2. Find its number: the end of its address in the notebook (`http://localhost:5173/#/recipes/18` is 18), or
    `.\publish-notebook.cmd --list`.
-3. Run `.\publish-notebook.cmd --add 18`. It refuses a draft, a sample or a number the notebook does not have.
+3. Run `.\publish-notebook.cmd --add 18` (several at once: `--add 18 19 20`). It refuses a draft, a sample or
+   a number the notebook does not have, and then changes nothing.
 
 To give it a "מהמקור למתכון" page as well, add its number to `show_processing` in
 `data/public-notebook/selection.json` (it must have been imported, not typed in), then run the command.

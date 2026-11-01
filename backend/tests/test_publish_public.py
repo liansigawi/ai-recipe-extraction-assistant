@@ -200,16 +200,20 @@ def test_adding_and_removing_recipes_in_the_selection(folder, client, data_dir):
     database = data_dir / "recipes.db"
     [cake] = recipe_ids(client, "saved")
     lemon = new_recipe(client, "עוגת לימון")["id"]
-    assert change_selection(folder, database, add=lemon, remove=None).recipes == [cake, lemon]
+    plum = new_recipe(client, "עוגת שזיפים")["id"]
+    assert change_selection(folder, database, add=[lemon, plum], remove=[]).recipes == [cake, lemon, plum]
+    assert change_selection(folder, database, add=[], remove=[plum]).recipes == [cake, lemon]
+    # One refused number changes nothing, not even the others.
     with pytest.raises(ExportError, match="a draft that has not been reviewed"):
-        change_selection(folder, database, add=recipe_ids(client, "draft")[0], remove=None)
+        change_selection(folder, database, add=[plum, recipe_ids(client, "draft")[0]], remove=[])
+    assert json.loads((folder / "selection.json").read_text(encoding="utf-8"))["recipes"] == [cake, lemon]
     sample = next(r["id"] for r in client.get("/api/recipes").json() if r["is_sample"])
     with pytest.raises(ExportError, match="an invented sample recipe"):
-        change_selection(folder, database, add=sample, remove=None)
+        change_selection(folder, database, add=[sample], remove=[])
     with pytest.raises(ExportError, match="no recipe 999"):
-        change_selection(folder, database, add=999, remove=None)
+        change_selection(folder, database, add=[999], remove=[])
     (folder / "selection.json").write_text(json.dumps({"recipes": [cake, lemon], "show_processing": [lemon]}), encoding="utf-8")
-    assert change_selection(folder, database, add=None, remove=lemon).model_dump()["show_processing"] == []
+    assert change_selection(folder, database, add=[], remove=[lemon]).model_dump()["show_processing"] == []
     assert json.loads((folder / "selection.json").read_text(encoding="utf-8"))["recipes"] == [cake]
 
 
