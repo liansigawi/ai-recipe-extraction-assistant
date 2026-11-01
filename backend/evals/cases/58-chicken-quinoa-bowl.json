@@ -1,0 +1,44 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: a quinoa dish with chicken that is the meal itself: a meat meal, not a side.",
+  "expect": {
+    "title": "קערת קינואה עם עוף",
+    "category": "ארוחות בשריות",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 כוס קינואה",
+            "1 כוס"
+          ],
+          [
+            "2 חזות עוף",
+            "2"
+          ],
+          [
+            "1 אבוקדו",
+            "1"
+          ],
+          [
+            "1 כוס עגבניות שרי",
+            "1 כוס"
+          ],
+          [
+            "2 כפות טחינה",
+            "2 כפות"
+          ],
+          [
+            "1 כף מיץ לימון",
+            "1 כף"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מבשלים את הקינואה.",
+      "צולים את חזות העוף ופורסים.",
+      "מסדרים בקערה קינואה, עוף, אבוקדו ועגבניות ומזלפים טחינה עם לימון."
+    ],
+    "warnings": []
+  }
+}

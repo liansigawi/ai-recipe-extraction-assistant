@@ -1,0 +1,39 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: a flavored butter: a spread.",
+  "expect": {
+    "title": "חמאת שום ועשבי תיבול",
+    "category": "ממרחים, מטבלים ורטבים",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "200 גרם חמאה רכה",
+            "200 גרם"
+          ],
+          [
+            "3 שיני שום כתושות",
+            "3 שיני"
+          ],
+          [
+            "2 כפות פטרוזיליה קצוצה",
+            "2 כפות"
+          ],
+          [
+            "1 כף עירית קצוצה",
+            "1 כף"
+          ],
+          [
+            "חצי כפית מלח גס",
+            "חצי כפית"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מערבבים את כל המרכיבים בקערה עד שהם אחידים.",
+      "מגלגלים לגליל בנייר אפייה ומקררים שעה לפחות."
+    ],
+    "warnings": []
+  }
+}

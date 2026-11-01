@@ -52,7 +52,7 @@ alone). `evals.compare` puts two runs side by side.
 
 ## The cases
 
-Forty-nine invented texts in `backend/evals/cases/` (each `<name>.txt` + `<name>.json`) and five
+Sixty-one invented texts in `backend/evals/cases/` (each `<name>.txt` + `<name>.json`) and five
 real captions in `data/evals/local-cases/` (git-ignored: other people's content and the user's).
 
 | Case | What it checks |
@@ -110,6 +110,14 @@ patties that are the meal itself, which fit none). Cases 46–49 were written wh
 still being compared, and used only to check the chosen ones (a tuna salad, a split-pea soup, ptitim
 served beside schnitzel, egg fried rice as the meal itself).
 
+**Spreads, dips and sauces; fresh cases (2026-11-01, later).** The person added "ממרחים, מטבלים ורטבים"
+(id 10). Cases 50–61 were written before the classification change below was measured and never used to
+tune anything: a herb butter, a pesto, hummus and a yogurt dip (the new category); pasta in a tomato-cream
+sauce (a whole dish with a sauce: not a sauce); a French onion soup with cheese and a steak salad (soups
+and salads with dairy or meat); quinoa with roasted vegetables served beside fish, against a quinoa bowl
+with chicken that is the meal (a side against a complete meal); a baked sea bream, a sourdough bread and
+seed crackers (no category fits).
+
 A run takes at most 40 cases, so run them in parts, choosing cases with `--case` (repeatable):
 
 ```bash
@@ -123,6 +131,54 @@ uv run python -m evals.run_extraction --extractor ollama --case 38-chicken-soup-
 
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
+
+### 2026-11-01 (later): the text around the recipe for the category request; spreads, dips and sauces
+
+Question: does the separate category request classify better when it also gets the text's own lines
+that are not part of the recipe (the introduction, a remark such as "the side we make with schnitzel")?
+Measured with the category request alone on saved drafts (no new extraction, no website fetching), the
+same 79 drafts and the eight categories for every approach, two runs each, alternating:
+- **tuning**: the 51 earlier cases (01–49 and the real captions), already seen while the change was designed;
+- **fresh**: cases 50–61, written before measuring;
+- **yours**: the 16 saved recipes in the notebook that have an imported original, compared with the
+  category the person saved (not a verified answer: a recipe saved before a fitting category existed
+  keeps its old one; the flavored butters, unclassified when saved, count as the new category).
+
+The text around the recipe: the original's lines that the draft's own strings do not cover by half, in the
+text's order, up to 500 characters, without lines of only hashtags, mentions, links or symbols and without
+short labels like "מצרכים:"; inside the request's randomly named data tags, under its own mark, described
+to the model as data. Two versions: with one more rule ("a category fits only when its description covers
+this kind of dish; sharing ingredients, or being eaten at a similar meal, is not enough: no_fit"), and the
+context alone.
+
+| Set (run 1 / run 2) | Current request | Context and the rule | Context only |
+|---|---|---|---|
+| tuning, 51 | 41 / 42 right, 10 / 9 wrong, 0 unclassified | 41 / 42 right, 10 / 9 wrong, 0 | 43 / 43 right, 8 / 7 wrong, 0 / 1 |
+| fresh, 12 | 6 / 6 right, 6 / 6 wrong, 0 | 3 / 5 right, 8 / 6 wrong, 1 / 1 | 7 / 7 right, 4 / 4 wrong, 1 / 1 |
+| yours, 16 | 13 / 13 right, 3 / 3 wrong, 0 | 10 / 13 right, 5 / 3 wrong, 1 / 0 | 10 / 10 right, 5 / 4 wrong, 1 / 2 |
+
+- **The rule made things worse** and was dropped: on the fresh cases 3 and 5 right instead of 6 and 6;
+  it never made a dish that fits nothing unclassified, only clear ones (the chicken quinoa bowl, 58).
+- **The context alone helps sides and savory dishes**: rice with vermicelli (43), green beans (44), ptitim
+  (48) and the quinoa side (57) became sides in both runs, and the pie (10), the tortillas (20) and the
+  avocado toast (24) were no longer called desserts. It also **breaks others**: the egg fried rice that is
+  the meal (49) became a side in both runs, the fritters (19) a dessert, the ricotta shells (28) a meat
+  meal; among the person's recipes the blintzes (13) came back unclassified, the buttercream (23) once a
+  soup, and the banana iced latte (17) a drink (saved in "קינוחים בריאים"; a drink is defensible).
+- **Neither leaves a dish that fits nothing unclassified**: majadra (11), pickles (26), chraime (31),
+  lentil patties (45), sea bream (59), crackers (61), and the person's udon and stuffed onions always got
+  a category.
+- **Flavored butter** (50, and the person's own butters) was a dessert in every run of every approach.
+  Pesto (51) was right with the current request in both runs; hummus (52) never (a dessert, or
+  unclassified with the context).
+
+Across all 79 drafts the current request and the context alone have as many right answers (60.5 against
+60 on average); the context trades about three wrong categories for three unclassified clear ones, and
+does worse on the person's own recipes. The improvement is not consistent, so **the current request
+stays**. The implementation (with its tests) is kept on the branch `experiment/classification-context`,
+for a stronger model. Results, scores and the drafts used: `data/evals/extraction/20261101-classification-context/`
+(git-ignored: it holds the person's recipes); the fresh cases' extraction run: `20261101-152154`, where
+every check other than the category passed.
 
 ### 2026-11-01: salads, soups and sides
 

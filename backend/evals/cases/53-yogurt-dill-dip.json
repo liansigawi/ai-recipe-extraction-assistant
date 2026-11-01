@@ -1,0 +1,39 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: a yogurt dip.",
+  "expect": {
+    "title": "מטבל יוגורט ושמיר",
+    "category": "ממרחים, מטבלים ורטבים",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 גביע יוגורט יווני",
+            "1"
+          ],
+          [
+            "1 מלפפון מגורד וסחוט",
+            "1"
+          ],
+          [
+            "2 כפות שמיר קצוץ",
+            "2 כפות"
+          ],
+          [
+            "1 שן שום כתושה",
+            "1 שן"
+          ],
+          [
+            "1 כף שמן זית",
+            "1 כף"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מערבבים את כל המרכיבים בקערה.",
+      "מקררים חצי שעה לפני ההגשה."
+    ],
+    "warnings": []
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: a bread: none of the categories.",
+  "expect": {
+    "title": "לחם מחמצת",
+    "category": null,
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "500 גרם קמח לחם",
+            "500 גרם"
+          ],
+          [
+            "350 מל מים",
+            "350 מל"
+          ],
+          [
+            "100 גרם מחמצת פעילה",
+            "100 גרם"
+          ],
+          [
+            "10 גרם מלח",
+            "10 גרם"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מערבבים קמח ומים ומניחים לשעה.",
+      "מוסיפים מחמצת ומלח ולשים.",
+      "מתפיחים לילה במקרר ואופים בסיר ברזל 45 דקות."
+    ],
+    "warnings": []
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: crackers: none of the categories.",
+  "expect": {
+    "title": "קרקרים מזרעים",
+    "category": null,
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "חצי כוס זרעי פשתן",
+            "חצי כוס"
+          ],
+          [
+            "חצי כוס זרעי חמנייה",
+            "חצי כוס"
+          ],
+          [
+            "רבע כוס שומשום",
+            "רבע כוס"
+          ],
+          [
+            "1 כוס מים",
+            "1 כוס"
+          ],
+          [
+            "1 כפית מלח",
+            "1 כפית"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "משרים את הזרעים במים חצי שעה.",
+      "מורחים שכבה דקה על נייר אפייה.",
+      "אופים שעה ב-160 מעלות ושוברים לקרקרים."
+    ],
+    "warnings": []
+  }
+}

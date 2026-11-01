@@ -1,0 +1,44 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: a salad with meat served as a meal: a salad.",
+  "expect": {
+    "title": "סלט סטייק עם ארוגולה",
+    "category": "סלטים",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 סטייק אנטריקוט",
+            "1"
+          ],
+          [
+            "1 שקית ארוגולה",
+            "1 שקית"
+          ],
+          [
+            "10 עגבניות שרי",
+            "10"
+          ],
+          [
+            "שבבי פרמזן",
+            null
+          ],
+          [
+            "2 כפות שמן זית",
+            "2 כפות"
+          ],
+          [
+            "1 כף חומץ בלסמי",
+            "1 כף"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "צולים את הסטייק 3 דקות מכל צד ומניחים לו לנוח.",
+      "פורסים דק ומניחים על הארוגולה והעגבניות.",
+      "מזלפים שמן זית ובלסמי ומפזרים פרמזן."
+    ],
+    "warnings": []
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: a pesto: a sauce or spread made on its own.",
+  "expect": {
+    "title": "פסטו בזיליקום",
+    "category": "ממרחים, מטבלים ורטבים",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "2 כוסות עלי בזיליקום",
+            "2 כוסות"
+          ],
+          [
+            "חצי כוס צנוברים קלויים",
+            "חצי כוס"
+          ],
+          [
+            "חצי כוס פרמזן מגורד",
+            "חצי כוס"
+          ],
+          [
+            "2 שיני שום",
+            "2 שיני"
+          ],
+          [
+            "חצי כוס שמן זית",
+            "חצי כוס"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "טוחנים במעבד מזון את הבזיליקום, הצנוברים והשום.",
+      "מוסיפים את הפרמזן ואת השמן בהדרגה עד למרקם חלק."
+    ],
+    "warnings": []
+  }
+}

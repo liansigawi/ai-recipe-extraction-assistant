@@ -1,0 +1,40 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: a fish dish: none of the categories.",
+  "expect": {
+    "title": "דג לברק בתנור עם לימון",
+    "category": null,
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "2 דגי לברק שלמים",
+            "2"
+          ],
+          [
+            "1 לימון פרוס",
+            "1"
+          ],
+          [
+            "4 שיני שום",
+            "4 שיני"
+          ],
+          [
+            "3 כפות שמן זית",
+            "3 כפות"
+          ],
+          [
+            "1 כפית מלח גס",
+            "1 כפית"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מחממים תנור ל-200 מעלות.",
+      "ממלאים את הדגים בלימון ובשום ומורחים בשמן ובמלח.",
+      "אופים 25 דקות."
+    ],
+    "warnings": []
+  }
+}

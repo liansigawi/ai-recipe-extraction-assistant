@@ -1,0 +1,44 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: quinoa served beside a main: a side.",
+  "expect": {
+    "title": "קינואה עם ירקות צלויים",
+    "category": "תוספות",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 כוס קינואה",
+            "1 כוס"
+          ],
+          [
+            "2 כוסות מים",
+            "2 כוסות"
+          ],
+          [
+            "1 קישוא",
+            "1"
+          ],
+          [
+            "1 פלפל אדום",
+            "1"
+          ],
+          [
+            "1 בצל סגול",
+            "1"
+          ],
+          [
+            "2 כפות שמן זית",
+            "2 כפות"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מבשלים את הקינואה במים 15 דקות.",
+      "צולים את הירקות החתוכים בשמן זית 25 דקות.",
+      "מערבבים את הירקות עם הקינואה."
+    ],
+    "warnings": []
+  }
+}

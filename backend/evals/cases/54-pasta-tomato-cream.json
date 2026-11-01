@@ -1,0 +1,43 @@
+{
+  "about": "Fresh case (2026-11-01), written before the classification change was measured and never used to tune it: a whole dish with a sauce: pasta, not a sauce (a light dairy meal, or none).",
+  "expect": {
+    "title": "פסטה ברוטב עגבניות ושמנת",
+    "category_one_of": [
+      "ארוחות קלילות",
+      null
+    ],
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "500 גרם פנה",
+            "500 גרם"
+          ],
+          [
+            "1 קופסת עגבניות מרוסקות",
+            "1 קופסת"
+          ],
+          [
+            "1 מיכל שמנת לבישול",
+            "1"
+          ],
+          [
+            "2 שיני שום",
+            "2 שיני"
+          ],
+          [
+            "חופן בזיליקום",
+            "חופן"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מבשלים את הפסטה לפי ההוראות על האריזה.",
+      "מטגנים את השום, מוסיפים עגבניות ושמנת ומבשלים 5 דקות.",
+      "מערבבים עם הפסטה ומפזרים בזיליקום."
+    ],
+    "warnings": []
+  }
+}
