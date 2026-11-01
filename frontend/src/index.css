@@ -1909,8 +1909,202 @@ h4.category-name {
   justify-content: flex-start;
 }
 
+/* ---- The public, read-only copy ---- */
+
+/* The marks look as in the notebook, but are text: no pointer, no hover. */
+.cooked-badge.is-static,
+.cooked-badge.is-static:hover {
+  box-shadow: 0 2px 10px rgb(0 0 0 / 14%);
+  cursor: default;
+}
+
+.cooked-badge.is-cooked.is-static:hover {
+  background: var(--color-success);
+}
+
+.cooked-toggle.is-static {
+  margin: 0;
+  cursor: default;
+}
+
+/* Where the notebook has its import strip: what this copy is. */
+.public-intro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+}
+
+.public-intro p {
+  flex: 1 1 24rem;
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.public-intro strong {
+  color: var(--color-text);
+}
+
+.processing-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-block: 1.25rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  background: var(--color-accent-soft);
+  font-weight: 600;
+}
+
+.eyebrow {
+  margin: 0 0 0.25rem;
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.page-about {
+  width: 100%;
+  max-width: 60rem;
+  margin-inline: auto;
+}
+
+/* Two columns side by side need more room than a recipe. */
+.page-source {
+  width: 100%;
+  max-width: 76rem;
+  margin-inline: auto;
+}
+
+/* Numbered steps, each with its name first: "המקור", "העיבוד", "הבדיקה". */
+.process-steps {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1rem 0 0;
+  padding-inline-start: 1.5rem;
+}
+
+.process-steps li::marker {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.process-step-title {
+  margin-inline-end: 0.5rem;
+  font-weight: 700;
+}
+
+.process-steps a {
+  color: var(--color-accent);
+}
+
+.comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin-block-start: 1.5rem;
+}
+
+.comparison-pane {
+  min-width: 0;
+}
+
+.comparison-pane .field-hint {
+  margin-block-end: 0.75rem;
+}
+
+/* The whole original, framed like the notebook's "הטקסט המקורי" box, without its height limit. */
+.comparison-original {
+  max-height: none;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-page);
+}
+
+.comparison-subtitle {
+  margin-block: 1.1rem 0.35rem;
+  font-size: 1rem;
+}
+
+.quantity-mark {
+  padding: 0 0.2rem;
+  border-radius: 4px;
+  background: var(--color-success-soft);
+  color: inherit;
+  font-weight: 600;
+}
+
+.change-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0;
+}
+
+.change-list dt {
+  font-weight: 700;
+}
+
+.change-list dd {
+  margin: 0;
+}
+
+/* A removed line struck through, an added one in green; the words "בטיוטה" / "במתכון השמור" are for screen readers. */
+.diff-lines {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diff-lines li {
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+}
+
+.diff-lines li::before {
+  margin-inline-end: 0.4rem;
+  font-weight: 800;
+}
+
+.diff-removed {
+  background: var(--color-danger-soft);
+  text-decoration: line-through;
+}
+
+.diff-removed::before {
+  content: '−';
+}
+
+.diff-added {
+  background: var(--color-success-soft);
+}
+
+.diff-added::before {
+  content: '+';
+}
+
+.compared-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-inline-start: 1.5rem;
+}
+
 /* ---- Narrow screens ---- */
 @media (max-width: 900px) {
+  .comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   /* The search moves to a second row of the top bar. */
   .topbar-inner {
     flex-wrap: wrap;

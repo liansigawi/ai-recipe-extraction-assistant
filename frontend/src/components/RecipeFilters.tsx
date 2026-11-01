@@ -24,6 +24,8 @@ interface RecipeFiltersProps {
   total: number
   /** How many recipes each "already cooked" choice would show. */
   counts: Record<CookedFilter, number>
+  /** The recipes-or-drafts choice; the public copy has no drafts. */
+  statusFilter?: boolean
 }
 
 /** The top-level category a filter belongs to (its subcategories are then offered). */
@@ -36,7 +38,7 @@ function topCategory(categories: Category[], filter: CategoryFilter): Category |
 // The filters above the gallery: "already cooked" first (with counts), the categories (their drawings
 // and colors as on the cards), the subcategories of the chosen one, and drafts. Radio buttons, shown as
 // chips; the real inputs stay for the keyboard. The search box is in the top bar. App filters the list.
-export default function RecipeFilters({ filters, onChange, categories, shown, total, counts }: RecipeFiltersProps) {
+export default function RecipeFilters({ filters, onChange, categories, shown, total, counts, statusFilter = true }: RecipeFiltersProps) {
   const id = useId()
   const top = topCategory(categories, filters.category)
   const setCategory = (category: CategoryFilter) => onChange({ ...filters, category })
@@ -90,14 +92,16 @@ export default function RecipeFilters({ filters, onChange, categories, shown, to
           </div>
         </fieldset>
 
-        <fieldset className="status-filter">
-          <legend className="visually-hidden">מתכונים וטיוטות</legend>
-          {STATUSES.map((status) => (
-            <Chip key={status.value} name={`${id}-status`} small checked={filters.status === status.value} onPick={() => onChange({ ...filters, status: status.value })}>
-              {status.label}
-            </Chip>
-          ))}
-        </fieldset>
+        {statusFilter && (
+          <fieldset className="status-filter">
+            <legend className="visually-hidden">מתכונים וטיוטות</legend>
+            {STATUSES.map((status) => (
+              <Chip key={status.value} name={`${id}-status`} small checked={filters.status === status.value} onPick={() => onChange({ ...filters, status: status.value })}>
+                {status.label}
+              </Chip>
+            ))}
+          </fieldset>
+        )}
       </div>
 
       {top !== undefined && top.subcategories.length > 0 && (

@@ -36,6 +36,28 @@ export function CookedBadge({ cooked, saving, describedBy, onToggle }: CookedBad
   )
 }
 
+/** The public copy's badge: the same look in the same corner, as text that cannot be changed. */
+export function CookedMark({ cooked }: { cooked: boolean }) {
+  return (
+    <span className={`cooked-badge is-static${cooked ? ' is-cooked' : ''}`}>
+      <Icon name={cooked ? 'check' : 'circle'} />
+      {cooked ? 'כבר הכנתי' : 'טרם הכנתי'}
+    </span>
+  )
+}
+
+/** The public copy's mark beside the recipe's title: what I saved, not a control. */
+export function CookedStatus({ cooked }: { cooked: boolean }) {
+  return (
+    <p className={`cooked-toggle is-static${cooked ? ' is-cooked' : ''}`}>
+      <span className="cooked-toggle-box">
+        <Icon name={cooked ? 'check' : 'circle'} />
+      </span>
+      <span className="cooked-toggle-text">{cooked ? 'כבר הכנתי' : 'טרם הכנתי'}</span>
+    </p>
+  )
+}
+
 interface CookedControlProps {
   recipe: Recipe
   /** Called with the recipe as saved, after each change. */

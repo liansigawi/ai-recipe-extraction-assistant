@@ -2,7 +2,7 @@
 // calling fetch themselves, so request details and error handling live in one place.
 //
 // The paths start with /api: in development Vite forwards them to FastAPI (vite.config.ts).
-import type { Category, CategoryInput, CategoryRow, ExtractionInfo, LinkedRecipe, MediaReport, Recipe, RecipeInput } from './types'
+import type { Category, CategoryInput, CategoryRow, ExtractionInfo, LinkedRecipe, MediaReport, PublicNotebook, Recipe, RecipeInput } from './types'
 
 /** Any failed request: an error response from the API, or no answer at all. */
 export class ApiError extends Error {
@@ -167,6 +167,21 @@ export function errorMessage(error: unknown): string {
     default:
       return `הפעולה נכשלה: ${error.message}`
   }
+}
+
+/** The public copy's recipes and categories: its one data file, beside the page, instead of the API. */
+export async function loadPublicNotebook(): Promise<PublicNotebook> {
+  let response: Response
+  try {
+    // BASE_URL: the page's own folder ('./' in the public build), wherever the copy is hosted.
+    response = await fetch(`${import.meta.env.BASE_URL}notebook.json`, { headers: { Accept: 'application/json' } })
+  } catch {
+    throw new ApiError(0, 'network_error', 'אין חיבור לאינטרנט. בדקו את החיבור ונסו שוב.')
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, 'server_unavailable', `קובץ המתכונים לא נמצא (HTTP ${response.status}).`)
+  }
+  return (await response.json()) as PublicNotebook
 }
 
 export function listRecipes(): Promise<Recipe[]> {

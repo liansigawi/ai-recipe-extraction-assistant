@@ -16,12 +16,13 @@ interface RecipeViewProps {
   titleRef?: Ref<HTMLHeadingElement> // lets the parent reach the title element (App focuses it)
   toolbar?: ReactNode // anything React can show; App passes "back to the recipes", edit and delete
   cooked?: ReactNode // beside the title: App passes the "כבר הכנתי" control
+  banner?: ReactNode // under the facts: the public copy's link to the recipe beside its original text
   onChange?: (recipe: Recipe) => void // after a change to its media (without it, the gallery only shows)
 }
 
 // The cooking view: title and facts, then the ingredients ABOVE the numbered preparation steps.
 // dir="auto" on recipe text lets an English recipe read left to right inside the right-to-left page.
-export default function RecipeView({ recipe, titleRef, toolbar, cooked, onChange }: RecipeViewProps) {
+export default function RecipeView({ recipe, titleRef, toolbar, cooked, banner, onChange }: RecipeViewProps) {
   const cover = coverOf(recipe)
   const picture = cover === undefined ? null : pictureUrl(cover)
   return (
@@ -67,6 +68,7 @@ export default function RecipeView({ recipe, titleRef, toolbar, cooked, onChange
           עודכן <time dateTime={recipe.updated_at}>{dateFormat.format(new Date(recipe.updated_at))}</time>
         </li>
       </ul>
+      {banner}
       <MediaGallery recipe={recipe} onChange={onChange} />
       {recipe.original !== null && <OriginalText original={recipe.original} />}
 
@@ -94,11 +96,12 @@ export default function RecipeView({ recipe, titleRef, toolbar, cooked, onChange
   )
 }
 
-// The components below are used only by RecipeView, so they stay in this file and are not exported.
+// The lists below are also shown by the public copy's comparison page (SourceComparison).
 // Their lists use the position (index) as key: fine for read-only lists that never reorder.
 // The editor's lists can change order, so they use stable keys instead (editorForm.ts).
 
-function IngredientGroups({ groups }: { groups: IngredientGroup[] }) {
+/** markQuantities: each line's quantity, as the backend read it from the line, is highlighted in it. */
+export function IngredientGroups({ groups, markQuantities = false }: { groups: IngredientGroup[]; markQuantities?: boolean }) {
   return (
     <>
       {groups.map((group, groupIndex) => (
@@ -111,7 +114,7 @@ function IngredientGroups({ groups }: { groups: IngredientGroup[] }) {
           <ul className="ingredient-list" dir="auto">
             {group.ingredients.map((ingredient, index) => (
               <li key={index}>
-                {ingredient.text}
+                {markQuantities ? <MarkedLine text={ingredient.text} quantity={ingredient.quantity} /> : ingredient.text}
                 {/* The recipe gives no amount: say so, never invent one. The space keeps the words
                     apart for screen readers and copy-paste, not only visually. */}
                 {ingredient.quantity === null && (
@@ -129,7 +132,20 @@ function IngredientGroups({ groups }: { groups: IngredientGroup[] }) {
   )
 }
 
-function StepGroups({ groups }: { groups: StepGroup[] }) {
+/** The line with its quantity in a <mark> (the quantity is always a piece of the line, by the contract). */
+function MarkedLine({ text, quantity }: { text: string; quantity: string | null }) {
+  const at = quantity === null ? -1 : text.indexOf(quantity)
+  if (quantity === null || at < 0) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark className="quantity-mark">{quantity}</mark>
+      {text.slice(at + quantity.length)}
+    </>
+  )
+}
+
+export function StepGroups({ groups }: { groups: StepGroup[] }) {
   return (
     <>
       {groups.map((group, groupIndex) => (

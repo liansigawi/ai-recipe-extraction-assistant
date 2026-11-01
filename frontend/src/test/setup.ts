@@ -6,6 +6,7 @@ import { afterEach, vi } from 'vitest'
 afterEach(() => {
   cleanup() // remove what each test rendered, so tests cannot affect each other
   vi.unstubAllGlobals() // put back anything a test replaced, such as fetch (test/fakeApi.ts)
+  vi.unstubAllEnvs() // e.g. MODE, switched to the public copy (App.public.test.tsx)
   vi.restoreAllMocks()
   localStorage.clear() // e.g. the import screen's kept text
   window.history.replaceState(null, '', '/') // the page's place (route.ts) starts at the gallery again

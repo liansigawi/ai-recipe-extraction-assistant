@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { ApiError, deleteRecipe, errorMessage, listCategories, listRecipes, setCooked } from './api'
+import { ApiError, deleteRecipe, errorMessage, listCategories, listRecipes, loadPublicNotebook, setCooked } from './api'
+import AboutPage, { PublicIntro } from './components/AboutPage'
 import CategoryManager from './components/CategoryManager'
-import { CookedControl } from './components/CookedControl'
+import { CookedControl, CookedStatus } from './components/CookedControl'
 import GalleryNotice, { type GalleryMessage } from './components/GalleryNotice'
 import Icon from './components/Icon'
 import ImportPanel from './components/ImportPanel'
@@ -11,21 +12,29 @@ import RecipeEditor from './components/RecipeEditor'
 import RecipeFilters from './components/RecipeFilters'
 import RecipeList from './components/RecipeList'
 import RecipeView from './components/RecipeView'
+import SourceComparison from './components/SourceComparison'
 import TopBar from './components/TopBar'
 import { cookedCounts, filterRecipes, isFiltering, NO_FILTERS, type RecipeFilters as Filters } from './recipeFilters'
+import { isPublicNotebook } from './publicNotebook'
 import { hashOf, routeFromHash, type Route } from './route'
-import type { Category, Recipe } from './types'
+import type { Category, PublicNotebook, Recipe } from './types'
 import { useNarrowScreen } from './useNarrowScreen'
 
 type Loading = { status: 'loading' } | { status: 'failed'; message: string } | { status: 'ready' }
 
 const DISCARD_QUESTION = 'לצאת מהעריכה? השינויים שלא נשמרו יאבדו.'
 const IMPORT_STRIP = 'quick-import'
+// The public copy has only the pages that show recipes and the project; the notebook has not its two own.
+const READ_ONLY_PAGES: Route['kind'][] = ['home', 'view', 'source', 'about']
+const PUBLIC_ONLY_PAGES: Route['kind'][] = ['source', 'about']
 
 // App owns the notebook's data and decides what is shown: the gallery ("home"), one recipe, the
 // editor, the import screen or the categories. Where the page is (the route) is also kept in the
 // address after "#", so the browser's back button and a reload work (route.ts).
+// The public copy (publicNotebook.ts) is the same App, read-only: the gallery, the recipes, each beside
+// its original text where the export kept one, and a page about the project.
 export default function App() {
+  const readOnly = isPublicNotebook()
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState<Loading>({ status: 'loading' })
@@ -41,14 +50,23 @@ export default function App() {
   const [savingCooked, setSavingCooked] = useState<ReadonlySet<number>>(new Set())
   const [galleryMessage, setGalleryMessage] = useState<GalleryMessage | null>(null)
   const [undoing, setUndoing] = useState(false)
+  // The public copy: when it was exported, and the project's repository.
+  const [copy, setCopy] = useState<Pick<PublicNotebook, 'exported_at' | 'repository_url'> | null>(null)
 
   // Derived on every render instead of stored.
   const shown = filterRecipes(recipes, filters)
-  const viewing = route.kind === 'view' ? recipes.find((recipe) => recipe.id === route.recipeId) : undefined
-  const editing = route.kind === 'edit' ? recipes.find((recipe) => recipe.id === route.recipeId) : undefined
+  // An address this version has no page for (editing in the public copy, say): the gallery.
+  const unavailable = readOnly ? !READ_ONLY_PAGES.includes(route.kind) : PUBLIC_ONLY_PAGES.includes(route.kind)
+  const wanted: Route = unavailable ? { kind: 'home' } : route
+  const viewing = wanted.kind === 'view' ? recipes.find((recipe) => recipe.id === wanted.recipeId) : undefined
+  const editing = wanted.kind === 'edit' ? recipes.find((recipe) => recipe.id === wanted.recipeId) : undefined
+  // Only a recipe the export kept its original and records for can be shown beside its source.
+  const comparing = wanted.kind === 'source' ? recipes.find((recipe) => recipe.id === wanted.recipeId && recipe.processing) : undefined
   // A recipe the address names but the notebook does not have (deleted, or a typo): the gallery.
-  const missing = loading.status === 'ready' && ((route.kind === 'view' && viewing === undefined) || (route.kind === 'edit' && editing === undefined))
-  const page: Route = missing ? { kind: 'home' } : route
+  const missing =
+    loading.status === 'ready' &&
+    ((wanted.kind === 'view' && viewing === undefined) || (wanted.kind === 'edit' && editing === undefined) || (wanted.kind === 'source' && comparing === undefined))
+  const page: Route = missing ? { kind: 'home' } : wanted
   const viewedId = page.kind === 'view' ? page.recipeId : null
 
   // useRef keeps a reference to an element on the page, or a value that survives re-renders.
@@ -72,12 +90,17 @@ export default function App() {
     // Set when this request's answer is no longer wanted (a newer attempt started, or React's
     // development-only practice run in StrictMode), so a late answer cannot overwrite a newer one.
     let ignore = false
-    // Promise.all: both requests run at the same time; continue when both have answered.
-    Promise.all([listRecipes(), listCategories()]).then(
-      ([loadedRecipes, loadedCategories]) => {
+    // Promise.all: both requests run at the same time; continue when both have answered. The public copy
+    // has everything in its one exported file instead.
+    const load: Promise<{ recipes: Recipe[]; categories: Category[]; exported_at?: string; repository_url?: string | null }> = readOnly
+      ? loadPublicNotebook()
+      : Promise.all([listRecipes(), listCategories()]).then(([recipes, categories]) => ({ recipes, categories }))
+    load.then(
+      (loaded) => {
         if (ignore) return
-        setRecipes(loadedRecipes)
-        setCategories(loadedCategories)
+        setRecipes(loaded.recipes)
+        setCategories(loaded.categories)
+        if (loaded.exported_at !== undefined) setCopy({ exported_at: loaded.exported_at, repository_url: loaded.repository_url ?? null })
         setLoading({ status: 'ready' })
       },
       (error: unknown) => {
@@ -88,7 +111,7 @@ export default function App() {
     return () => {
       ignore = true
     }
-  }, [loadAttempt])
+  }, [loadAttempt, readOnly])
 
   // While the editor has unsaved changes, closing or reloading the tab asks first.
   useEffect(() => {
@@ -115,10 +138,10 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  // ...and the address says so too.
+  // ...and the address says so too (again after each move: the back button can reach another such address).
   useEffect(() => {
-    if (missing) window.history.replaceState(null, '', window.location.pathname)
-  }, [missing])
+    if (missing || unavailable) window.history.replaceState(null, '', window.location.pathname)
+  }, [missing, unavailable, route])
 
   // After the page changed: the gallery comes back where it was scrolled to; anything else starts at the top.
   useLayoutEffect(() => {
@@ -152,6 +175,7 @@ export default function App() {
       lastOpened.current = to.recipeId
       focusAfterRender.current = 'title'
     }
+    if (to.kind === 'source' || to.kind === 'about') focusAfterRender.current = 'title'
     if (to.kind === 'home' && from.kind !== 'home') focusAfterRender.current = 'gallery'
   }
 
@@ -172,6 +196,8 @@ export default function App() {
 
   const goHome = () => go({ kind: 'home' })
   const openRecipe = (id: number) => go({ kind: 'view', recipeId: id })
+  const openComparison = (id: number) => go({ kind: 'source', recipeId: id })
+  const openAbout = () => go({ kind: 'about' })
 
   /** "ייבוא מתכון" in the top bar: on a phone it opens and closes the import strip; on a wider screen
    * the strip is always there and the button moves focus to its link field. */
@@ -305,7 +331,19 @@ export default function App() {
   }
 
   let content: ReactNode
-  if (page.kind === 'import') {
+  if (page.kind === 'about') {
+    content = (
+      <AboutPage
+        compared={recipes.filter((recipe) => recipe.processing)}
+        exportedAt={copy?.exported_at ?? ''}
+        repositoryUrl={copy?.repository_url ?? null}
+        titleRef={titleRef}
+        onOpenComparison={openComparison}
+      />
+    )
+  } else if (comparing !== undefined) {
+    content = <SourceComparison recipe={comparing} titleRef={titleRef} onBack={() => openRecipe(comparing.id)} />
+  } else if (page.kind === 'import') {
     content = (
       <ImportPanel
         onImported={handleImported}
@@ -345,7 +383,7 @@ export default function App() {
       <RecipeView
         recipe={viewing}
         titleRef={titleRef}
-        onChange={handleRecipeChanged}
+        onChange={readOnly ? undefined : handleRecipeChanged}
         toolbar={
           <div className="page-toolbar">
             <button type="button" className="back-button" onClick={goHome}>
@@ -353,22 +391,35 @@ export default function App() {
               כל המתכונים
             </button>
             {/* key: a new recipe gets fresh buttons, so a delete question left open does not carry over. */}
-            <RecipeActions
-              key={viewing.id}
-              editLabel={viewing.status === 'draft' ? 'בדיקה ושמירה' : 'עריכה'}
-              onEdit={() => go({ kind: 'edit', recipeId: viewing.id })}
-              onDelete={() => handleDelete(viewing.id)}
-            />
+            {!readOnly && (
+              <RecipeActions
+                key={viewing.id}
+                editLabel={viewing.status === 'draft' ? 'בדיקה ושמירה' : 'עריכה'}
+                onEdit={() => go({ kind: 'edit', recipeId: viewing.id })}
+                onDelete={() => handleDelete(viewing.id)}
+              />
+            )}
           </div>
         }
-        cooked={<CookedControl key={viewing.id} recipe={viewing} onChange={handleRecipeChanged} />}
+        cooked={readOnly ? <CookedStatus cooked={viewing.cooked} /> : <CookedControl key={viewing.id} recipe={viewing} onChange={handleRecipeChanged} />}
+        banner={
+          viewing.processing && (
+            <p className="processing-banner">
+              <span>איך המתכון הזה נוצר מהמקור שלו, ומה השתנה בדרך?</span>
+              <button type="button" className="button" onClick={() => openComparison(viewing.id)}>
+                מהמקור למתכון
+              </button>
+            </p>
+          )
+        }
       />
     )
   } else {
     const filtering = isFiltering(filters)
     content = (
       <>
-        {(!narrow || importOpen) && (
+        {readOnly && <PublicIntro onAbout={openAbout} />}
+        {!readOnly && (!narrow || importOpen) && (
           <QuickImport
             id={IMPORT_STRIP}
             inputRef={importInputRef}
@@ -385,12 +436,13 @@ export default function App() {
             shown={shown.length}
             total={recipes.length}
             counts={cookedCounts(recipes, filters)}
+            statusFilter={!readOnly}
           />
         )}
         <RecipeList
           recipes={shown}
           onOpen={openRecipe}
-          onToggleCooked={handleToggleCooked}
+          onToggleCooked={readOnly ? undefined : handleToggleCooked}
           savingCooked={savingCooked}
           onClearFilters={filtering ? () => setFilters(NO_FILTERS) : undefined}
           headingRef={galleryHeadingRef}
@@ -409,13 +461,20 @@ export default function App() {
   return (
     <div className="app">
       <TopBar
-        page={page.kind === 'categories' ? 'categories' : page.kind === 'home' || page.kind === 'view' ? 'recipes' : 'other'}
+        page={
+          page.kind === 'categories' || page.kind === 'about'
+            ? page.kind
+            : page.kind === 'home' || page.kind === 'view' || page.kind === 'source'
+              ? 'recipes'
+              : 'other'
+        }
         search={filters.text}
         onSearch={handleSearch}
         onHome={goHome}
-        onCategories={() => go({ kind: 'categories' })}
-        onImport={handleImportButton}
-        importExpanded={narrow && page.kind === 'home' ? importOpen : undefined}
+        onCategories={readOnly ? undefined : () => go({ kind: 'categories' })}
+        onImport={readOnly ? undefined : handleImportButton}
+        onAbout={readOnly ? openAbout : undefined}
+        importExpanded={narrow && page.kind === 'home' && !readOnly ? importOpen : undefined}
       />
 
       <div className="app-content">

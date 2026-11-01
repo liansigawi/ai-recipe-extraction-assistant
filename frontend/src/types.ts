@@ -158,6 +158,37 @@ export interface Recipe extends RecipeContent {
   /** ISO 8601 date and time with a time zone, e.g. "2026-10-19T08:00:00Z". */
   created_at: string
   updated_at: string
+  /** The public copy only, on the few recipes chosen to show how they were made. */
+  processing?: Processing | null
+}
+
+/** What the records say about how a recipe went from its source to the saved recipe (the public copy). */
+export interface Processing {
+  /** The import's own draft from before any review, as a backup of the database kept it; null: no copy was kept. */
+  draft: KeptDraft | null
+}
+
+/** An import's draft exactly as the import saved it. */
+export interface KeptDraft {
+  title: string
+  servings: string | null
+  category: CategoryRef | null
+  subcategory: CategoryRef | null
+  ingredient_groups: IngredientGroup[]
+  step_groups: StepGroup[]
+  notes: string[]
+  /** The review points the import raised. */
+  issues: Issue[]
+  saved_at: string
+}
+
+/** The public copy's data file, notebook.json beside the page (backend/scripts/export_public.py). */
+export interface PublicNotebook {
+  exported_at: string
+  /** The project's code, linked from the "about" page; null: no link. */
+  repository_url: string | null
+  recipes: Recipe[]
+  categories: Category[]
 }
 
 /** What the page sends to create or save a recipe. Categories are chosen by id only. */

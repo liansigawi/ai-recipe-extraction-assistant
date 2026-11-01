@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { chooseCover, errorMessage, fetchPostMedia, removeMedia, uploadMedia } from '../api'
 import { instagramPostOf, pictureUrl, reportText } from '../media'
+import { isPublicNotebook } from '../publicNotebook'
 import type { Recipe, RecipeMediaItem } from '../types'
 
 const MAX_UPLOAD_BYTES = 20_000_000 // the backend's limit (MAX_UPLOAD_BYTES)
@@ -20,7 +21,9 @@ export function MediaImage({ src, alt, className }: { src: string | null; alt: s
 }
 
 function itemLabel(item: RecipeMediaItem, index: number, count: number, isCover: boolean): string {
-  const kind = item.kind === 'image' ? 'תמונה' : item.status === 'saved' ? 'סרטון' : 'סרטון שלא נשמר במחשב'
+  // The public copy never holds a video: only its still, with the post's link.
+  const notHere = isPublicNotebook() ? 'סרטון באינסטגרם' : 'סרטון שלא נשמר במחשב'
+  const kind = item.kind === 'image' ? 'תמונה' : item.status === 'saved' ? 'סרטון' : notHere
   return `${kind} ${index + 1} מתוך ${count}${isCover ? ', התמונה הראשית' : ''}`
 }
 
@@ -91,6 +94,9 @@ export default function MediaGallery({ recipe, onChange }: MediaGalleryProps) {
       setError(errorMessage(failure))
     }
   }
+
+  // Only to look at, with nothing to look at: no section at all.
+  if (onChange === undefined && media.length === 0) return null
 
   return (
     <section className="recipe-section media-section" aria-labelledby={`${id}-heading`}>
@@ -219,7 +225,7 @@ function MediaViewer({ title, media, index, coverId, onIndex, onClose, onCover, 
           <>
             <MediaImage key={item.id} src={item.thumbnail?.url ?? null} alt={`תמונה מתוך סרטון ${index + 1} של ${title}`} className="viewer-media" />
             <p className="viewer-note">
-              הסרטון עצמו לא נשמר במחשב הזה; זו תמונה מתוכו.{' '}
+              {isPublicNotebook() ? 'כאן מוצגת רק תמונה מתוך הסרטון.' : 'הסרטון עצמו לא נשמר במחשב הזה; זו תמונה מתוכו.'}{' '}
               {item.post_url !== null && (
                 <a href={item.post_url} target="_blank" rel="noreferrer">
                   לצפייה בסרטון בפוסט באינסטגרם

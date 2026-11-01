@@ -9,17 +9,22 @@ export type Route =
   // url and start: a link from the gallery's import strip, read at once. Not kept in the address.
   | { kind: 'import'; url?: string; start?: boolean; focusText?: boolean }
   | { kind: 'categories' }
+  // The public copy only: a recipe beside the text it was imported from, and the page about the project.
+  | { kind: 'source'; recipeId: number }
+  | { kind: 'about' }
 
 export function routeFromHash(hash: string): Route {
   const path = hash.replace(/^#\/?/, '')
-  const recipe = /^recipes\/(\d+)(\/edit)?$/.exec(path)
+  const recipe = /^recipes\/(\d+)(\/edit|\/source)?$/.exec(path)
   if (recipe !== null) {
     const recipeId = Number(recipe[1])
-    return recipe[2] === undefined ? { kind: 'view', recipeId } : { kind: 'edit', recipeId }
+    if (recipe[2] === '/edit') return { kind: 'edit', recipeId }
+    return recipe[2] === '/source' ? { kind: 'source', recipeId } : { kind: 'view', recipeId }
   }
   if (path === 'new') return { kind: 'create' }
   if (path === 'import') return { kind: 'import' }
   if (path === 'categories') return { kind: 'categories' }
+  if (path === 'about') return { kind: 'about' }
   return { kind: 'home' }
 }
 
@@ -32,11 +37,15 @@ export function hashOf(route: Route): string {
       return `#/recipes/${route.recipeId}`
     case 'edit':
       return `#/recipes/${route.recipeId}/edit`
+    case 'source':
+      return `#/recipes/${route.recipeId}/source`
     case 'create':
       return '#/new'
     case 'import':
       return '#/import'
     case 'categories':
       return '#/categories'
+    case 'about':
+      return '#/about'
   }
 }

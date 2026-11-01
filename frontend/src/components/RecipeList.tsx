@@ -5,7 +5,7 @@ import RecipeCard from './RecipeCard'
 interface RecipeListProps {
   recipes: Recipe[]
   onOpen: (id: number) => void
-  onToggleCooked: (recipe: Recipe) => void
+  onToggleCooked?: (recipe: Recipe) => void
   /** The recipes whose "already cooked" mark is being saved. */
   savingCooked: ReadonlySet<number>
   /** Given while a search or a filter is on: an empty list then means "nothing matches". */

@@ -2,7 +2,7 @@ import { categoryLabel, categoryLook } from '../categoryLook'
 import { creditedSource } from '../credit'
 import { coverOf, pictureUrl } from '../media'
 import type { Creator, Recipe } from '../types'
-import { CookedBadge } from './CookedControl'
+import { CookedBadge, CookedMark } from './CookedControl'
 import Icon from './Icon'
 import { MediaImage } from './MediaGallery'
 import Placeholder from './Placeholder'
@@ -10,8 +10,8 @@ import Placeholder from './Placeholder'
 interface RecipeCardProps {
   recipe: Recipe
   onOpen: (id: number) => void // a function prop: the card reports the click, its parent decides what happens
-  /** The badge was pressed: mark or unmark the recipe as cooked. */
-  onToggleCooked: (recipe: Recipe) => void
+  /** The badge was pressed: mark or unmark the recipe as cooked. Without it (the public copy) the badge only shows. */
+  onToggleCooked?: (recipe: Recipe) => void
   /** Its mark is being saved. */
   savingCooked: boolean
 }
@@ -60,7 +60,11 @@ export default function RecipeCard({ recipe, onOpen, onToggleCooked, savingCooke
           </span>
         )}
       </button>
-      <CookedBadge cooked={recipe.cooked} saving={savingCooked} describedBy={titleId} onToggle={() => onToggleCooked(recipe)} />
+      {onToggleCooked !== undefined ? (
+        <CookedBadge cooked={recipe.cooked} saving={savingCooked} describedBy={titleId} onToggle={() => onToggleCooked(recipe)} />
+      ) : (
+        <CookedMark cooked={recipe.cooked} />
+      )}
     </div>
   )
 }

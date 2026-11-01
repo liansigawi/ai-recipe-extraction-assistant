@@ -10,6 +10,8 @@ describe('routes in the address', () => {
       { kind: 'create' },
       { kind: 'import' },
       { kind: 'categories' },
+      { kind: 'source', recipeId: 6 },
+      { kind: 'about' },
     ]
     for (const route of routes) expect(routeFromHash(hashOf(route))).toEqual(route)
   })
