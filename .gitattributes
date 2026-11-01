@@ -1,3 +1,5 @@
 # Store and check out text files with LF line endings on every OS, so Windows,
 # macOS, Linux and CI see identical files. Git detects binary files automatically.
 * text=auto eol=lf
+# Except Windows batch files: cmd.exe reads them reliably only with CRLF line endings.
+*.cmd text eol=crlf

@@ -29,6 +29,8 @@ htmlcov/
 node_modules/
 dist/
 *.tsbuildinfo
+# Wrangler's local state, if it ever makes one (its login lives in your user profile, not here).
+.wrangler/
 
 # --- Playwright ------------------------------------------------------------------
 playwright-report/
