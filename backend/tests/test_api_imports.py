@@ -109,7 +109,7 @@ def test_an_import_saves_a_draft_with_the_original_text_exactly_as_pasted(client
     # The extractor got the text and the categories from the database.
     [(text, categories)] = extractor.calls
     assert text == pasted and [category.name for category in categories] == [
-        "קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות", "סלטים", "מרקים", "תוספות"
+        "קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות", "סלטים", "מרקים", "תוספות", "ממרחים, מטבלים ורטבים"
     ]
 
 

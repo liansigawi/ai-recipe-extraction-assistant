@@ -16,7 +16,7 @@ def test_a_new_top_level_category_and_a_subcategory_under_it(client):
     soups = client.post("/api/categories", json={"name": "רטבים", "description": "רטבים וממרחים"})
     assert soups.status_code == 201
     soups = soups.json()
-    assert soups == {"id": 10, "name": "רטבים", "description": "רטבים וממרחים", "parent_id": None}
+    assert soups == {"id": 11, "name": "רטבים", "description": "רטבים וממרחים", "parent_id": None}
     cold = client.post("/api/categories", json={"name": "רטבים חריפים", "description": "", "parent_id": soups["id"]}).json()
     assert cold["parent_id"] == soups["id"] and cold["description"] is None  # an empty description is none
     listed = categories(client)[-1]

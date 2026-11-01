@@ -12,10 +12,13 @@ describe('how a category looks', () => {
     ['סלטים', 'leaf', 'salad'],
     ['מרקים', 'soup', 'soup'],
     ['תוספות', 'side', 'side'],
+    ['ממרחים, מטבלים ורטבים', 'jar', 'spread'],
     // A category you add looks like its kind, by its name.
     ['סלטי קיץ', 'leaf', 'salad'],
     ['מרקי חורף', 'soup', 'soup'],
-    ['רטבים', 'utensils', 'other'],
+    ['רטבים', 'jar', 'spread'],
+    ['מטבלים', 'jar', 'spread'],
+    ['לחמים', 'utensils', 'other'],
   ])('%s: the %s drawing on the %s color', (name, icon, tone) => {
     expect(categoryLook(named(name))).toEqual({ icon, tone })
   })

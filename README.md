@@ -13,7 +13,7 @@ collection that supports Hebrew and right-to-left text.
 > subcategories**, and the app **warns about a post you already have**. An imported post keeps its
 > **creator's credit** and its **pictures and videos**, saved on this computer; you can add pictures of
 > your own to any recipe. A new database
-> starts with seven categories, two dessert subcategories and **four invented sample recipes**, labeled
+> starts with eight categories, two dessert subcategories and **four invented sample recipes**, labeled
 > "דוגמה". The same link field also imports **recipe pages from websites** (a first version: see
 > [docs/website-import.md](docs/website-import.md) for what was tested and what is not supported). Next on
 > the roadmap: reading recipes from screenshots, and scaling quantities. A **public, read-only copy** of
@@ -447,8 +447,10 @@ The model still decides a few things, and the backend checks each:
   meals), "ארוחות קלילות" (savory dairy or egg meals; "light" is a personal label, not about
   calories or portions), "משקאות" (drinks, smoothies, coffee drinks, lemonade), and since 2026-11-01
   "סלטים" (salads, also a substantial one served as a meal), "מרקים" (soups of every kind) and "תוספות"
-  (what is served alongside a main course: rice, potatoes, roasted vegetables, grain or legume sides).
-  What the dish is decides over its main ingredient: a salad with cheese or chicken is a salad, a chicken
+  (what is served alongside a main course: rice, potatoes, roasted vegetables, grain or legume sides),
+  and "ממרחים, מטבלים ורטבים" (made to be spread, dipped into, poured over or added to another dish:
+  flavored butter, pesto, hummus, tahini, a yogurt dip, a sauce made on its own; a whole dish with a
+  sauce, like pasta in sauce, is not a sauce). What the dish is decides over its main ingredient: a salad with cheese or chicken is a salad, a chicken
   or meat soup is a soup. A side is judged by its role, so a rice or legume dish that is the meal itself
   is not one. A fish dish, or a legume main course, usually fits none and stays unclassified. "קינוחים" has two subcategories:
   "קינוחים רגילים" and "קינוחים בריאים" (your own style: desserts built mainly on dates, oats, nuts,
@@ -617,7 +619,8 @@ The project keeps these separate and reports which one was run:
 │   │   └── importers/instagram.py   Instagram URL parsing, page capture, caption analysis, reading a post for an import
 │   ├── migrations/                  database migrations (Alembic): 0001 milestone 3, 0002 imports, 0003-0005 categories,
 │   │                                0006 Instagram originals, 0007 subcategories, 0008 structured credit, 0009 media,
-│   │                                0010 cooked marks, 0011 website pictures, 0012 salads, soups and sides
+│   │                                0010 cooked marks, 0011 website pictures, 0012 salads, soups and sides,
+│   │                                0013 spreads, dips and sauces
 │   ├── alembic.ini                  Alembic's settings, for its command line
 │   ├── evals/                       the extraction quality check (paid; run by hand) and its cases
 │   ├── scripts/probe_instagram.py   bounded live probe and offline analysis

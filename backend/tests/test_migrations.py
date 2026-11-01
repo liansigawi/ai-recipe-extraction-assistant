@@ -88,9 +88,9 @@ def test_a_milestone_3_database_is_upgraded_and_keeps_every_recipe(data_dir):
     with TestClient(app, base_url="http://localhost") as client:
         recipes = client.get("/api/recipes").json()
         # Not seeded again: the database already existed. (0005 renamed one category and added the drinks;
-        # 0012 added salads, soups and sides.)
+        # 0012 added salads, soups and sides; 0013 spreads, dips and sauces.)
         assert [category["name"] for category in client.get("/api/categories").json()] == [
-            "קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות", "סלטים", "מרקים", "תוספות"
+            "קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות", "סלטים", "מרקים", "תוספות", "ממרחים, מטבלים ורטבים"
         ]
 
     assert [recipe["title"] for recipe in recipes] == ["בדיקה", "עוגת שוקולד עם גנאש"]
@@ -285,7 +285,8 @@ def test_0005_renames_in_place_adds_the_drinks_and_keeps_every_recipe(tmp_path):
         categories = db.execute("SELECT id, name, description FROM categories WHERE parent_id IS NULL ORDER BY id").fetchall()
     # Same id: the recipe that was in "בישולים" is in "ארוחות בשריות" without being touched.
     assert [(id_, name) for id_, name, _ in categories] == [
-        (1, "קינוחים"), (2, "ארוחות בשריות"), (3, "ארוחות קלילות"), (4, "משקאות"), (7, "סלטים"), (8, "מרקים"), (9, "תוספות")
+        (1, "קינוחים"), (2, "ארוחות בשריות"), (3, "ארוחות קלילות"), (4, "משקאות"), (7, "סלטים"), (8, "מרקים"), (9, "תוספות"),
+        (10, "ממרחים, מטבלים ורטבים"),
     ]
     assert [description for _, _, description in categories] == list(STARTER.values()) + [d for _, d in ADDED_CATEGORIES]
     # 0006 then adds two columns to the originals; their first six are untouched.
@@ -305,7 +306,7 @@ def test_0005_leaves_a_category_you_renamed_and_a_drinks_category_you_already_ha
         db.commit()
     upgrade_database(path)
     names = [name for name, _ in categories_of(path)]
-    assert names == ["קינוחים", "עיקריות", "ארוחות קלילות", "משקאות", "סלטים", "מרקים", "תוספות"]
+    assert names == ["קינוחים", "עיקריות", "ארוחות קלילות", "משקאות", "סלטים", "מרקים", "תוספות", "ממרחים, מטבלים ורטבים"]
     assert dict(categories_of(path))["משקאות"] == "שלי"
 
 
@@ -410,7 +411,7 @@ def test_0012_adds_salads_soups_and_sides_and_changes_no_recipe(tmp_path):
     assert added == [(7 + i, name, description, None) for i, (name, description) in enumerate(ADDED_CATEGORIES)]
     assert categories_of(path)[:4] == before and len(subcategories_of(path)) == 2
     assert rows(path, "recipes") == recipes  # nothing moved into them, nothing else changed
-    assert len(list(tmp_path.glob("recipes.backup-*-before-0012.db"))) == 1
+    assert len(list(tmp_path.glob(f"recipes.backup-*-before-{head_revision()}.db"))) == 1
 
 
 def test_0012_keeps_a_category_you_already_have_and_downgrade_keeps_one_in_use(tmp_path):
@@ -422,7 +423,7 @@ def test_0012_keeps_a_category_you_already_have_and_downgrade_keeps_one_in_use(t
     upgrade_database(path)
     names = [name for name, _ in categories_of(path)]
     assert names.count("מרקים") == 1 and dict(categories_of(path))["מרקים"] == "קערות חמות"
-    assert names[-2:] == ["סלטים", "תוספות"]
+    assert names[-3:] == ["סלטים", "תוספות", "ממרחים, מטבלים ורטבים"]
     with closing(sqlite3.connect(path)) as db:
         salads = db.execute("SELECT id FROM categories WHERE name = 'סלטים'").fetchone()[0]
         db.execute("UPDATE recipes SET category_id = ? WHERE id = 1", (salads,))
@@ -431,15 +432,59 @@ def test_0012_keeps_a_category_you_already_have_and_downgrade_keeps_one_in_use(t
     with engine.begin() as connection:
         command.downgrade(alembic_config(connection), "0011")
     engine.dispose()
-    # The salad keeps its category; the unused side category goes; your own soups category stays.
+    # The salad keeps its category; the unused sides and spreads categories go; your own soups category stays.
     assert [name for name, _ in categories_of(path)][-3:] == ["מרקים", "משקאות", "סלטים"]
+
+
+def test_0013_adds_spreads_dips_and_sauces_and_changes_no_recipe(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    engine = migration_engine(path)
+    with engine.begin() as connection:
+        command.upgrade(alembic_config(connection), "0012")
+    engine.dispose()
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("UPDATE recipes SET category_id = 9, cooked = 1 WHERE id = 1")  # a side you cooked
+        db.commit()
+    recipes, before = rows(path, "recipes"), rows(path, "categories")
+
+    upgrade_database(path)
+
+    assert rows(path, "categories") == before + [(10, "ממרחים, מטבלים ורטבים", ADDED_CATEGORIES[3][1], None)]
+    assert rows(path, "recipes") == recipes  # nothing moved into it, nothing else changed
+    assert len(list(tmp_path.glob("recipes.backup-*-before-0013.db"))) == 1
+
+
+def test_0013_keeps_a_category_you_already_have_and_downgrade_keeps_it_in_use(tmp_path):
+    path = tmp_path / "recipes.db"
+    database_at_0004(path)
+    with closing(sqlite3.connect(path)) as db:
+        db.execute("INSERT INTO categories (name, description, parent_id) VALUES ('ממרחים, מטבלים ורטבים', 'שלי', NULL)")
+        db.commit()
+    upgrade_database(path)
+    assert [name for name, _ in categories_of(path)].count("ממרחים, מטבלים ורטבים") == 1
+    assert dict(categories_of(path))["ממרחים, מטבלים ורטבים"] == "שלי"  # yours, untouched
+
+    other = tmp_path / "other.db"
+    database_at_0004(other)
+    upgrade_database(other)
+    with closing(sqlite3.connect(other)) as db:
+        db.execute("UPDATE recipes SET category_id = 10 WHERE id = 1")  # a pesto, say
+        db.commit()
+    engine = migration_engine(other)
+    with engine.begin() as connection:
+        command.downgrade(alembic_config(connection), "0012")
+    engine.dispose()
+    assert [name for name, _ in categories_of(other)][-1] == "ממרחים, מטבלים ורטבים"  # kept: a recipe is in it
 
 
 def test_a_new_database_starts_with_the_dessert_subcategories(client):
     categories = client.get("/api/categories").json()
     assert [(sub["id"], sub["name"]) for sub in categories[0]["subcategories"]] == [(5, "קינוחים רגילים"), (6, "קינוחים בריאים")]
     # ...and the categories added later after them, with the ids an upgraded database gives them (0012).
-    assert [(category["id"], category["name"]) for category in categories[4:]] == [(7, "סלטים"), (8, "מרקים"), (9, "תוספות")]
+    assert [(category["id"], category["name"]) for category in categories[4:]] == [
+        (7, "סלטים"), (8, "מרקים"), (9, "תוספות"), (10, "ממרחים, מטבלים ורטבים")
+    ]
 
 
 def test_0010_leaves_every_recipe_unmarked_and_changes_nothing_else(tmp_path):

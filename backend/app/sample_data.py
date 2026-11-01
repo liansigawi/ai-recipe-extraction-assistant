@@ -62,10 +62,12 @@ STARTER_SUBCATEGORIES: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
-# Three more top-level categories you asked for (2026-11-01), created after the subcategories so a new
-# database gives them the same ids as an older one that migration 0012 upgraded. What the dish is decides
-# over its main ingredient: a cheese or chicken salad is a salad, a chicken or meat soup is a soup. A side
-# is judged by its role: a rice or legume dish that is the meal itself is not one.
+# More top-level categories you asked for (2026-11-01), created after the subcategories so a new database
+# gives them the same ids as an older one that migrations 0012 (the first three) and 0013 (spreads, dips
+# and sauces) upgraded. What the dish is decides over its main ingredient: a cheese or chicken salad is a
+# salad, a chicken or meat soup is a soup. A side is judged by its role: a rice or legume dish that is the
+# meal itself is not one. A spread, dip or sauce is made to go on or with another dish; a whole dish with a
+# sauce (pasta in sauce) is not a sauce.
 ADDED_CATEGORIES: list[tuple[str, str]] = [
     (
         "סלטים",
@@ -84,6 +86,12 @@ ADDED_CATEGORIES: list[tuple[str, str]] = [
         "קטניות (למשל בורגול, קוסקוס, פתיתים או שעועית ירוקה). לפי תפקיד המנה במתכון ולא לפי המרכיב: מנת "
         "אורז או קטניות שהיא הארוחה עצמה (למשל עוף ואורז בסיר אחד, או תבשיל עדשים כמנה עיקרית) לא כאן, "
         "וסלט שייך לסלטים.",
+    ),
+    (
+        "ממרחים, מטבלים ורטבים",
+        "מתכונים שעיקר מטרתם למרוח, לטבול, לתבל או להוסיף טעם למנה אחרת: חמאה בטעמים, פסטו, חומוס, טחינה, "
+        "מטבל יוגורט, רוטב לסלט או רוטב שמכינים בנפרד. תוספת שהיא מנה בפני עצמה (אורז, תפוחי אדמה, ירקות "
+        "צלויים) שייכת לתוספות, ומנה שלמה שיש בה רוטב (פסטה ברוטב) אינה רוטב: לפי המתכון כולו.",
     ),
 ]
 
