@@ -34,6 +34,12 @@
   --tone-light-ink: #44702f;
   --tone-drink: #d3e7f3;
   --tone-drink-ink: #286688;
+  --tone-salad: #d2efe4;
+  --tone-salad-ink: #1d6b50;
+  --tone-soup: #fcebb6;
+  --tone-soup-ink: #876200;
+  --tone-side: #f3dcef;
+  --tone-side-ink: #8a3a7c;
   --tone-none: #e9e5f3;
   --tone-none-ink: #574c84;
   --tone-other: #efe8d2;
@@ -1583,6 +1589,21 @@ h4.category-name {
   color: var(--tone-drink-ink);
 }
 
+.tone-salad {
+  background-color: var(--tone-salad);
+  color: var(--tone-salad-ink);
+}
+
+.tone-soup {
+  background-color: var(--tone-soup);
+  color: var(--tone-soup-ink);
+}
+
+.tone-side {
+  background-color: var(--tone-side);
+  color: var(--tone-side-ink);
+}
+
 .tone-none {
   background-color: var(--tone-none);
   color: var(--tone-none-ink);
@@ -1607,6 +1628,18 @@ h4.category-name {
 
 .category-dot.tone-drink {
   background-color: var(--tone-drink-ink);
+}
+
+.category-dot.tone-salad {
+  background-color: var(--tone-salad-ink);
+}
+
+.category-dot.tone-soup {
+  background-color: var(--tone-soup-ink);
+}
+
+.category-dot.tone-side {
+  background-color: var(--tone-side-ink);
 }
 
 .category-dot.tone-none {

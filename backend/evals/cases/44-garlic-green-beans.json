@@ -1,0 +1,40 @@
+{
+  "about": "Invented for the categories added on 2026-11-01 (salads, soups, sides), written before the first run and not used for tuning: a vegetable side dish.",
+  "expect": {
+    "title": "שעועית ירוקה בשום ולימון",
+    "category": "תוספות",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "500 גרם שעועית ירוקה",
+            "500 גרם"
+          ],
+          [
+            "2 כפות שמן זית",
+            "2 כפות"
+          ],
+          [
+            "3 שיני שום פרוסות",
+            "3 שיני"
+          ],
+          [
+            "1 כף מיץ לימון",
+            "1 כף"
+          ],
+          [
+            "חצי כפית מלח",
+            "חצי כפית"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מחליטים את השעועית במים רותחים 3 דקות ומעבירים למי קרח.",
+      "מטגנים את השום בשמן דקה, מוסיפים את השעועית ומקפיצים 4 דקות.",
+      "מתבלים במלח ובמיץ לימון ומגישים."
+    ],
+    "warnings": []
+  }
+}

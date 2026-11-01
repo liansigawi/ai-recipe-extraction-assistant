@@ -1,8 +1,8 @@
 {
-  "about": "Invented. Many words with ׳ and ״ (ג׳ינג׳ר, צ׳ילי, ס״מ, מ״ל) in ingredients and steps; parentheses inside lines; a storage note.",
+  "about": "Invented. Many words with ׳ and ״ (ג׳ינג׳ר, צ׳ילי, ס״מ, מ״ל) in ingredients and steps; parentheses inside lines; a storage note. Since 2026-11-01 a soup: the soups category (until then no category fit).",
   "expect": {
     "title": "מרק עדשים כתומות עם ג׳ינג׳ר וצ׳ילי",
-    "category": null,
+    "category": "מרקים",
     "ingredient_groups": [
       {
         "name": null,

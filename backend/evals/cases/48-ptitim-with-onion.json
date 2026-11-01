@@ -1,0 +1,40 @@
+{
+  "about": "Held out for the categories added on 2026-11-01: written before their descriptions were tuned, used only to check them: a grain dish served alongside a main: a side.",
+  "expect": {
+    "title": "פתיתים עם בצל מטוגן",
+    "category": "תוספות",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 שקית פתיתים",
+            "1 שקית"
+          ],
+          [
+            "1 בצל גדול קצוץ",
+            "1"
+          ],
+          [
+            "2 כפות שמן",
+            "2 כפות"
+          ],
+          [
+            "2 כוסות מים רותחים",
+            "2 כוסות"
+          ],
+          [
+            "1 כפית מלח",
+            "1 כפית"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מטגנים את הבצל בשמן עד שהוא זהוב.",
+      "מוסיפים את הפתיתים ומשחימים 3 דקות.",
+      "מוסיפים מים ומלח ומבשלים על אש נמוכה 10 דקות."
+    ],
+    "warnings": []
+  }
+}

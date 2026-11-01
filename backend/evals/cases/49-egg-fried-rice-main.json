@@ -1,0 +1,51 @@
+{
+  "about": "Held out for the categories added on 2026-11-01: written before their descriptions were tuned, used only to check them: a rice dish that is the meal itself: not a side (no category, or a light egg meal).",
+  "expect": {
+    "title": "אורז מוקפץ עם ירקות וביצה",
+    "category_one_of": [
+      null,
+      "ארוחות קלילות"
+    ],
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "3 כוסות אורז מבושל מאתמול",
+            "3 כוסות"
+          ],
+          [
+            "3 ביצים",
+            "3"
+          ],
+          [
+            "1 גזר קצוץ",
+            "1"
+          ],
+          [
+            "1 כוס אפונה קפואה",
+            "1 כוס"
+          ],
+          [
+            "3 בצלים ירוקים",
+            "3"
+          ],
+          [
+            "3 כפות רוטב סויה",
+            "3 כפות"
+          ],
+          [
+            "2 כפות שמן",
+            "2 כפות"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מחממים שמן בווק ומקפיצים את הגזר והאפונה 3 דקות.",
+      "מוסיפים את האורז ומקפיצים 5 דקות.",
+      "מפנים מקום, מקשקשים את הביצים ומערבבים הכל עם רוטב הסויה והבצל הירוק."
+    ],
+    "warnings": []
+  }
+}

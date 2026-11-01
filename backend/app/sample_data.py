@@ -62,6 +62,31 @@ STARTER_SUBCATEGORIES: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+# Three more top-level categories you asked for (2026-11-01), created after the subcategories so a new
+# database gives them the same ids as an older one that migration 0012 upgraded. What the dish is decides
+# over its main ingredient: a cheese or chicken salad is a salad, a chicken or meat soup is a soup. A side
+# is judged by its role: a rice or legume dish that is the meal itself is not one.
+ADDED_CATEGORIES: list[tuple[str, str]] = [
+    (
+        "סלטים",
+        "סלטים: סלטי ירקות ועלים, וסלטים עשירים שמוגשים כארוחה (למשל סלט יווני, סלט קיסר, סלט טונה או סלט "
+        "עם עוף). סלט שיש בו גבינה, עוף, בשר, טונה או ביצה שייך לכאן ולא לארוחות הבשריות או הקלילות: היותו "
+        "סלט קובע, לא המרכיב העיקרי.",
+    ),
+    (
+        "מרקים",
+        "מרקים מכל סוג: מרקי ירקות, מרקי קטניות (עדשים, אפונה, שעועית), מרק עוף ומרקי בשר, גם מרק סמיך, "
+        "קרם או מרק קר. מרק שייך לכאן גם כשיש בו עוף, בשר או גבינה: היותו מרק קובע, לא המרכיב העיקרי.",
+    ),
+    (
+        "תוספות",
+        "מנות שמוגשות בעיקר לצד מנה עיקרית: אורז, תפוחי אדמה, ירקות צלויים או מוקפצים, ותוספות של דגנים או "
+        "קטניות (למשל בורגול, קוסקוס, פתיתים או שעועית ירוקה). לפי תפקיד המנה במתכון ולא לפי המרכיב: מנת "
+        "אורז או קטניות שהיא הארוחה עצמה (למשל עוף ואורז בסיר אחד, או תבשיל עדשים כמנה עיקרית) לא כאן, "
+        "וסלט שייך לסלטים.",
+    ),
+]
+
 
 def ingredient(text: str, quantity: str | None) -> Ingredient:
     return Ingredient(text=text, quantity=quantity)

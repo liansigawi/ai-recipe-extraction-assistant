@@ -52,7 +52,7 @@ alone). `evals.compare` puts two runs side by side.
 
 ## The cases
 
-Thirty-three invented texts in `backend/evals/cases/` (each `<name>.txt` + `<name>.json`) and four
+Forty-nine invented texts in `backend/evals/cases/` (each `<name>.txt` + `<name>.json`) and five
 real captions in `data/evals/local-cases/` (git-ignored: other people's content and the user's).
 
 | Case | What it checks |
@@ -94,17 +94,27 @@ expectations were written by their author and checked only mechanically (every s
 poultry meals; "ארוחות קלילות" savory dairy or egg meals (shakshuka 07 and 14 and the spinach-cheese
 pie 10 now belong there); "משקאות", added by the person, drinks (the lemonades 06, 21, the watermelon
 drink 27 and the coffee drink real-4). Fish, vegetable, legume and other dishes without a clear fit
-stay unclassified (11, 12, 25, 26, 31). A savory dish with cheese, yogurt or egg as one part (a feta
-salad 04, fritters with a yogurt sauce 19, avocado toast with eggs 24) accepts "ארוחות קלילות" or
+stay unclassified (11, 26, 31; the soups 12 and 25 until 2026-11-01). A savory dish with cheese, yogurt
+or egg as one part (fritters with a yogurt sauce 19, avocado toast with eggs 24; the feta salad 04 until
+2026-11-01) accepts "ארוחות קלילות" or
 unclassified. Case 06 used to check that a drink stays unresolved with no "משקאות" suggested; now
 that the person added that category it expects it, and cases 05, 08, 24 and 25 still check that no
 new category is suggested.
 
-Run all thirty-seven with:
+**Salads, soups and sides (2026-11-01).** The person added "סלטים", "מרקים" and "תוספות" (ids 7, 8, 9).
+What the dish is decides over its main ingredient, so the feta salad 04 now expects salads and the soups
+12 and 25 expect soups; a side is judged by its role. Cases 38–45 were written for this before the first
+run and not used for tuning (a chicken soup, a goat-cheese salad, a chicken salad served as a meal, a
+goulash soup, roasted potatoes, rice with vermicelli and green beans served alongside a main, and lentil
+patties that are the meal itself, which fit none). Cases 46–49 were written while the descriptions were
+still being compared, and used only to check the chosen ones (a tuna salad, a split-pea soup, ptitim
+served beside schnitzel, egg fried rice as the meal itself).
+
+A run takes at most 40 cases, so run them in parts, choosing cases with `--case` (repeatable):
 
 ```bash
 cd backend
-uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/evals/local-cases
+uv run python -m evals.run_extraction --extractor ollama --case 38-chicken-soup-noodles --case 39-goat-cheese-pear-salad
 ```
 
 ## Results
@@ -113,6 +123,50 @@ uv run python -m evals.run_extraction --extractor ollama --cases-dir ../data/eva
 
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
+
+### 2026-11-01: salads, soups and sides
+
+`qwen3:8b` through Ollama, on the RTX 5060 Laptop, with the seven top-level categories (migration
+0012). Runs `20261101-141716` (32 cases: 38–45 and every case near the new categories), `20261101-143317`
+and `20261101-143402` (46–49 and 38). Besides full runs, the category request alone was asked again on
+the first run's 29 drafts, so descriptions could be compared on the same drafts; logs in
+`data/evals/extraction/20261101-category-variants.txt`.
+
+**What works.** Every soup went to "מרקים" in every run, also with chicken (38) or beef (41) and the
+legume soups (12, 47); every salad to "סלטים", also with cheese (04, 39), chicken (40) or tuna and egg
+(46). Roasted potatoes (42) and ptitim (48) went to "תוספות". The chicken-and-rice pot (22) and the
+harissa chicken with chickpeas (29) did not become sides. All other checks of these cases passed.
+
+**What does not.**
+- **A dish that fits no category is pushed into a new one** instead of staying unclassified: the
+  lentil patties (45, a main course) went to soups every time, the majadra (11) to salads or soups, the
+  pickles (26) to soups or salads, the fish (31) to meat meals or salads. Measured on the 18 earlier
+  recipe cases, with the same drafts and two passes each: the old four categories got 13 and 14 right,
+  2 and 2 wrong, 3 and 2 left unresolved; the seven got 14 and 13 right, 4 and 5 wrong, none unresolved.
+  As many are right, but a wrong category replaces "unresolved", which the person had to classify anyway.
+- **A side's role is not visible to the category request.** It sees the draft's title, ingredient lines
+  and steps; "the side we always make with chicken" is usually in the introduction, which is not part of
+  the draft. So sides are judged by what the dish is: rice with vermicelli (43) was a side in 1 of 3
+  answers (otherwise a light meal), the green beans (44) never (soups or salads), and the egg fried rice
+  that is the meal (49) became a side in 1 of 2 runs.
+- **The model's own description of the dish sometimes breaks down**, more often than with four
+  categories: avocado toast with eggs (24) once became "קינוח שוקולד", the spinach-cheese pie (10) "פשטידה
+  מתוקה", and the tortillas (20) a dessert, as they sometimes did before.
+- **Temperature 0 is not repeatable here:** the same request on the same drafts gave 23 and 21 of 29
+  right.
+
+**Descriptions compared** (the category request alone, 29 drafts, right of 29): as written (kept): 23,
+21; described by the dish's form instead of naming ingredients: 19; as written without the ingredient
+words and with "a stew, patties in sauce or pickles are not soup or salad": 19; that, with the dish
+type (soup, salad, side dish, main course) asked before classifying: 23; "only a dish the recipe itself
+calls a soup / a salad / a side": 21, 21. None was better than the first wording beyond the variation,
+so it stays: it says the person's own rules most directly, and the person can refine it in the category
+screen. Possible next steps: give the category request the introduction's short lines, so a side's role
+is visible (a change to every import, to be measured on all cases), or classify with the Claude API (not
+measured).
+
+During these measurements Ollama stopped once with "CUDA error: unknown error"; it reloaded the model by
+itself on the next request.
 
 ### 2026-10-26 (evening): dessert subcategories
 

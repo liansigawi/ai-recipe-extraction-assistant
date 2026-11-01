@@ -7,7 +7,7 @@ deleted, and your recipes are never touched.
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import crud, models
-from app.sample_data import SAMPLE_RECIPES, STARTER_CATEGORIES, STARTER_SUBCATEGORIES
+from app.sample_data import ADDED_CATEGORIES, SAMPLE_RECIPES, STARTER_CATEGORIES, STARTER_SUBCATEGORIES
 
 
 def seed_new_database(session_factory: sessionmaker[Session]) -> None:
@@ -22,6 +22,9 @@ def seed_new_database(session_factory: sessionmaker[Session]) -> None:
             for name, description in subcategories:
                 session.add(models.Category(name=name, description=description, parent_id=ids[parent]))
                 session.flush()  # in order: the same ids as in a database that migration 0007 upgraded
+        for name, description in ADDED_CATEGORIES:
+            session.add(models.Category(name=name, description=description))
+            session.flush()  # after the subcategories: the same ids as in a database that migration 0012 upgraded
         session.commit()
 
         # Newest recipes are listed first, so insert the samples in reverse to show them in file order.

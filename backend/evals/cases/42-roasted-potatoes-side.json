@@ -1,0 +1,40 @@
+{
+  "about": "Invented for the categories added on 2026-11-01 (salads, soups, sides), written before the first run and not used for tuning: potatoes served alongside a main course: a side.",
+  "expect": {
+    "title": "תפוחי אדמה צלויים בתנור",
+    "category": "תוספות",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 קילו תפוחי אדמה קטנים",
+            "1 קילו"
+          ],
+          [
+            "3 כפות שמן זית",
+            "3 כפות"
+          ],
+          [
+            "4 שיני שום",
+            "4 שיני"
+          ],
+          [
+            "1 כפית מלח גס",
+            "1 כפית"
+          ],
+          [
+            "2 ענפי רוזמרין",
+            "2 ענפי"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מחממים תנור ל-220 מעלות.",
+      "חוצים את תפוחי האדמה, מערבבים עם השמן, השום, המלח והרוזמרין.",
+      "צולים 40 דקות עד שהם זהובים ופריכים."
+    ],
+    "warnings": []
+  }
+}

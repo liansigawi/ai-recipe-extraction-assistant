@@ -1,0 +1,40 @@
+{
+  "about": "Invented for the categories added on 2026-11-01 (salads, soups, sides), written before the first run and not used for tuning: rice served next to a main: a side (judged by its role, not by being rice).",
+  "expect": {
+    "title": "אורז עם אטריות",
+    "category": "תוספות",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "2 כוסות אורז פרסי",
+            "2 כוסות"
+          ],
+          [
+            "חצי כוס אטריות דקות",
+            "חצי כוס"
+          ],
+          [
+            "2 כפות שמן",
+            "2 כפות"
+          ],
+          [
+            "3 כוסות מים רותחים",
+            "3 כוסות"
+          ],
+          [
+            "1 כפית מלח",
+            "1 כפית"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "משחימים את האטריות בשמן עד שהן זהובות.",
+      "מוסיפים את האורז ומערבבים דקה.",
+      "מוסיפים מים רותחים ומלח, מכסים ומבשלים על אש נמוכה 20 דקות."
+    ],
+    "warnings": []
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "about": "Invented for the categories added on 2026-11-01 (salads, soups, sides), written before the first run and not used for tuning: a legume dish that is the meal itself (no meat, no dairy): not a side, and no category fits.",
+  "expect": {
+    "title": "קציצות עדשים ברוטב עגבניות",
+    "category": null,
+    "ingredient_groups": [
+      {
+        "name": "לקציצות",
+        "items": [
+          [
+            "2 כוסות עדשים כתומות מבושלות",
+            "2 כוסות"
+          ],
+          [
+            "1 בצל מגורד",
+            "1"
+          ],
+          [
+            "חצי כוס פירורי לחם",
+            "חצי כוס"
+          ],
+          [
+            "1 כפית כמון",
+            "1 כפית"
+          ],
+          [
+            "מלח ופלפל",
+            null
+          ]
+        ]
+      },
+      {
+        "name": "לרוטב",
+        "items": [
+          [
+            "1 קופסת עגבניות מרוסקות",
+            "1 קופסת"
+          ],
+          [
+            "2 שיני שום",
+            "2 שיני"
+          ],
+          [
+            "1 כפית פפריקה",
+            "1 כפית"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מערבבים את מרכיבי הקציצות ויוצרים קציצות.",
+      "מבשלים את מרכיבי הרוטב 10 דקות בסיר רחב.",
+      "מניחים את הקציצות ברוטב ומבשלים 20 דקות עם מכסה."
+    ],
+    "warnings": []
+  }
+}

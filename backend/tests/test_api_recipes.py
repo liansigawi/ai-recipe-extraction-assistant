@@ -22,13 +22,16 @@ def test_a_new_database_lists_the_four_samples_newest_first(client):
         Recipe.model_validate(recipe)  # every item matches the contract the frontend types mirror
 
 
-def test_categories_are_the_four_starter_categories(client):
+def test_categories_are_the_seven_starter_categories(client):
     categories = client.get("/api/categories").json()
-    assert [category["name"] for category in categories] == ["קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות"]
+    assert [category["name"] for category in categories] == [
+        "קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות", "סלטים", "מרקים", "תוספות"
+    ]
     # Desserts have the two subcategories you asked for; the others have none.
     assert [[sub["name"] for sub in category["subcategories"]] for category in categories] == [
-        ["קינוחים רגילים", "קינוחים בריאים"], [], [], []
+        ["קינוחים רגילים", "קינוחים בריאים"], [], [], [], [], [], []
     ]
+    assert all(category["description"] for category in categories)
     assert all(sub["description"] for sub in categories[0]["subcategories"])
 
 

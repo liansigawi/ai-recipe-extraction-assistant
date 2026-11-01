@@ -1,0 +1,52 @@
+{
+  "about": "Invented for the categories added on 2026-11-01 (salads, soups, sides), written before the first run and not used for tuning: a chicken soup: the dish being a soup decides over the chicken (not a meat meal).",
+  "expect": {
+    "title": "מרק עוף של יום שישי",
+    "category": "מרקים",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "1 עוף שלם חתוך לחלקים",
+            "1"
+          ],
+          [
+            "2 גזרים גדולים",
+            "2"
+          ],
+          [
+            "2 גבעולי סלרי",
+            "2 גבעולי"
+          ],
+          [
+            "1 בצל",
+            "1"
+          ],
+          [
+            "1 קישוא",
+            "1"
+          ],
+          [
+            "10 כוסות מים",
+            "10 כוסות"
+          ],
+          [
+            "1 כפית מלח",
+            "1 כפית"
+          ],
+          [
+            "100 גרם אטריות דקות",
+            "100 גרם"
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "שמים את העוף והמים בסיר גדול ומביאים לרתיחה.",
+      "מסירים את הקצף, מוסיפים את הירקות והמלח ומבשלים על אש נמוכה שעה וחצי.",
+      "מבשלים את האטריות בנפרד ומגישים בצלחת עם המרק."
+    ],
+    "warnings": []
+  }
+}

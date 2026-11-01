@@ -1,8 +1,8 @@
 {
- "about": "An English soup post with 'for serving' and 'To garnish:' lines (the latter as the last ingredient line right before the method heading), prep and total time lines, a yield, cream that the method uses but the ingredient list never mentions, a tip that runs over two lines, and an introduction, call to action, mention and hashtags; a soup can reasonably be a main dish or a light meal. Written independently as a held-out case.",
+ "about": "An English soup post with 'for serving' and 'To garnish:' lines (the latter as the last ingredient line right before the method heading), prep and total time lines, a yield, cream that the method uses but the ingredient list never mentions, a tip that runs over two lines, and an introduction, call to action, mention and hashtags; a soup can reasonably be a main dish or a light meal. Written independently as a held-out case. Since 2026-11-01 a soup: the soups category (until then no category fit).",
  "expect": {
   "title": "Roasted Tomato & Red Pepper Soup",
-  "category": null,
+  "category": "מרקים",
   "ingredient_groups": [
    {"name": null, "items": [
     ["1.5 kg ripe plum tomatoes, halved", "1.5 kg"],

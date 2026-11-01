@@ -1,0 +1,56 @@
+{
+  "about": "Invented for the categories added on 2026-11-01 (salads, soups, sides), written before the first run and not used for tuning: a salad with cheese: a salad, not a light dairy meal.",
+  "expect": {
+    "title": "סלט עלים עם גבינת עיזים ואגסים",
+    "category": "סלטים",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "200 גרם עלי בייבי",
+            "200 גרם"
+          ],
+          [
+            "2 אגסים פרוסים",
+            "2"
+          ],
+          [
+            "150 גרם גבינת עיזים",
+            "150 גרם"
+          ],
+          [
+            "חצי כוס אגוזי מלך קלויים",
+            "חצי כוס"
+          ]
+        ]
+      },
+      {
+        "name": "לרוטב",
+        "items": [
+          [
+            "3 כפות שמן זית",
+            "3 כפות"
+          ],
+          [
+            "1 כף חומץ בלסמי",
+            "1 כף"
+          ],
+          [
+            "1 כפית דבש",
+            "1 כפית"
+          ],
+          [
+            "מלח ופלפל",
+            null
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "מערבבים את מרכיבי הרוטב בצנצנת.",
+      "מסדרים בקערה את העלים, האגסים והאגוזים, מפוררים מעל את הגבינה ומזלפים את הרוטב רגע לפני ההגשה."
+    ],
+    "warnings": []
+  }
+}

@@ -16,9 +16,12 @@ export type IconName =
   | 'pot'
   | 'bowl'
   | 'glass'
+  | 'leaf'
+  | 'soup'
+  | 'side'
   | 'utensils'
 
-export type Tone = 'dessert' | 'meat' | 'light' | 'drink' | 'none' | 'other'
+export type Tone = 'dessert' | 'meat' | 'light' | 'drink' | 'salad' | 'soup' | 'side' | 'none' | 'other'
 
 /** By the category's name, so a category you add ("קינוחים לחג") looks like its kind; any other
  * category gets the utensils, and an unclassified recipe the notebook. */
@@ -29,6 +32,9 @@ export function categoryLook(category: CategoryRef | null): { icon: IconName; to
   if (name.includes('בשרי') || name.includes('בישול')) return { icon: 'pot', tone: 'meat' }
   if (name.includes('קליל')) return { icon: 'bowl', tone: 'light' }
   if (name.includes('משק') || name.includes('שתי')) return { icon: 'glass', tone: 'drink' }
+  if (name.includes('סלט')) return { icon: 'leaf', tone: 'salad' }
+  if (name.includes('מרק')) return { icon: 'soup', tone: 'soup' }
+  if (name.includes('תוספ')) return { icon: 'side', tone: 'side' }
   return { icon: 'utensils', tone: 'other' }
 }
 

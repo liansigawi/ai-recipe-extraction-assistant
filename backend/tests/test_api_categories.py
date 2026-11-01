@@ -13,14 +13,14 @@ def categories(client) -> list[dict]:
 
 
 def test_a_new_top_level_category_and_a_subcategory_under_it(client):
-    soups = client.post("/api/categories", json={"name": "מרקים", "description": "מרקים חמים וקרים"})
+    soups = client.post("/api/categories", json={"name": "רטבים", "description": "רטבים וממרחים"})
     assert soups.status_code == 201
     soups = soups.json()
-    assert soups == {"id": 7, "name": "מרקים", "description": "מרקים חמים וקרים", "parent_id": None}
-    cold = client.post("/api/categories", json={"name": "מרקים קרים", "description": "", "parent_id": soups["id"]}).json()
+    assert soups == {"id": 10, "name": "רטבים", "description": "רטבים וממרחים", "parent_id": None}
+    cold = client.post("/api/categories", json={"name": "רטבים חריפים", "description": "", "parent_id": soups["id"]}).json()
     assert cold["parent_id"] == soups["id"] and cold["description"] is None  # an empty description is none
     listed = categories(client)[-1]
-    assert (listed["name"], [s["name"] for s in listed["subcategories"]]) == ("מרקים", ["מרקים קרים"])
+    assert (listed["name"], [s["name"] for s in listed["subcategories"]]) == ("רטבים", ["רטבים חריפים"])
 
 
 def test_renaming_keeps_the_id_and_every_recipe_in_it(client):
@@ -84,14 +84,14 @@ def test_the_parent_cannot_be_changed_by_an_edit(client):
 
 
 def test_a_new_category_and_its_description_reach_the_next_import(client, use):
-    client.post("/api/categories", json={"name": "מרקים", "description": "מרקים חמים וקרים"})
+    client.post("/api/categories", json={"name": "רטבים", "description": "רטבים וממרחים"})
     extractor = use(StandIn(answer()))
     client.post("/api/imports/text", json={"text": SOURCE})
     [(_, given)] = extractor.calls
-    soups = next(category for category in given if category.name == "מרקים")
-    assert soups.description == "מרקים חמים וקרים"
+    soups = next(category for category in given if category.name == "רטבים")
+    assert soups.description == "רטבים וממרחים"
 
 
 def test_changes_need_the_notebook_page(client):
-    response = client.post("/api/categories", json={"name": "מרקים"}, headers={"Origin": "https://example.com"})
+    response = client.post("/api/categories", json={"name": "רטבים"}, headers={"Origin": "https://example.com"})
     assert response.status_code == 403

@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from app import models
 from app.db import utc_now
 from app.main import app
-from app.sample_data import STARTER_CATEGORIES
+from app.sample_data import ADDED_CATEGORIES, STARTER_CATEGORIES
 
 NEW_RECIPE = {
     "title": "עוגת תפוזים",
@@ -123,7 +123,7 @@ def test_samples_are_added_only_once_so_deleted_samples_stay_deleted(client):
 
     with restarted() as again:
         assert again.get("/api/recipes").json() == []
-        assert len(again.get("/api/categories").json()) == len(STARTER_CATEGORIES)  # categories are not added twice either
+        assert len(again.get("/api/categories").json()) == len(STARTER_CATEGORIES) + len(ADDED_CATEGORIES)  # categories are not added twice either
 
 
 # --- The category rule ---------------------------------------------------------------------------------
@@ -133,7 +133,7 @@ def test_unknown_category_is_refused_never_created(client):
     response = client.post("/api/recipes", json={**NEW_RECIPE, "category_id": 99})
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "unknown_category"
-    assert len(client.get("/api/categories").json()) == len(STARTER_CATEGORIES)
+    assert len(client.get("/api/categories").json()) == len(STARTER_CATEGORIES) + len(ADDED_CATEGORIES)
 
 
 def test_subcategory_must_belong_to_the_chosen_category(client):

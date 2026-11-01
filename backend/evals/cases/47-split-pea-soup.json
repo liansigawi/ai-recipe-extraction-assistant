@@ -1,0 +1,48 @@
+{
+  "about": "Held out for the categories added on 2026-11-01: written before their descriptions were tuned, used only to check them: a legume soup: a soup.",
+  "expect": {
+    "title": "מרק אפונה יבשה",
+    "category": "מרקים",
+    "ingredient_groups": [
+      {
+        "name": null,
+        "items": [
+          [
+            "2 כוסות אפונה יבשה",
+            "2 כוסות"
+          ],
+          [
+            "1 בצל",
+            "1"
+          ],
+          [
+            "2 גזרים חתוכים",
+            "2"
+          ],
+          [
+            "1 תפוח אדמה",
+            "1"
+          ],
+          [
+            "8 כוסות מים",
+            "8 כוסות"
+          ],
+          [
+            "1 כפית כמון",
+            "1 כפית"
+          ],
+          [
+            "מלח ופלפל",
+            null
+          ]
+        ]
+      }
+    ],
+    "preparation": [
+      "שוטפים את האפונה ומשרים שעתיים.",
+      "מבשלים את כל המרכיבים שעה, עד שהאפונה מתרככת.",
+      "טוחנים בבלנדר מוט ומתבלים."
+    ],
+    "warnings": []
+  }
+}

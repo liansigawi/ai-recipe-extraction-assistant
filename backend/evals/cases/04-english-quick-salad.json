@@ -1,8 +1,8 @@
 {
-  "about": "Invented. An English recipe stays in English; 'to taste' is not an amount; a range with an en dash and a can size stay as written. A quick lunch: a light meal.",
+  "about": "Invented. An English recipe stays in English; 'to taste' is not an amount; a range with an en dash and a can size stay as written. A quick lunch salad with feta: the salads category since 2026-11-01 (a salad with cheese is a salad; before, a light meal or none).",
   "expect": {
     "title": "Chickpea & Feta Lunch Salad",
-    "category_one_of": ["ארוחות קלילות", null],
+    "category": "סלטים",
     "ingredient_groups": [
       {
         "name": null,
