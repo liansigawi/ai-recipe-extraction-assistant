@@ -16,7 +16,9 @@ collection that supports Hebrew and right-to-left text.
 > starts with four categories, two dessert subcategories and **four invented sample recipes**, labeled
 > "דוגמה". The same link field also imports **recipe pages from websites** (a first version: see
 > [docs/website-import.md](docs/website-import.md) for what was tested and what is not supported). Next on
-> the roadmap: reading recipes from screenshots, and scaling quantities.
+> the roadmap: reading recipes from screenshots, and scaling quantities. A **public, read-only copy** of
+> chosen recipes is published as a static site with one command, `.\publish-notebook.cmd`
+> ([docs/public-notebook.md](docs/public-notebook.md)).
 > Milestone 1 (Instagram feasibility) is documented in
 > [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
 > contract are in [docs/architecture.md](docs/architecture.md), and the original requirements are
@@ -495,6 +497,13 @@ Backend, from `backend/`:
 | `uv run python -m scripts.probe_instagram <url> …` | The same check for up to 10 of your own public post or Reel URLs. |
 | `uv run python -m scripts.probe_instagram --analyze <run-id>` | Re-analyzes a saved run offline. Pass the run ID (for example `20261018-135240`) or the run folder. |
 | `uv run python -m scripts.probe_instagram --help` | All probe options with their defaults. |
+| `uv run python -m scripts.export_public` | Exports the recipes chosen in `data/public-notebook/selection.json` for the public, read-only copy (the notebook is opened read-only). `--list` shows which recipes can be published. See [docs/public-notebook.md](docs/public-notebook.md). |
+| `uv run python -m scripts.check_public_site <address>` | Checks the published notebook in a real browser, using only its public address. |
+
+From the project root: **`.\publish-notebook.cmd`** updates the public notebook: export, build, check,
+publish to the same address, check the address (`--add ID`, `--remove ID`, `--list`, `--no-deploy`). The
+first time it needs a free Cloudflare account and `npx wrangler login` in `frontend/`
+([docs/public-notebook.md](docs/public-notebook.md)).
 
 Frontend, from `frontend/`:
 
@@ -505,6 +514,8 @@ Frontend, from `frontend/`:
 | `npm run build` | Type-checks all TypeScript (`tsc -b`), then builds the production files into `frontend/dist/`. You don't need `dist/` yet; the build proves everything compiles. |
 | `npm run preview` | Serves the built `dist/` at http://localhost:4173. Opening `dist/index.html` directly shows a blank page, because the built files must be served. |
 | `npm run lint` | Checks the code for common mistakes, including accessibility problems, with Oxlint. |
+| `npm run build:public` | Builds the public, read-only copy into `data/public-notebook/site/` from the latest export (`publish-notebook.cmd` runs it for you). |
+| `npm run preview:public` | Serves that copy at http://localhost:4173, to look at it before publishing. |
 
 Open `summary.md` files in VS Code. Windows PowerShell 5.1's `Get-Content` shows Hebrew as garbage
 unless you add `-Encoding UTF8`.
@@ -605,6 +616,9 @@ The project keeps these separate and reports which one was run:
 │   ├── alembic.ini                  Alembic's settings, for its command line
 │   ├── evals/                       the extraction quality check (paid; run by hand) and its cases
 │   ├── scripts/probe_instagram.py   bounded live probe and offline analysis
+│   ├── scripts/export_public.py     exports chosen saved recipes for the public, read-only copy
+│   ├── scripts/publish_public.py    export, build, check and publish it (publish-notebook.cmd at the root)
+│   ├── scripts/check_public_site.py checks the published copy in a browser
 │   └── tests/                       pytest: API, persistence, migrations, extraction, contract, importer, settings…
 ├── frontend/                        React + TypeScript + Vite
 │   ├── index.html                   the page shell: lang="he" dir="rtl"
@@ -616,6 +630,8 @@ The project keeps these separate and reports which one was run:
 │       ├── editorForm.ts            the editor's form state, checks and conversions (no React)
 │       ├── recipeFilters.ts         search and filters for the gallery, "already cooked" and its counts (no React)
 │       ├── route.ts                 the page's place in the address (#/recipes/12): back button and reload
+│       ├── publicNotebook.ts        whether the page is the public, read-only copy (npm run build:public)
+│       ├── processing.ts            the public copy's comparison: what review changed between draft and recipe
 │       ├── importLinks.ts           which importer a link goes to (Instagram today), and what to say otherwise
 │       ├── categoryLook.ts          each category's drawing and color, and its label
 │       ├── useNarrowScreen.ts       phone-sized or not (the import strip opens from its button on a phone)
@@ -628,7 +644,8 @@ The project keeps these separate and reports which one was run:
 │       │                            gallery), RecipeCard, Placeholder, CookedControl (badge and control), Icon,
 │       │                            RecipeView, RecipeActions, RecipeEditor (with IngredientsEditor,
 │       │                            StepsEditor, RowButtons, FieldError), CategoryChip, ImportPanel,
-│       │                            ReviewIssues, OriginalText, CategoryManager, MediaGallery
+│       │                            ReviewIssues, OriginalText, CategoryManager, MediaGallery; for the public
+│       │                            copy: SourceComparison (a recipe beside its original), AboutPage
 │       ├── test/                    test setup, the fake API, sample recipes as test data
 │       └── *.test.ts(x)             Vitest + Testing Library tests
 └── data/                            local data (git-ignored)
