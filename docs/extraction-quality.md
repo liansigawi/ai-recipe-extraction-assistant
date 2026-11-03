@@ -54,6 +54,9 @@ alone). `evals.compare` puts two runs side by side.
 
 Sixty-one invented texts in `backend/evals/cases/` (each `<name>.txt` + `<name>.json`) and five
 real captions in `data/evals/local-cases/` (git-ignored: other people's content and the user's).
+Since 2026-11-03 (migration 0014) a dessert case expects a type (`subcategory`) and, apart from it, a
+healthy style (`healthy`, or `healthy_one_of`), each checked on its own; the thirteen cases that expected
+"קינוחים רגילים" or "קינוחים בריאים" expect the same choice as a healthy style.
 
 | Case | What it checks |
 |---|---|
@@ -131,6 +134,55 @@ uv run python -m evals.run_extraction --extractor ollama --case 38-chicken-soup-
 
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
+
+### 2026-11-03: dessert types and the healthy style, one candidate against the current request
+
+The person replaced "קינוחים רגילים / בריאים" with six dessert types and a separate healthy-style attribute
+(migration 0014), and asked for three separate decisions: what kind of dish it is, its category and (for a
+dessert) its type, and whether it is in their healthy style. Measured with the category request alone on
+drafts (no extraction, no website), local `qwen3:8b`, two runs each, alternating.
+
+- **Cases**, with the expected answers written before any run: 19, of which 12 to look at while building
+  the candidate and 7 **held out** until the final check. 13 of the person's saved recipes (their saved
+  healthy or regular choice as the expected healthy style; the type judged from the dish), the evaluation
+  cases 34 (date and oat balls) and 37 (oat and raisin cookies with butter and sugar), and four invented
+  for this: a savory cottage-cheese and oat pie, oat, almond-butter and honey cookies, butter-and-sugar
+  cookies with oats and dates, chocolate mousse cups. Butter-and-sugar sweets with oats or dates accept
+  "no" or "not decided"; only "yes" is wrong.
+- **The current request**, run with the new categories (for the category and the type) and with the old
+  ones (its "בריאים / רגילים" choice is how it decided the healthy style until now).
+- **One candidate**, written before any run and not reworded after: one request; the current rules plus
+  three decisions in order (`kind`: drink, dessert, savory dish or other; the category and the type; and
+  `healthy_style`: yes, no or unsure, with the person's own definition and "the whole recipe, never one
+  ingredient"); a `kind` that disagrees with the category (a dessert outside the desserts, or the
+  reverse) leaves the recipe unclassified.
+
+| (run 1 / run 2) | Current request | Candidate |
+|---|---|---|
+| category, 12 to tune | 9 / 9 right, 3 / 3 wrong, 0 unresolved | 10 / 9 right, 2 / 3 wrong, 0 unresolved |
+| category, 7 held out | 6 / 6 right, 1 / 1 wrong | 6 / 6 right, 1 / 1 wrong |
+| dessert type, 13 desserts in the right category | 12 / 12 right, 1 / 1 wrong | 12 / 12 right, 1 / 1 wrong |
+| healthy style, 13 desserts | 8 / 8 right, 5 / 5 wrong | 10 / 10 right, 3 / 3 wrong |
+| one classification request | 1.3–1.6 s on average (median 1.3) | 1.7 s (median 1.6) |
+
+- **Better with the candidate**: the brûlée tart (31), the oat and raisin cookies (37) and the
+  butter-and-sugar date cookies are no longer called healthy-style; the savory pie was a light meal in one
+  run of two (a dessert in every other run of both).
+- **Worse with the candidate**: the person's healthy chocolate-chip cookies (21) became "no" in both runs.
+- **Wrong with both**: the banana-date iced coffee (17) and the sahlab (50) are desserts in every run (the
+  candidate's own `kind` said "dessert", so its check had nothing to catch: the model reads them as "a sweet
+  dessert with banana and dates"); the cottage-cheese ice cream (19) and the blintzes (13) are "no" for
+  the healthy style; the vanilla torte (12) is a tart; the savory protein pancakes (14) are a dessert (now)
+  or a meat meal (candidate).
+- **The types work with the current request**: 12 of 13, from the subcategories' descriptions alone; the
+  new categories changed no main category answer (the same answers with the old and the new ones).
+
+The candidate is better on the healthy style, but not on the category (the drinks, the person's own
+example, stay wrong) or the type, and its "no" covered three of the person's five healthy desserts. Not
+clearly better, so **the current request stays**: a new import gets a category and, for a dessert, a type
+when one clearly fits; its healthy style stays "not decided", for the person. Results, the cases and the
+scripts: `data/evals/extraction/20261103-dessert-classification/` (git-ignored: it holds the person's
+recipes).
 
 ### 2026-11-01 (later): the text around the recipe for the category request; spreads, dips and sauces
 

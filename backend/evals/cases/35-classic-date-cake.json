@@ -3,7 +3,8 @@
   "expect": {
     "title": "עוגת תמרים של סבתא",
     "category": "קינוחים",
-    "subcategory": "קינוחים רגילים",
+    "subcategory": "עוגות",
+    "healthy": false,
     "ingredient_groups": [
       {
         "name": null,

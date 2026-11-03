@@ -8,8 +8,10 @@ after normalizing only spacing, Unicode form and invisible marks (review.normali
     "title": "...", "title_acceptable": [..]   the title, or one of these
     "title_composed": true                    the text has no title: any title, with a warning
     "category": "קינוחים" or null, or "category_one_of": ["ארוחות קלילות", null]
-    "subcategory": "קינוחים רגילים" or null, or "subcategory_one_of": ["קינוחים רגילים", null]
+    "subcategory": "עוגות" or null, or "subcategory_one_of": ["מאפים מתוקים", "עוגות"]
                                               (checked only when the draft has the expected category)
+    "healthy": true, false or null, or "healthy_one_of": [false, null]
+                                              a dessert's healthy style (checked only in a category that has it)
     "ingredient_groups": [{"name": "לבצק" | null | ["...", null], "items": [["2 כוסות קמח", "2 כוסות"], ["מלח", null]]}]
                                               EVERY ingredient line, in order, in its group, with its
                                               quantity (docs/quantity-conventions.md); null: none
@@ -42,7 +44,7 @@ from app.extraction.review import FIXED_MESSAGES, PROMOTION_FLAG, TIP_IN_LIST_FL
 
 KNOWN_EXPECTATIONS = {
     "is_recipe", "title", "title_acceptable", "title_composed", "category", "category_one_of",
-    "subcategory", "subcategory_one_of",
+    "subcategory", "subcategory_one_of", "healthy", "healthy_one_of",
     "ingredient_groups", "preparation", "tips", "step_groups", "facts", "yield", "excluded",
     "never_suggested", "warnings", "source_gaps",
 }
@@ -54,7 +56,7 @@ AREAS = [
 ]
 # Minor findings: the draft is not wrong, but a check failed (the person classifies; a review point is
 # missing; a fact or tip is kept, but split over two adjacent entries). They still count as failed checks.
-MINOR = {"category_unresolved", "subcategory_unresolved", "missing_warning", "source_gap_unflagged", "split_fact", "split_tip"}
+MINOR = {"category_unresolved", "subcategory_unresolved", "healthy_unresolved", "missing_warning", "source_gap_unflagged", "split_fact", "split_tip"}
 # The app's own review points that point at real problems (not remarks the model made up).
 PROBLEM_FLAGS = {"not_found_in_source", "quantity_not_in_line", "invalid_reference", "not_extracted"}
 
@@ -178,6 +180,17 @@ def check(
                     fail("subcategory_unresolved", "category", f"no subcategory; a fitting one: {allowed_sub}", "subcategory")
                 else:
                     fail("subcategory_wrong", "category", f"subcategory {actual_sub!r}, expected {allowed_sub}", "subcategory")
+    # Healthy style: only for a dessert (a category with healthy_style), once the category is right.
+    allowed_healthy = [expect["healthy"]] if "healthy" in expect else expect.get("healthy_one_of")
+    if allowed_healthy is not None and draft.category_id is not None:
+        top = next((c for c in categories if c.id == draft.category_id), None)
+        if top is not None and top.healthy_style and (allowed is None or top.name in allowed):
+            result.count("category")
+            if draft.healthy not in allowed_healthy:
+                if draft.healthy is None:
+                    fail("healthy_unresolved", "category", f"healthy style not decided; expected {allowed_healthy}", "healthy")
+                else:
+                    fail("healthy_wrong", "category", f"healthy style {draft.healthy}, expected {allowed_healthy}", "healthy")
 
     # Source gaps: the source recipe omits an ingredient its steps use. Not an extraction mistake;
     # the draft must not add it, and the app should point it out.
@@ -365,9 +378,9 @@ def _flagged(kind: str, about: tuple[str, ...], draft: schemas.RecipeInput) -> b
         return any(issue.kind == "classification_unresolved" for issue in draft.issues)
     if kind == "title":
         return any(issue.kind in ("missing_title", "not_found_in_source") for issue in draft.issues)
-    if kind == "subcategory_unresolved":
-        return True  # the subcategory field is in plain view, empty; no point is expected
-    if kind in ("category_wrong", "subcategory_wrong", "missing_warning", "suggested_category", "order", "group") or not about:
+    if kind in ("subcategory_unresolved", "healthy_unresolved"):
+        return True  # the field is in plain view, empty; no point is expected
+    if kind in ("category_wrong", "subcategory_wrong", "healthy_wrong", "missing_warning", "suggested_category", "order", "group") or not about:
         return False
     targets = [normalize(text) for text in about if text]
     for issue in draft.issues:

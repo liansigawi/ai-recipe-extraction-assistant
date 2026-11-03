@@ -3,7 +3,8 @@
  "expect": {
   "title": "בראוניז שוקולד מריר עם קרמל מלוח",
   "category": "קינוחים",
-  "subcategory": "קינוחים רגילים",
+  "subcategory": "עוגיות וחיתוכיות",
+    "healthy": false,
   "ingredient_groups": [
    {"name": "לקרמל המלוח", "items": [
     ["3/4 כוס סוכר", "3/4 כוס"],

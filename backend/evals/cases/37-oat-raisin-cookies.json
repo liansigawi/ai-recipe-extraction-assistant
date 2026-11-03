@@ -3,10 +3,8 @@
   "expect": {
     "title": "עוגיות שיבולת שועל וצימוקים",
     "category": "קינוחים",
-    "subcategory_one_of": [
-      "קינוחים רגילים",
-      null
-    ],
+    "subcategory": "עוגיות וחיתוכיות",
+    "healthy_one_of": [false, null],
     "ingredient_groups": [
       {
         "name": null,

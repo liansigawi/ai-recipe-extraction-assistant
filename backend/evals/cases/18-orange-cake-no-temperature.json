@@ -3,7 +3,8 @@
  "expect": {
   "title": "עוגת תפוזים בחושה עם זיגוג",
   "category": "קינוחים",
-  "subcategory": "קינוחים רגילים",
+  "subcategory": "עוגות",
+    "healthy": false,
   "ingredient_groups": [
    {
     "name": "לעוגה",

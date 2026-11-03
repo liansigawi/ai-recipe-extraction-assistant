@@ -158,6 +158,17 @@ def test_a_wrong_category_is_an_error_an_unresolved_one_is_minor_but_still_a_fai
     assert not result.all_passed  # "all checks passed" means every check, minor ones too
 
 
+def test_a_dessert_s_type_and_healthy_style_are_checked_apart_and_only_for_a_dessert():
+    expect = {**EXPECT, "category": "קינוחים", "subcategory": "גלידות וקינוחים קפואים", "healthy": True}
+    frozen = 15
+    found = lambda **fields: [(f.kind, f.minor) for f in check(expect, draft=draft(**fields), error_code=None, categories=CATEGORIES, source=SOURCE).findings]  # noqa: E731
+    assert found(category_id=1, subcategory_id=frozen, healthy=True) == []
+    assert found(category_id=1, subcategory_id=frozen, healthy=False) == [("healthy_wrong", False)]
+    assert found(category_id=1, subcategory_id=frozen) == [("healthy_unresolved", True)]
+    assert found(category_id=1, subcategory_id=11, healthy=True) == [("subcategory_wrong", False)]  # cakes
+    assert found(category_id=4) == [("category_wrong", False)]  # a drink: one problem, not three
+
+
 def test_a_finding_records_whether_the_app_showed_a_review_point_about_it():
     issue = Issue(kind="unused_text", message="המודל לא שיבץ את הקטע", quote="מלח")
     result = check(EXPECT, draft=draft(ingredient_groups=lines(("200 גרם קמח", "200 גרם")), issues=[issue]),

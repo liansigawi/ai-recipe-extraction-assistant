@@ -3,7 +3,8 @@
   "expect": {
     "title": "מאפינס בננה ושיבולת שועל בלי סוכר לבן",
     "category": "קינוחים",
-    "subcategory": "קינוחים בריאים",
+    "subcategory": "עוגות",
+    "healthy": true,
     "ingredient_groups": [
       {
         "name": null,

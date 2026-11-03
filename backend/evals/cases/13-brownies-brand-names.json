@@ -3,7 +3,8 @@
   "expect": {
     "title": "בראוניז נוטלה בקערה אחת",
     "category": "קינוחים",
-    "subcategory": "קינוחים רגילים",
+    "subcategory": "עוגיות וחיתוכיות",
+    "healthy": false,
     "ingredient_groups": [
       {
         "name": "לבראוניז",

@@ -3,7 +3,8 @@
   "expect": {
     "title": "כדורי תמרים ושיבולת שועל",
     "category": "קינוחים",
-    "subcategory": "קינוחים בריאים",
+    "subcategory": "עוגיות וחיתוכיות",
+    "healthy": true,
     "ingredient_groups": [
       {
         "name": null,

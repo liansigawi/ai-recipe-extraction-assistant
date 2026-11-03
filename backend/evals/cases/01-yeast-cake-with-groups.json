@@ -3,7 +3,8 @@
   "expect": {
     "title": "עוגת שמרים בחושה עם קרם וניל",
     "category": "קינוחים",
-    "subcategory": "קינוחים רגילים",
+    "subcategory_one_of": ["מאפים מתוקים", "עוגות"],
+    "healthy": false,
     "ingredient_groups": [
       {
         "name": "לבצק",

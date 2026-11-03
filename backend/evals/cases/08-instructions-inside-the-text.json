@@ -3,7 +3,8 @@
   "expect": {
     "title": "עוגיות חמאה פשוטות",
     "category": "קינוחים",
-    "subcategory": "קינוחים רגילים",
+    "subcategory": "עוגיות וחיתוכיות",
+    "healthy": false,
     "ingredient_groups": [
       {
         "name": null,
