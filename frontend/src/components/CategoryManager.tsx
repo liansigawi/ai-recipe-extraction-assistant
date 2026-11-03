@@ -105,6 +105,12 @@ export default function CategoryManager({ categories, recipes, onChanged, onClos
         {categories.map((category) => (
           <li key={category.id} className="category-node">
             {open?.kind === 'edit' && open.id === category.id ? formFor(category, `עריכת הקטגוריה "${category.name}"`) : summary(category, false)}
+            {category.healthy_style === true && (
+              <p className="category-attribute">
+                <strong>קינוח בריא:</strong> סימון נפרד מהסוג, בכל קינוח: כן, לא או לא נקבע. כך קינוח קפוא, למשל, יכול להיות גם קינוח בריא. בוחרים
+                אותו בעריכת המתכון, ומסננים לפיו ברשימת הקינוחים.
+              </p>
+            )}
             <ul className="subcategory-list" aria-label={`תת-קטגוריות של ${category.name}`}>
               {category.subcategories.map((sub) => (
                 <li key={sub.id}>

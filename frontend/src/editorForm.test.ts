@@ -21,6 +21,7 @@ describe('recipeToForm and formToInput', () => {
         title: recipe.title,
         category_id: recipe.category?.id ?? null,
         subcategory_id: recipe.subcategory?.id ?? null,
+        healthy: recipe.healthy,
         servings: recipe.servings,
         ingredient_groups: recipe.ingredient_groups,
         step_groups: recipe.step_groups,
@@ -131,6 +132,7 @@ describe('errorsFromApi', () => {
   it('places category errors on the category fields', () => {
     expect(errorsFromApi('unknown_category', null, {})).toHaveProperty(['category_id'])
     expect(errorsFromApi('subcategory_not_in_category', null, {})).toHaveProperty(['subcategory_id'])
+    expect(errorsFromApi('healthy_not_dessert', { field: 'healthy' }, {})).toHaveProperty(['healthy'])
   })
 
   it('maps a validation error back to the form row it came from', () => {

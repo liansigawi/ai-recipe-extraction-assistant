@@ -131,6 +131,76 @@ p {
   color: var(--color-muted);
 }
 
+/* "קינוח בריא": a leaf in the salads' green, on the cards, the recipe, the filter and the categories screen. */
+.badge-healthy,
+.chip-healthy {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+  background: var(--tone-salad);
+  color: var(--tone-salad-ink);
+}
+
+.badge-healthy {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-healthy .icon,
+.chip-healthy .icon,
+.filter-chip.is-toggle .icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.filter-chip.is-toggle > span {
+  border-color: var(--tone-salad-ink);
+  color: var(--tone-salad-ink);
+}
+
+.filter-chip.is-toggle input:checked + span {
+  border-color: var(--tone-salad-ink);
+  background: var(--tone-salad-ink);
+  color: #ffffff;
+}
+
+.category-attribute {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--tone-salad);
+  color: var(--tone-salad-ink);
+  font-size: 0.9rem;
+}
+
+.healthy-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.healthy-field > legend {
+  padding: 0;
+}
+
+.choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+}
+
+.choice {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 /* ---- Recipe view ------------------------------------------------------------- */
 
 .recipe-view {
@@ -1523,6 +1593,7 @@ h4.category-name {
 
 .recipe-card-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
   color: var(--color-muted);

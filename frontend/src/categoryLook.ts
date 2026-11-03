@@ -42,6 +42,15 @@ export function categoryLook(category: CategoryRef | null): { icon: IconName; to
 
 /** "קינוחים · קינוחים בריאים", or the subcategory alone when its name already starts with the
  * category's ("קינוחים רגילים"), or "לא מסווג". */
+/** The healthy-style attribute's name, and its value as words (null: not decided, nothing to say). */
+export const HEALTHY_LABEL = 'קינוח בריא'
+
+export function healthyLabel(healthy: boolean | null | undefined): string | null {
+  if (healthy === true) return HEALTHY_LABEL
+  if (healthy === false) return `לא ${HEALTHY_LABEL}`
+  return null
+}
+
 export function categoryLabel(category: CategoryRef | null, subcategory: CategoryRef | null = null): string {
   if (category === null) return 'לא מסווג'
   if (subcategory === null) return category.name

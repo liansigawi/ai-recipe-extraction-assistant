@@ -25,9 +25,10 @@ class Checks:
     def __init__(self) -> None:
         self.failed = 0
 
-    def __call__(self, ok: bool, what: str, detail: str = "") -> None:
+    def __call__(self, ok: bool, what: str, detail: str = "") -> bool:
         print(f"{'OK  ' if ok else 'FAIL'}  {what}{'' if ok or not detail else f': {detail}'}")
         self.failed += not ok
+        return ok
 
 
 def open_page(page: Page, url: str) -> None:
@@ -102,6 +103,14 @@ def main(argv: list[str] | None = None) -> int:
                 page.locator(".subcategory-filter label", has_text=sub["name"]).click()
                 expected = sum(r["subcategory"] is not None and r["subcategory"]["id"] == sub["id"] for r in recipes)
                 check(cards.count() == expected, f'the filter "{sub["name"]}" shows its recipes', f"{cards.count()}, expected {expected}")
+            if category.get("healthy_style"):  # "קינוח בריא", with all of the category's types
+                toggle = page.locator(".subcategory-filter label.is-toggle")
+                if check(toggle.count() == 1, f'the filter "קינוח בריא" is offered with {category["name"]}'):
+                    page.locator(".subcategory-filter label", has_text=f"כל ה{category['name']}").click()
+                    toggle.click()
+                    expected = sum(r["category"] is not None and r["category"]["id"] == category["id"] and r.get("healthy") is True for r in recipes)
+                    check(cards.count() == expected, f'the filter "קינוח בריא" shows the healthy-style {category["name"]}', f"{cards.count()}, expected {expected}")
+                    toggle.click()
         page.locator(".category-filter label", has_text="לא מסווג").click()
         expected = sum(r["category"] is None for r in recipes)
         check(cards.count() == expected, 'the filter "לא מסווג" shows the unclassified recipes', f"{cards.count()}, expected {expected}")

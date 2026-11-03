@@ -1,4 +1,4 @@
-import { categoryLabel, categoryLook } from '../categoryLook'
+import { categoryLabel, categoryLook, HEALTHY_LABEL } from '../categoryLook'
 import { creditedSource } from '../credit'
 import { coverOf, pictureUrl } from '../media'
 import type { Creator, Recipe } from '../types'
@@ -45,6 +45,12 @@ export default function RecipeCard({ recipe, onOpen, onToggleCooked, savingCooke
         <span className="recipe-card-meta">
           <span className={`category-dot tone-${categoryLook(recipe.category).tone}`} aria-hidden="true" />
           {categoryLabel(recipe.category, recipe.subcategory)}
+          {recipe.healthy === true && (
+            <span className="badge-healthy">
+              <Icon name="leaf" />
+              {HEALTHY_LABEL}
+            </span>
+          )}
         </span>
         {cover?.kind === 'video' && (
           <span className="recipe-card-video">

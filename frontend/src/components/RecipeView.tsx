@@ -3,7 +3,9 @@ import { creditedSource, postLink, profileUrl, shownName } from '../credit'
 import { SOURCE_LABELS } from '../labels'
 import { coverOf, pictureUrl } from '../media'
 import type { Creator, IngredientGroup, Recipe, Source, StepGroup } from '../types'
+import { HEALTHY_LABEL } from '../categoryLook'
 import CategoryChip from './CategoryChip'
+import Icon from './Icon'
 import MediaGallery, { MediaImage } from './MediaGallery'
 import OriginalText from './OriginalText'
 import Placeholder from './Placeholder'
@@ -57,6 +59,14 @@ export default function RecipeView({ recipe, titleRef, toolbar, cooked, banner, 
         <li>
           <CategoryChip category={recipe.category} subcategory={recipe.subcategory} />
         </li>
+        {recipe.healthy === true && (
+          <li>
+            <span className="chip chip-healthy">
+              <Icon name="leaf" />
+              {HEALTHY_LABEL}
+            </span>
+          </li>
+        )}
         {recipe.servings !== null && <li dir="auto">{recipe.servings}</li>}
         {recipe.sources.map((source, index) => (
           <li key={index}>

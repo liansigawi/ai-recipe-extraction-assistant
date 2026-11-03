@@ -58,6 +58,8 @@ export interface RecipeForm {
   /** '' means "not classified" (a <select> value is always a string). */
   category_id: string
   subcategory_id: string
+  /** "קינוח בריא": 'yes', 'no', or '' (not decided). Only offered for a category with healthy_style. */
+  healthy: '' | 'yes' | 'no'
   servings: string
   ingredient_groups: IngredientGroupForm[]
   step_groups: StepGroupForm[]
@@ -84,6 +86,7 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
       title: '',
       category_id: '',
       subcategory_id: '',
+      healthy: '',
       servings: '',
       ingredient_groups: [emptyIngredientGroup()],
       step_groups: [emptyStepGroup()],
@@ -96,6 +99,7 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
     title: recipe.title,
     category_id: recipe.category ? String(recipe.category.id) : '',
     subcategory_id: recipe.subcategory ? String(recipe.subcategory.id) : '',
+    healthy: recipe.healthy === null ? '' : recipe.healthy ? 'yes' : 'no',
     servings: recipe.servings ?? '',
     // A recipe without ingredients or steps (e.g. a draft saved without Claude) starts with one
     // empty row of each, like a new recipe, ready to type into. Empty rows are never sent.
@@ -198,6 +202,7 @@ export function formToInput(
     title: form.title.trim(),
     category_id: form.category_id === '' ? null : Number(form.category_id),
     subcategory_id: form.subcategory_id === '' ? null : Number(form.subcategory_id),
+    healthy: form.healthy === '' ? null : form.healthy === 'yes',
     servings: orNull(form.servings),
     ingredient_groups,
     step_groups,
@@ -266,6 +271,9 @@ export function errorsFromApi(code: string, details: unknown, pathMap: Record<st
   }
   if (code === 'subcategory_not_in_category') {
     return { subcategory_id: 'תת-הקטגוריה לא שייכת לקטגוריה שנבחרה.' }
+  }
+  if (code === 'healthy_not_dessert') {
+    return { healthy: 'רק קינוח אפשר לסמן כקינוח בריא. בחרו "לא נקבע", או את הקטגוריה של הקינוחים.' }
   }
   if (code !== 'invalid_request' || !Array.isArray(details)) {
     return null

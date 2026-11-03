@@ -27,10 +27,13 @@ def test_categories_are_the_eight_starter_categories(client):
     assert [category["name"] for category in categories] == [
         "קינוחים", "ארוחות בשריות", "ארוחות קלילות", "משקאות", "סלטים", "מרקים", "תוספות", "ממרחים, מטבלים ורטבים"
     ]
-    # Desserts have the two subcategories you asked for; the others have none.
+    # Desserts have the six dessert types you asked for; the others have none.
     assert [[sub["name"] for sub in category["subcategories"]] for category in categories] == [
-        ["קינוחים רגילים", "קינוחים בריאים"], [], [], [], [], [], [], []
+        ["עוגות", "עוגיות וחיתוכיות", "טארטים ופאי", "קינוחי כוסות ומוסים", "גלידות וקינוחים קפואים", "מאפים מתוקים"],
+        [], [], [], [], [], [], [],
     ]
+    # Only desserts can be marked "קינוח בריא".
+    assert [category["healthy_style"] for category in categories] == [True] + [False] * 7
     assert all(category["description"] for category in categories)
     assert all(sub["description"] for sub in categories[0]["subcategories"])
 

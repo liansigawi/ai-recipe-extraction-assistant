@@ -7,24 +7,33 @@ deleted, and your recipes are never touched.
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import crud, models
-from app.sample_data import ADDED_CATEGORIES, SAMPLE_RECIPES, STARTER_CATEGORIES, STARTER_SUBCATEGORIES
+from app.sample_data import (
+    ADDED_CATEGORIES,
+    FIRST_ADDED_ID,
+    HEALTHY_STYLE_CATEGORY,
+    SAMPLE_RECIPES,
+    STARTER_CATEGORIES,
+    STARTER_SUBCATEGORIES,
+)
 
 
 def seed_new_database(session_factory: sessionmaker[Session]) -> None:
     with session_factory() as session:
         ids: dict[str, int] = {}
         for name, description in STARTER_CATEGORIES:
-            row = models.Category(name=name, description=description)
+            row = models.Category(name=name, description=description, healthy_style=name == HEALTHY_STYLE_CATEGORY)
             session.add(row)
             session.flush()  # INSERT now, so SQLite assigns row.id
             ids[name] = row.id
+        # The same ids as in an older database that migrations 0012 to 0014 upgraded: the added categories
+        # from FIRST_ADDED_ID, then the dessert types.
+        for offset, (name, description) in enumerate(ADDED_CATEGORIES):
+            session.add(models.Category(id=FIRST_ADDED_ID + offset, name=name, description=description))
+            session.flush()
         for parent, subcategories in STARTER_SUBCATEGORIES.items():
             for name, description in subcategories:
                 session.add(models.Category(name=name, description=description, parent_id=ids[parent]))
-                session.flush()  # in order: the same ids as in a database that migration 0007 upgraded
-        for name, description in ADDED_CATEGORIES:
-            session.add(models.Category(name=name, description=description))
-            session.flush()  # after the subcategories: the same ids as in a database that migration 0012 upgraded
+                session.flush()
         session.commit()
 
         # Newest recipes are listed first, so insert the samples in reverse to show them in file order.

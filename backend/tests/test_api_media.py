@@ -91,7 +91,7 @@ def own_recipe(client):
     body = {
         "title": "עוגיות שקדים שלי", "servings": None,
         "ingredient_groups": [{"name": None, "ingredients": [{"text": "כוס קמח שקדים", "quantity": "כוס"}]}],
-        "step_groups": [{"name": None, "steps": ["אופים."]}], "notes": [], "category_id": 1, "subcategory_id": 6,
+        "step_groups": [{"name": None, "steps": ["אופים."]}], "notes": [], "category_id": 1, "subcategory_id": 12, "healthy": True,
         "sources": [{"kind": "instagram", "url": "https://www.instagram.com/reel/Cm1mCdCpSzJ/", "creators": [{"name": "שם שלי", "username": "baker"}]}],
     }
     return client.post("/api/recipes", json=body).json()

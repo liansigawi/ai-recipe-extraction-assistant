@@ -32,6 +32,7 @@ const draft: KeptDraft = {
 function saved(fields: Partial<Recipe>): Recipe {
   return {
     ...draft,
+    healthy: null,
     sources: [],
     id: 6,
     is_sample: false,
@@ -70,6 +71,21 @@ describe('what review changed', () => {
         lines: [
           { kind: 'removed', text: 'חצי תמר מג׳ hollow · כמות: חצי' },
           { kind: 'added', text: 'חצי תמר מג׳הול · כמות: חצי' },
+        ],
+      },
+    ])
+  })
+
+  it("a dessert's healthy style is part of its category: the same choice is no change, another one is", () => {
+    const desserts = { id: 1, name: 'קינוחים' }
+    const regular = { ...draft, category: desserts, healthy: false }
+    expect(reviewChanges(regular, saved({ category: desserts, healthy: false })).unchanged).toContain('קטגוריה')
+    expect(reviewChanges(regular, saved({ category: desserts, healthy: true })).changed).toEqual([
+      {
+        part: 'קטגוריה',
+        lines: [
+          { kind: 'removed', text: 'קינוחים · לא קינוח בריא' },
+          { kind: 'added', text: 'קינוחים · קינוח בריא' },
         ],
       },
     ])

@@ -76,7 +76,8 @@ To give it a "מהמקור למתכון" page as well, add its number to `show_p
 Each run lists what becomes public, recipe by recipe: its credit, whether its original text is public, and
 its cover.
 
-Public, per recipe: title, category and subcategory names, servings, ingredient and step groups, notes,
+Public, per recipe: title, category and subcategory names (a dessert's type), a dessert's healthy style,
+servings, ingredient and step groups, notes,
 sources with their credit and links, the cooked mark, the creation and last-saved times, and the cover
 picture (for a video, a still from it, with the link to the post; never the video). For the recipes in
 `show_processing`, also: the imported original text as it was read (a caption's hashtags, mentions and

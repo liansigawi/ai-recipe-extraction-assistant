@@ -186,6 +186,7 @@ describe('creating a recipe', () => {
           title: 'עוגת תפוזים',
           category_id: 1,
           subcategory_id: null,
+          healthy: null,
           servings: null,
           ingredient_groups: [
             {
@@ -316,6 +317,7 @@ describe('editing a recipe', () => {
       title: 'עוגת שוקולד מריר',
       category_id: 1,
       subcategory_id: null,
+      healthy: null,
       servings: cake.servings,
       ingredient_groups: cake.ingredient_groups, // untouched content goes back exactly as it was
       step_groups: cake.step_groups,

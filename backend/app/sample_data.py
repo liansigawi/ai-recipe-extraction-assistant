@@ -42,32 +42,51 @@ STARTER_CATEGORIES: list[tuple[str, str]] = [
     ),
 ]
 
-# The starter subcategories, by their category's name: (name, description). "קינוחים בריאים" is your own
-# style of dessert, judged by the whole recipe, not a nutritional verdict and not "vegan" or "dairy-free".
-# A dessert whose style is unclear stays in "קינוחים" without a subcategory. Migration 0007 added these
-# to older databases.
+# The dessert types (2026-11-03, migration 0014), by their category's name: (name, description). Whether a
+# dessert is in your healthy style is not a type but its own attribute (recipes.healthy), so a frozen
+# dessert can be healthy too. A dessert whose type is unclear stays in "קינוחים" without a subcategory.
 STARTER_SUBCATEGORIES: dict[str, list[tuple[str, str]]] = {
     "קינוחים": [
         (
-            "קינוחים רגילים",
-            "רוב הקינוחים: עוגות, עוגיות, מאפים, טארטים, בראוניז וקינוחי חלב שבנויים על קמח רגיל, סוכר, חמאה, "
-            "שמנת או שוקולד. גם כשיש בהם קצת דבש, אגוזים או שקדים (למשל טארט דבש מלוח).",
+            "עוגות",
+            "עוגות: עוגות בחושות, בחושה ושוקולד, עוגות גבינה, עוגות שכבות וטורטים, עוגות ביסקוויטים, מאפינס "
+            "וקאפקייקס, גם עוגה ללא אפייה.",
         ),
         (
-            "קינוחים בריאים",
-            "הסגנון האישי שלי: קינוחים שבנויים בעיקר על תמרים, שיבולת שועל, אגוזים, קמח שקדים או חמאת אגוזים, "
-            "לפעמים ממותקים בדבש או במייפל, למשל כדורי תמרים ושיבולת שועל. לפי המתכון כולו ולא לפי מרכיב "
-            "אחד; לא הערכה תזונתית, ולא בהכרח טבעוני או ללא חלב.",
+            "עוגיות וחיתוכיות",
+            "עוגיות וביסקוויטים, בראוניז ובלונדיז, חיתוכיות ומלבנים שחותכים מתבנית, וכדורים וחטיפים מתוקים "
+            "(למשל כדורי תמרים).",
+        ),
+        (
+            "טארטים ופאי",
+            "טארטים, טארטלטים ופאי מתוקים: בסיס של בצק פריך או קראסט עם מילוי (קרם, פירות, שוקולד, גבינה).",
+        ),
+        (
+            "קינוחי כוסות ומוסים",
+            "קינוחים בכוס או בקערה: מוסים, פודינגים, קרמים, פנקוטה, טרייפל וקינוחי שכבות בכוס.",
+        ),
+        (
+            "גלידות וקינוחים קפואים",
+            "גלידות, סורבה, ארטיקים, פרוזן יוגורט וגלידת בננה, וקינוחים שמגישים קפואים.",
+        ),
+        (
+            "מאפים מתוקים",
+            "מאפים מתוקים מבצק או מבלילה: שמרים (באבקה, סינבון, רוגלך), סופגניות, בצק עלים, וגם פנקייקים, "
+            "וופלים, קרפים ובלינצ'ס מתוקים; גם כששמם עוגה (עוגת שמרים).",
         ),
     ],
 }
 
-# More top-level categories you asked for (2026-11-01), created after the subcategories so a new database
-# gives them the same ids as an older one that migrations 0012 (the first three) and 0013 (spreads, dips
-# and sauces) upgraded. What the dish is decides over its main ingredient: a cheese or chicken salad is a
+# The category whose recipes can be marked "קינוח בריא" (categories.healthy_style).
+HEALTHY_STYLE_CATEGORY = "קינוחים"
+
+# More top-level categories you asked for (2026-11-01). A new database gives them the ids that an older
+# one has after migrations 0012 (the first three) and 0013 (spreads, dips and sauces): from FIRST_ADDED_ID,
+# as ids 5 and 6 were the two style subcategories that migration 0014 replaced with the dessert types. What the dish is decides over its main ingredient: a cheese or chicken salad is a
 # salad, a chicken or meat soup is a soup. A side is judged by its role: a rice or legume dish that is the
 # meal itself is not one. A spread, dip or sauce is made to go on or with another dish; a whole dish with a
 # sauce (pasta in sauce) is not a sauce.
+FIRST_ADDED_ID = 7
 ADDED_CATEGORIES: list[tuple[str, str]] = [
     (
         "סלטים",

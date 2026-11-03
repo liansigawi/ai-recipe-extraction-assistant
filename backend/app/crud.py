@@ -23,6 +23,7 @@ def to_schema(row: models.Recipe) -> schemas.Recipe:
         title=row.title,
         category=schemas.CategoryRef(id=row.category.id, name=row.category.name) if row.category else None,
         subcategory=schemas.CategoryRef(id=row.subcategory.id, name=row.subcategory.name) if row.subcategory else None,
+        healthy=row.healthy,
         servings=row.servings,
         ingredient_groups=row.ingredient_groups,
         step_groups=row.step_groups,
@@ -137,6 +138,7 @@ def list_categories(session: Session) -> list[schemas.Category]:
             name=row.name,
             description=row.description,
             subcategories=[schemas.Subcategory(id=s.id, name=s.name, description=s.description) for s in row.subcategories],
+            healthy_style=row.healthy_style,
         )
         for row in rows
     ]
@@ -196,13 +198,20 @@ def linked_urls(session: Session) -> list[tuple[schemas.LinkedRecipe, str]]:
 # --- The category rule -------------------------------------------------------------------------
 
 
-def check_classification(session: Session, category_id: int | None, subcategory_id: int | None) -> None:
-    """Category ids must name existing rows, and the subcategory must belong to the category.
+def check_classification(session: Session, category_id: int | None, subcategory_id: int | None, healthy: bool | None = None) -> None:
+    """Category ids must name existing rows, the subcategory must belong to the category, and only a
+    dessert (a category with healthy_style) can be marked healthy-style or not.
 
     Nothing here ever creates a category. (The database enforces the parent pair too;
     checking first gives a clear error message instead of a database error.)
     """
+    not_a_dessert = ApiError(
+        422, "healthy_not_dessert", "Only a recipe in the desserts category can be marked as a healthy-style dessert or not.",
+        {"field": "healthy"},
+    )
     if category_id is None:
+        if healthy is not None:
+            raise not_a_dessert
         return  # unclassified is allowed
     category = session.get(models.Category, category_id)  # SELECT ... FROM categories WHERE id = ?
     if category is None or category.parent_id is not None:
@@ -210,6 +219,8 @@ def check_classification(session: Session, category_id: int | None, subcategory_
             422, "unknown_category", f"There is no top-level category with id {category_id}.",
             {"field": "category_id"},
         )
+    if healthy is not None and not category.healthy_style:
+        raise not_a_dessert
     if subcategory_id is None:
         return
     subcategory = session.get(models.Category, subcategory_id)
@@ -229,6 +240,7 @@ def _apply(row: models.Recipe, data: schemas.RecipeInput) -> None:
     row.title = data.title
     row.category_id = data.category_id
     row.subcategory_id = data.subcategory_id
+    row.healthy = data.healthy
     row.servings = data.servings
     # Plain lists and dicts go into the JSON columns, in order.
     row.ingredient_groups = [group.model_dump() for group in data.ingredient_groups]
@@ -247,7 +259,7 @@ def _apply(row: models.Recipe, data: schemas.RecipeInput) -> None:
 
 
 def create_recipe(session: Session, data: schemas.RecipeInput, *, is_sample: bool = False) -> schemas.Recipe:
-    check_classification(session, data.category_id, data.subcategory_id)
+    check_classification(session, data.category_id, data.subcategory_id, data.healthy)
     now = utc_now()
     row = models.Recipe(is_sample=is_sample, created_at=now, updated_at=now)
     _apply(row, data)
@@ -269,7 +281,7 @@ def create_import(
     source_details: dict | None = None,
 ) -> schemas.Recipe:
     """Save an imported draft together with the text it came from (and the post's address), in one transaction."""
-    check_classification(session, draft.category_id, draft.subcategory_id)
+    check_classification(session, draft.category_id, draft.subcategory_id, draft.healthy)
     now = utc_now()
     row = models.Recipe(created_at=now, updated_at=now)
     _apply(row, draft)
@@ -285,7 +297,7 @@ def create_import(
 
 def update_recipe(session: Session, recipe_id: int, data: schemas.RecipeInput) -> schemas.Recipe:
     row = _load(session, recipe_id)
-    check_classification(session, data.category_id, data.subcategory_id)
+    check_classification(session, data.category_id, data.subcategory_id, data.healthy)
     _apply(row, data)
     row.updated_at = utc_now()
     # UPDATE recipes SET ... WHERE id = ?; DELETE/INSERT recipe_sources ...; COMMIT

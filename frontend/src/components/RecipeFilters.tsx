@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import { categoryLook } from '../categoryLook'
+import { categoryLook, HEALTHY_LABEL } from '../categoryLook'
 import { isFiltering, NO_FILTERS, type CategoryFilter, type CookedFilter, type RecipeFilters as Filters, type StatusFilter } from '../recipeFilters'
 import type { Category } from '../types'
 import Icon from './Icon'
@@ -41,7 +41,9 @@ function topCategory(categories: Category[], filter: CategoryFilter): Category |
 export default function RecipeFilters({ filters, onChange, categories, shown, total, counts, statusFilter = true }: RecipeFiltersProps) {
   const id = useId()
   const top = topCategory(categories, filters.category)
-  const setCategory = (category: CategoryFilter) => onChange({ ...filters, category })
+  // The healthy-style filter belongs to the desserts: choosing another category turns it off.
+  const setCategory = (category: CategoryFilter) =>
+    onChange({ ...filters, category, healthy: filters.healthy && topCategory(categories, category)?.healthy_style === true })
 
   return (
     <search className="recipe-filters" aria-label="סינון מתכונים">
@@ -104,7 +106,7 @@ export default function RecipeFilters({ filters, onChange, categories, shown, to
         )}
       </div>
 
-      {top !== undefined && top.subcategories.length > 0 && (
+      {top !== undefined && (top.subcategories.length > 0 || top.healthy_style === true) && (
         <fieldset className="subcategory-filter">
           <legend>{top.name}:</legend>
           <Chip name={`${id}-sub`} small checked={filters.category.kind === 'category'} onPick={() => setCategory({ kind: 'category', id: top.id })}>
@@ -121,6 +123,15 @@ export default function RecipeFilters({ filters, onChange, categories, shown, to
               {sub.name}
             </Chip>
           ))}
+          {top.healthy_style === true && (
+            <label className="filter-chip is-small is-toggle">
+              <input type="checkbox" checked={filters.healthy} onChange={(event) => onChange({ ...filters, healthy: event.target.checked })} />
+              <span>
+                <Icon name="leaf" />
+                {HEALTHY_LABEL}
+              </span>
+            </label>
+          )}
         </fieldset>
       )}
 

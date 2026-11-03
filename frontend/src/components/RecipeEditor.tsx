@@ -15,6 +15,7 @@ import {
   type RecipeForm,
   type SourceRow,
 } from '../editorForm'
+import { HEALTHY_LABEL } from '../categoryLook'
 import { SOURCE_KINDS, SOURCE_LABELS } from '../labels'
 import type { Category, Recipe, RecipeStatus } from '../types'
 import FieldError from './FieldError'
@@ -24,6 +25,13 @@ import OriginalText from './OriginalText'
 import ReviewIssues from './ReviewIssues'
 import RowButtons from './RowButtons'
 import StepsEditor from './StepsEditor'
+
+// "קינוח בריא": decided either way, or left undecided (the model, or you, may not know).
+const HEALTHY_CHOICES: { value: RecipeForm['healthy']; label: string }[] = [
+  { value: 'yes', label: 'כן' },
+  { value: 'no', label: 'לא' },
+  { value: '', label: 'לא נקבע' },
+]
 
 interface RecipeEditorProps {
   /** The recipe to edit; undefined for a new recipe. */
@@ -178,7 +186,7 @@ export default function RecipeEditor({ recipe, categories, onSaved, onCancel, on
             value={form.category_id}
             aria-invalid={errors.category_id !== undefined}
             aria-describedby={describedBy(`${id}-category-hint`, errors.category_id !== undefined && `${id}-category-error`)}
-            onChange={(event) => update({ ...form, category_id: event.target.value, subcategory_id: '' })}
+            onChange={(event) => update({ ...form, category_id: event.target.value, subcategory_id: '', healthy: '' })}
           >
             <option value="">לא מסווג</option>
             {categories.map((option) => (
@@ -214,6 +222,26 @@ export default function RecipeEditor({ recipe, categories, onSaved, onCancel, on
             </select>
             <FieldError id={`${id}-subcategory-error`} message={errors.subcategory_id} />
           </div>
+        )}
+
+        {/* The healthy style is its own choice, beside the dessert's type: a frozen dessert can be healthy too. */}
+        {(category?.healthy_style === true || form.healthy !== '') && (
+          <fieldset className="editor-field healthy-field" aria-describedby={describedBy(`${id}-healthy-hint`, errors.healthy !== undefined && `${id}-healthy-error`)}>
+            <legend className="field-label">{HEALTHY_LABEL}</legend>
+            <div className="choice-row">
+              {HEALTHY_CHOICES.map((choice) => (
+                <label key={choice.value} className="choice">
+                  <input type="radio" name={`${id}-healthy`} checked={form.healthy === choice.value} onChange={() => update({ ...form, healthy: choice.value })} />
+                  {choice.label}
+                </label>
+              ))}
+            </div>
+            <p id={`${id}-healthy-hint`} className="field-hint">
+              הסגנון האישי שלך לסידור, לא הערכה תזונתית: קינוח שבנוי בעיקר על שיבולת שועל, קוטג׳ או יוגורט, אגוזים, קמח שקדים, תמרים, פירות
+              או דבש. לפי המתכון כולו.
+            </p>
+            <FieldError id={`${id}-healthy-error`} message={errors.healthy} />
+          </fieldset>
         )}
 
         <div className="editor-field">

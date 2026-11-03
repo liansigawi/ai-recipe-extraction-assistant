@@ -35,7 +35,7 @@ from app.errors import ApiError
 from app.extraction.choose import extraction_info, make_extractor
 from app.extraction.claude import Extractor
 from app.extraction.review import is_recipe, make_draft
-from app.sample_data import ADDED_CATEGORIES, STARTER_CATEGORIES, STARTER_SUBCATEGORIES
+from app.sample_data import ADDED_CATEGORIES, FIRST_ADDED_ID, HEALTHY_STYLE_CATEGORY, STARTER_CATEGORIES, STARTER_SUBCATEGORIES
 from evals.scoring import score_case, totals, verdict
 
 CASES_DIR = Path(__file__).parent / "cases"
@@ -43,20 +43,19 @@ MAX_CASES = 40  # bounded: with Claude each case is one paid request
 
 
 def _starter_categories() -> list[schemas.Category]:
-    """The categories of a new notebook, with the ids a new database gives them: the top-level ones
-    first, then the subcategories, then the categories added later (app/seed.py)."""
+    """The categories of a new notebook, with the ids a new database gives them (app/seed.py): the
+    top-level ones, the categories added later from FIRST_ADDED_ID, then the subcategories."""
     categories = [
-        schemas.Category(id=index, name=name, description=description)
+        schemas.Category(id=index, name=name, description=description, healthy_style=name == HEALTHY_STYLE_CATEGORY)
         for index, (name, description) in enumerate(STARTER_CATEGORIES, start=1)
     ]
-    next_id = len(categories) + 1
+    for offset, (name, description) in enumerate(ADDED_CATEGORIES):
+        categories.append(schemas.Category(id=FIRST_ADDED_ID + offset, name=name, description=description))
+    next_id = FIRST_ADDED_ID + len(ADDED_CATEGORIES)
     for category in categories:
         for name, description in STARTER_SUBCATEGORIES.get(category.name, []):
             category.subcategories.append(schemas.Subcategory(id=next_id, name=name, description=description))
             next_id += 1
-    for name, description in ADDED_CATEGORIES:
-        categories.append(schemas.Category(id=next_id, name=name, description=description))
-        next_id += 1
     return categories
 
 

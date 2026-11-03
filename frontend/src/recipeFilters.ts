@@ -20,13 +20,19 @@ export interface RecipeFilters {
   category: CategoryFilter
   status: StatusFilter
   cooked: CookedFilter
+  /** Only desserts marked "קינוח בריא", together with the category or type chosen. */
+  healthy: boolean
 }
 
-export const NO_FILTERS: RecipeFilters = { text: '', category: { kind: 'all' }, status: 'all', cooked: 'all' }
+export const NO_FILTERS: RecipeFilters = { text: '', category: { kind: 'all' }, status: 'all', cooked: 'all', healthy: false }
 
 export function isFiltering(filters: RecipeFilters): boolean {
   return (
-    normalizeForSearch(filters.text) !== '' || filters.category.kind !== 'all' || filters.status !== 'all' || filters.cooked !== 'all'
+    normalizeForSearch(filters.text) !== '' ||
+    filters.category.kind !== 'all' ||
+    filters.status !== 'all' ||
+    filters.cooked !== 'all' ||
+    filters.healthy
   )
 }
 
@@ -81,6 +87,7 @@ export function filterRecipes(recipes: Recipe[], filters: RecipeFilters): Recipe
       (filters.status === 'all' || recipe.status === filters.status) &&
       matchesCooked(recipe, filters.cooked) &&
       matchesCategory(recipe, filters.category) &&
+      (!filters.healthy || recipe.healthy === true) &&
       matchesText(recipe, words),
   )
 }

@@ -89,13 +89,24 @@ export function fakeApi(initial: {
   let offline = false
   let gate: Promise<void> | null = null // holds the next request back until released
 
+  /** The backend's rule: only a dessert (a category with healthy_style) is marked healthy-style or not. */
+  function refused(input: RecipeInput): Response | null {
+    const category = categories.find((option) => option.id === input.category_id)
+    if (input.healthy !== null && input.healthy !== undefined && category?.healthy_style !== true) {
+      return json(422, { error: { code: 'healthy_not_dessert', message: 'Only a dessert.', details: { field: 'healthy' } } })
+    }
+    return null
+  }
+
   function stored(input: RecipeInput, id: number, createdAt: string, existing?: Recipe): Recipe {
     const category = categories.find((option) => option.id === input.category_id)
+    const subcategory = category?.subcategories.find((option) => option.id === input.subcategory_id)
     return {
       id,
       title: input.title,
       category: category === undefined ? null : { id: category.id, name: category.name },
-      subcategory: null,
+      subcategory: subcategory === undefined ? null : { id: subcategory.id, name: subcategory.name },
+      healthy: input.healthy ?? null,
       servings: input.servings,
       ingredient_groups: input.ingredient_groups,
       step_groups: input.step_groups,
@@ -214,6 +225,8 @@ export function fakeApi(initial: {
     }
     if (path === '/api/extraction' && method === 'GET') return json(200, extraction)
     if (path === '/api/recipes' && method === 'POST') {
+      const refusal = refused(body as RecipeInput)
+      if (refusal !== null) return refusal
       const recipe = stored(body as RecipeInput, nextId++, SAVED_AT)
       recipes = [recipe, ...recipes]
       return json(201, recipe)
@@ -228,6 +241,7 @@ export function fakeApi(initial: {
         title: 'טיוטה',
         category: null,
         subcategory: null,
+        healthy: null,
         servings: null,
         ingredient_groups: [],
         step_groups: [],
@@ -264,6 +278,7 @@ export function fakeApi(initial: {
         title: 'טיוטה',
         category: null,
         subcategory: null,
+        healthy: null,
         servings: null,
         ingredient_groups: [],
         step_groups: [],
@@ -301,6 +316,7 @@ export function fakeApi(initial: {
         title: 'טיוטה',
         category: null,
         subcategory: null,
+        healthy: null,
         servings: null,
         ingredient_groups: [],
         step_groups: [],
@@ -343,6 +359,8 @@ export function fakeApi(initial: {
       return json(404, { error: { code: 'recipe_not_found', message: `There is no recipe with id ${id}.`, details: null } })
     }
     if (method === 'PUT') {
+      const refusal = refused(body as RecipeInput)
+      if (refusal !== null) return refusal
       const recipe = stored(body as RecipeInput, id, existing.created_at, existing)
       recipes = recipes.map((item) => (item.id === id ? recipe : item))
       return json(200, recipe)

@@ -2,6 +2,7 @@
 shows, the notebook opened read-only, and an import's draft only when a backup really kept it."""
 
 import hashlib
+import sqlite3
 import json
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import pytest
 
 from app import media, models
 from app.db import utc_now
-from app.migrate import backup_database
+from app.migrate import backup_database, upgrade_database
 from scripts.export_public import ExportError, Selection, export_notebook, find_kept_draft, main
 from tests.test_media import JPEG, MP4, PNG
 
@@ -185,3 +186,32 @@ def test_the_command_lists_what_can_be_published_and_exports_the_selection(noteb
     assert main([]) == 0
     assert "the import's draft, from recipes.backup-" in capsys.readouterr().out
     assert json.loads((folder / "export" / "notebook.json").read_text(encoding="utf-8"))["recipes"][0]["title"] == "לימונדה"
+
+
+def test_a_dessert_s_type_and_healthy_style_are_public_with_only_the_types_in_use(client, data_dir, tmp_path):
+    frozen = new_recipe(client, "גלידת קוטג׳", subcategory_id=15, healthy=True)
+    plain = new_recipe(client, "עוגת שמרים", healthy=False)
+    data, _ = export(data_dir, tmp_path / "export", recipes=[frozen["id"], plain["id"]])
+    by_title = {recipe["title"]: recipe for recipe in data["recipes"]}
+    assert (by_title["גלידת קוטג׳"]["subcategory"]["name"], by_title["גלידת קוטג׳"]["healthy"]) == ("גלידות וקינוחים קפואים", True)
+    assert (by_title["עוגת שמרים"]["subcategory"], by_title["עוגת שמרים"]["healthy"]) == (None, False)
+    [desserts] = data["categories"]
+    assert desserts["healthy_style"] is True  # the page offers the "קינוח בריא" filter
+    assert [(s["name"], s["description"]) for s in desserts["subcategories"]] == [("גלידות וקינוחים קפואים", None)]
+
+
+def test_a_draft_kept_from_before_the_healthy_attribute_is_shown_as_saved_recipes_have_it(tmp_path):
+    from tests.test_migrations import database_at_0004, upgrade_to
+
+    notebook = tmp_path / "recipes.db"
+    database_at_0004(notebook)
+    upgrade_to(notebook, "0013")
+    with sqlite3.connect(notebook) as db:  # an import's draft, in "קינוחים רגילים" as the model chose it
+        db.execute("UPDATE recipes SET category_id = 1, subcategory_id = 5, status = 'draft', updated_at = created_at WHERE id = 2")
+    upgrade_database(notebook)  # its backup keeps the draft as it was
+    with sqlite3.connect(notebook) as db:  # then reviewed and saved, unchanged
+        db.execute("UPDATE recipes SET status = 'saved', updated_at = '2026-11-02 10:00:00' WHERE id = 2")
+
+    kept, backup = find_kept_draft(notebook, 2)
+    assert backup.endswith("-before-0014.db")
+    assert (kept.category.name, kept.subcategory, kept.healthy) == ("קינוחים", None, False)

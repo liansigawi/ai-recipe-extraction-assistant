@@ -148,6 +148,34 @@ def test_subcategory_must_belong_to_the_chosen_category(client):
     assert as_top_level.json()["error"]["code"] == "unknown_category"
 
 
+FROZEN = 15  # "גלידות וקינוחים קפואים", a dessert type
+
+
+def test_a_dessert_has_a_type_and_separately_whether_it_is_in_the_healthy_style(client):
+    frozen = client.post("/api/recipes", json={**NEW_RECIPE, "category_id": 1, "subcategory_id": FROZEN, "healthy": True})
+    assert frozen.status_code == 201
+    assert (frozen.json()["subcategory"], frozen.json()["healthy"]) == ({"id": FROZEN, "name": "גלידות וקינוחים קפואים"}, True)
+    regular = client.post("/api/recipes", json={**NEW_RECIPE, "category_id": 1, "healthy": False}).json()
+    assert (regular["subcategory"], regular["healthy"]) == (None, False)  # a style without a type is fine
+    undecided = client.post("/api/recipes", json={**NEW_RECIPE, "category_id": 1}).json()
+    assert undecided["healthy"] is None  # not decided until someone decides
+    # Saving it again without the field leaves it undecided; a decision can be taken back.
+    again = client.put(f"/api/recipes/{frozen.json()['id']}", json={**NEW_RECIPE, "category_id": 1, "subcategory_id": FROZEN, "healthy": None})
+    assert again.json()["healthy"] is None
+
+
+@pytest.mark.parametrize(("category_id", "healthy"), [(2, True), (4, False), (None, True)])
+def test_only_a_dessert_can_be_marked_healthy_style_or_not(client, category_id, healthy):
+    response = client.post("/api/recipes", json={**NEW_RECIPE, "category_id": category_id, "healthy": healthy})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "healthy_not_dessert" and response.json()["error"]["details"] == {"field": "healthy"}
+    # Moving a healthy dessert to another category needs the mark taken off first.
+    dessert = client.post("/api/recipes", json={**NEW_RECIPE, "category_id": 1, "healthy": True}).json()
+    moved = client.put(f"/api/recipes/{dessert['id']}", json={**NEW_RECIPE, "category_id": 4, "healthy": True})
+    assert moved.json()["error"]["code"] == "healthy_not_dessert"
+    assert client.put(f"/api/recipes/{dessert['id']}", json={**NEW_RECIPE, "category_id": 4}).json()["healthy"] is None
+
+
 def test_the_database_itself_refuses_a_subcategory_under_the_wrong_category(client):
     # Bypassing the API on purpose: even buggy code could not store this.
     cakes = add_subcategory(client, "עוגות", parent_id=1)

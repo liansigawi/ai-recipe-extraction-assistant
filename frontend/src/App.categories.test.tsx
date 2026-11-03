@@ -50,23 +50,23 @@ describe('managing categories', () => {
   it('adds a subcategory, which the recipe editor then offers', async () => {
     const { user, api } = await openManager()
     await user.click(screen.getByRole('button', { name: '+ הוספת תת-קטגוריה ל"קינוחים"' }))
-    await user.type(screen.getByLabelText('שם'), 'קינוחים בריאים')
-    await user.type(screen.getByLabelText('תיאור (המודל מסווג לפיו)'), 'תמרים ושיבולת שועל')
+    await user.type(screen.getByLabelText('שם'), 'פחזניות')
+    await user.type(screen.getByLabelText('תיאור (המודל מסווג לפיו)'), 'פחזניות ואקלרים')
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
-    await screen.findByText('הקטגוריה "קינוחים בריאים" נשמרה.')
+    await screen.findByText('הקטגוריה "פחזניות" נשמרה.')
     expect(api.changes()[0]).toEqual({
-      method: 'POST', path: '/api/categories', body: { name: 'קינוחים בריאים', description: 'תמרים ושיבולת שועל', parent_id: 1 },
+      method: 'POST', path: '/api/categories', body: { name: 'פחזניות', description: 'פחזניות ואקלרים', parent_id: 1 },
     })
     const subs = screen.getByRole('list', { name: 'תת-קטגוריות של קינוחים' })
-    expect(within(subs).getByRole('heading', { level: 4, name: 'קינוחים בריאים' })).toBeInTheDocument()
+    expect(within(subs).getByRole('heading', { level: 4, name: 'פחזניות' })).toBeInTheDocument()
 
     // Back to the recipes: the chocolate cake's editor offers the new subcategory.
     await user.click(screen.getByRole('button', { name: 'חזרה למתכונים' }))
     await user.click(screen.getByRole('button', { name: /עוגת שוקולד עם גנאש/ }))
     await user.click(screen.getByRole('button', { name: 'עריכה' }))
     expect(within(screen.getByLabelText('תת-קטגוריה')).getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'ללא', 'קינוחים בריאים',
+      'ללא', 'פחזניות',
     ])
   })
 

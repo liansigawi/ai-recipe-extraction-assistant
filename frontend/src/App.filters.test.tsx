@@ -6,14 +6,15 @@ import { fakeApi } from './test/fakeApi'
 import { sampleCategories, sampleRecipes } from './test/sampleRecipes'
 import type { Category, Recipe } from './types'
 
-// Searching and filtering the list, against the fake backend: desserts have two subcategories, the
-// cake is in "קינוחים רגילים", and a dessert draft has no subcategory.
+// Searching and filtering the list, against the fake backend: desserts have two types and the healthy
+// style; the cake is in "עוגות" and not healthy-style, and a dessert draft has no type but is healthy-style.
 const categories: Category[] = [
   {
     ...sampleCategories[0],
+    healthy_style: true,
     subcategories: [
-      { id: 10, name: 'קינוחים רגילים', description: null },
-      { id: 11, name: 'קינוחים בריאים', description: null },
+      { id: 10, name: 'עוגות', description: null },
+      { id: 11, name: 'עוגיות וחיתוכיות', description: null },
     ],
   },
   ...sampleCategories.slice(1),
@@ -25,9 +26,10 @@ const draft: Recipe = {
   title: 'כדורי תמרים',
   status: 'draft',
   subcategory: null,
+  healthy: true,
   ingredient_groups: [{ name: null, ingredients: [{ text: 'כוס תמרים', quantity: 'כוס' }] }],
 }
-const recipes: Recipe[] = [draft, { ...cake, subcategory: { id: 10, name: 'קינוחים רגילים' } }, ...others]
+const recipes: Recipe[] = [draft, { ...cake, subcategory: { id: 10, name: 'עוגות' }, healthy: false }, ...others]
 
 async function renderApp() {
   const user = userEvent.setup()
@@ -64,10 +66,27 @@ describe('searching and filtering the recipe gallery', () => {
     await pick(user, 'קטגוריה', 'קינוחים')
     expect(cardTitles()).toHaveLength(2) // the cake (in a subcategory) and the draft (in none)
     expect(group('קטגוריה').getByRole('radio', { name: 'קינוחים' })).toBeChecked()
-    await pick(user, 'קינוחים:', 'קינוחים רגילים') // its subcategories appear once it is chosen
+    await pick(user, 'קינוחים:', 'עוגות') // its subcategories appear once it is chosen
     expect(cardTitles()).toEqual(['עוגת שוקולד עם גנאש'])
     expect(group('קטגוריה').getByRole('radio', { name: 'קינוחים' })).toBeChecked() // still within desserts
     await pick(user, 'קינוחים:', 'כל הקינוחים')
+    expect(cardTitles()).toHaveLength(2)
+  })
+
+  it('the healthy-style filter works together with a dessert type, and leaves with the desserts', async () => {
+    const user = await renderApp()
+    expect(screen.queryByRole('checkbox', { name: 'קינוח בריא' })).not.toBeInTheDocument() // only among the desserts
+    await pick(user, 'קטגוריה', 'קינוחים')
+    await user.click(group('קינוחים:').getByRole('checkbox', { name: 'קינוח בריא' }))
+    expect(cardTitles()).toEqual(['כדורי תמרים'])
+    expect(screen.getByText('קינוח בריא', { selector: '.recipe-card .badge-healthy' })).toBeInTheDocument()
+    await pick(user, 'קינוחים:', 'עוגות') // a cake that is not healthy-style: none
+    expect(screen.getByText('לא נמצאו מתכונים שמתאימים לחיפוש ולסינון.')).toBeInTheDocument()
+    await pick(user, 'קינוחים:', 'כל הקינוחים')
+    expect(cardTitles()).toEqual(['כדורי תמרים'])
+    await pick(user, 'קטגוריה', 'ארוחות קלילות') // another category: the healthy filter goes with the desserts
+    await pick(user, 'קטגוריה', 'קינוחים')
+    expect(group('קינוחים:').getByRole('checkbox', { name: 'קינוח בריא' })).not.toBeChecked()
     expect(cardTitles()).toHaveLength(2)
   })
 

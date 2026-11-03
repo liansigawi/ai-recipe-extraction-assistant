@@ -13,7 +13,7 @@ collection that supports Hebrew and right-to-left text.
 > subcategories**, and the app **warns about a post you already have**. An imported post keeps its
 > **creator's credit** and its **pictures and videos**, saved on this computer; you can add pictures of
 > your own to any recipe. A new database
-> starts with eight categories, two dessert subcategories and **four invented sample recipes**, labeled
+> starts with eight categories, six dessert types and **four invented sample recipes**, labeled
 > "דוגמה". The same link field also imports **recipe pages from websites** (a first version: see
 > [docs/website-import.md](docs/website-import.md) for what was tested and what is not supported). Next on
 > the roadmap: reading recipes from screenshots, and scaling quantities. A **public, read-only copy** of
@@ -162,7 +162,8 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
 - **Search and filter:** the search box finds recipes by their title or an ingredient line (every word
   you type, anywhere; niqqud, case and ׳/' marks do not matter). Above the gallery: **"הכול /
   טרם הכנתי / כבר הכנתי"**, each with how many recipes it would show; the categories, with the same
-  drawing and color as the cards (choosing one shows its subcategories, e.g. "קינוחים בריאים"), and
+  drawing and color as the cards (choosing one shows its subcategories, e.g. "עוגות"; for the
+  desserts also **"קינוח בריא"**, which works together with a type: healthy-style frozen desserts), and
   "לא מסווג"; and "הכול / מתכונים / טיוטות" (everything, saved recipes only, or drafts only). They all
   combine; "ניקוי" clears them, and the line under them says how many recipes match. Searching runs in
   the page, on the recipes already loaded: no request and no model. Typing a search on a recipe's page
@@ -171,7 +172,8 @@ with "Port 5173 is already in use" instead of moving to another port. Close the 
   line as written, and copy its amount into the quantity box ("200 גרם" from "200 גרם קמח"); leave
   the quantity empty when the recipe gives none. The form refuses a quantity that is not in its line.
 - **Edit:** "עריכה" opens the recipe in the same form. Rows can be added, moved (▲ ▼) and removed (✕).
-  The category list offers only existing categories, or "לא מסווג" (not classified).
+  The category list offers only existing categories, or "לא מסווג" (not classified). A dessert also has
+  **"קינוח בריא": כן / לא / לא נקבע**, separate from its type.
 - **Delete:** "מחיקה" asks first, in the page. Deleting cannot be undone.
 - **Categories:** "קטגוריות" lists your categories and their subcategories, with how many recipes each
   holds. "עריכה" changes a name or a description; "+ הוספת תת-קטגוריה" adds a subcategory under a
@@ -452,11 +454,16 @@ The model still decides a few things, and the backend checks each:
   flavored butter, pesto, hummus, tahini, a yogurt dip, a sauce made on its own; a whole dish with a
   sauce, like pasta in sauce, is not a sauce). What the dish is decides over its main ingredient: a salad with cheese or chicken is a salad, a chicken
   or meat soup is a soup. A side is judged by its role, so a rice or legume dish that is the meal itself
-  is not one. A fish dish, or a legume main course, usually fits none and stays unclassified. "קינוחים" has two subcategories:
-  "קינוחים רגילים" and "קינוחים בריאים" (your own style: desserts built mainly on dates, oats, nuts,
-  almond flour or nut butter, sometimes sweetened with honey or maple; not a nutritional verdict). The
-  model picks a subcategory only when one clearly fits; otherwise the dessert stays in "קינוחים"
-  without one. A subcategory that is not its category's own is dropped and the category kept;
+  is not one. A fish dish, or a legume main course, usually fits none and stays unclassified. Since
+  2026-11-03 "קינוחים" has six types as subcategories: "עוגות", "עוגיות וחיתוכיות", "טארטים ופאי",
+  "קינוחי כוסות ומוסים", "גלידות וקינוחים קפואים" and "מאפים מתוקים" (their descriptions, editable,
+  say what belongs where; a name like "עוגה" is a clue, not a rule). Whether a dessert is in **your
+  healthy style** ("קינוח בריא": built mainly on oats, cottage cheese or yogurt, nuts, almond flour, nut
+  butter, fruit, dates or honey, judged by the whole recipe; not a nutritional verdict) is a separate
+  attribute, yes, no or not decided, so a frozen dessert can be healthy too. Only a dessert can have it
+  (the backend refuses it elsewhere). The model picks a type only when one clearly fits, and never sets
+  the healthy style: you do (measured: [docs/extraction-quality.md](docs/extraction-quality.md),
+  2026-11-03). A dessert without a clear type stays in "קינוחים" without one. A subcategory that is not its category's own is dropped and the category kept;
 - **roles, corrected by the surrounding structure**:
   - a short line in the ingredient list that says what it is for, or that it is optional ("לציפוי -
     מלח מאלדון", "להגשה: גלידת וניל", "אופציונאלי: שוקולד צ׳יפס", "Lemon wedges, for serving"), is an
@@ -620,7 +627,7 @@ The project keeps these separate and reports which one was run:
 │   ├── migrations/                  database migrations (Alembic): 0001 milestone 3, 0002 imports, 0003-0005 categories,
 │   │                                0006 Instagram originals, 0007 subcategories, 0008 structured credit, 0009 media,
 │   │                                0010 cooked marks, 0011 website pictures, 0012 salads, soups and sides,
-│   │                                0013 spreads, dips and sauces
+│   │                                0013 spreads, dips and sauces, 0014 dessert types and the healthy style
 │   ├── alembic.ini                  Alembic's settings, for its command line
 │   ├── evals/                       the extraction quality check (paid; run by hand) and its cases
 │   ├── scripts/probe_instagram.py   bounded live probe and offline analysis

@@ -18,6 +18,7 @@ function recipe(fields: Partial<Recipe> & Pick<Recipe, 'id' | 'title'>): Recipe 
   return {
     category: desserts,
     subcategory: null,
+    healthy: null,
     servings: null,
     ingredient_groups: [{ name: null, ingredients: [{ text: '3 ביצים L', quantity: '3' }] }],
     step_groups: [{ name: null, steps: ['מערבבים ואופים.'] }],
@@ -41,11 +42,12 @@ const notebook: PublicNotebook = {
   exported_at: '2026-11-01T10:33:00Z',
   repository_url: 'https://github.com/example/recipes',
   categories: [
-    { id: 1, name: 'קינוחים', description: null, subcategories: [] },
+    // As exported before any dessert has a type: the desserts, with their healthy style, and no type in use.
+    { id: 1, name: 'קינוחים', description: null, subcategories: [], healthy_style: true },
     { id: 4, name: 'משקאות', description: null, subcategories: [] },
   ],
   recipes: [
-    recipe({ id: 15, title: CAKE, cooked: true }),
+    recipe({ id: 15, title: CAKE, cooked: true, healthy: true }),
     recipe({
       id: 12,
       title: TORTE,
@@ -138,6 +140,15 @@ describe('the public copy', () => {
     expect(screen.getByRole('radio', { name: /כבר הכנתי 2/ })).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: 'טיוטות' })).not.toBeInTheDocument()
     expect(requests).toEqual([{ url: '/notebook.json', method: 'GET' }])
+  })
+
+  it('offers the healthy-style filter for the desserts even before any dessert has a type', async () => {
+    const user = userEvent.setup()
+    await renderCopy()
+    await user.click(within(screen.getByRole('group', { name: 'קטגוריה' })).getByRole('radio', { name: 'קינוחים' }))
+    await user.click(screen.getByRole('checkbox', { name: 'קינוח בריא' }))
+    expect(gallery().getAllByRole('listitem')).toHaveLength(1)
+    expect(gallery().getByText(CAKE)).toBeInTheDocument()
   })
 
   it('a recipe has no edit or delete, and shows its cooked mark as saved', async () => {

@@ -142,6 +142,8 @@ export interface Recipe extends RecipeContent {
   /** null: not classified yet. */
   category: CategoryRef | null
   subcategory: CategoryRef | null
+  /** "קינוח בריא": true, false, or null (not decided). Only a dessert has it; separate from its type (the subcategory). */
+  healthy: boolean | null
   /** true for the built-in examples, which were invented for the project. */
   is_sample: boolean
   status: RecipeStatus
@@ -174,6 +176,8 @@ export interface KeptDraft {
   servings: string | null
   category: CategoryRef | null
   subcategory: CategoryRef | null
+  /** Absent in an export made before the attribute existed. */
+  healthy?: boolean | null
   ingredient_groups: IngredientGroup[]
   step_groups: StepGroup[]
   notes: string[]
@@ -195,6 +199,8 @@ export interface PublicNotebook {
 export interface RecipeInput extends RecipeContent {
   category_id: number | null
   subcategory_id: number | null
+  /** Only with a category whose healthy_style is true; the server refuses it otherwise. */
+  healthy: boolean | null
   status: RecipeStatus
   /** The issues still open, when saving a draft. */
   issues: Issue[]
@@ -221,6 +227,8 @@ export interface Subcategory {
 /** A top-level category with its subcategories (GET /api/categories). */
 export interface Category extends Subcategory {
   subcategories: Subcategory[]
+  /** Its recipes can be marked "קינוח בריא" (the desserts). Absent: false. */
+  healthy_style?: boolean
 }
 
 /** What the page sends to create a category (POST) or to change one (PUT: no parent_id; it never changes). */

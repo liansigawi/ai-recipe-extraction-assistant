@@ -110,7 +110,7 @@ def _wrap(text: str, categories: list[schemas.Category] | None) -> str:
     tag = f"source_text_{secrets.token_hex(6)}"
     if categories is None:  # labels only: no categories in view
         return f"<{tag}>\n{text}\n</{tag}>"
-    category_list = [category.model_dump(mode="json") for category in categories]
+    category_list = [category.model_dump(mode="json", exclude={"healthy_style"}) for category in categories]
     return (
         f"<categories>\n{json.dumps(category_list, ensure_ascii=False, indent=1)}\n</categories>\n\n"
         f"<{tag}>\n{text}\n</{tag}>"

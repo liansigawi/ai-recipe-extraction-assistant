@@ -262,6 +262,7 @@ class Recipe(RecipeContent):
     id: int
     category: CategoryRef | None = None  # None: not classified yet
     subcategory: CategoryRef | None = None  # only together with a category
+    healthy: bool | None = None  # "קינוח בריא": yes, no, or None (not decided); only a dessert has it
     is_sample: bool = False  # True for the built-in examples, which were invented for the project
     status: RecipeStatus = "saved"
     issues: list[Issue] = []  # what to check before saving a draft
@@ -294,6 +295,7 @@ class RecipeInput(RecipeContent):
 
     category_id: int | None = None
     subcategory_id: int | None = None
+    healthy: bool | None = None  # only with a category whose healthy_style is true (the desserts)
     status: RecipeStatus = "saved"  # the review screen sends "draft" to keep reviewing later
     issues: list[Issue] = []  # the issues still open, when saving a draft
 
@@ -317,6 +319,8 @@ class Category(ContractModel):
     name: NonEmptyStr
     description: NonEmptyStr | None = None
     subcategories: list[Subcategory] = []
+    # Its recipes can be marked "קינוח בריא" (the desserts): set by migration 0014, not by the person.
+    healthy_style: bool = False
 
 
 MAX_CATEGORY_NAME = 60

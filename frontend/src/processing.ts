@@ -1,6 +1,6 @@
 // How a recipe went from its source to the saved recipe, for the public copy's comparison page. No React.
-import { categoryLabel } from './categoryLook'
-import type { IngredientGroup, KeptDraft, Recipe, StepGroup } from './types'
+import { categoryLabel, healthyLabel } from './categoryLook'
+import type { CategoryRef, IngredientGroup, KeptDraft, Recipe, StepGroup } from './types'
 
 export interface LineChange {
   kind: 'removed' | 'added'
@@ -48,6 +48,12 @@ function ingredientLines(groups: IngredientGroup[]): string[] {
   ])
 }
 
+// The category line, with the dessert's healthy style when it was decided.
+function classification(category: CategoryRef | null, subcategory: CategoryRef | null, healthy: boolean | null | undefined): string[] {
+  const style = healthyLabel(healthy)
+  return [style === null ? categoryLabel(category, subcategory) : `${categoryLabel(category, subcategory)} · ${style}`]
+}
+
 function stepLines(groups: StepGroup[]): string[] {
   return groups.flatMap((group) => [...(group.name !== null ? [`${group.name}:`] : []), ...group.steps])
 }
@@ -57,7 +63,7 @@ export function reviewChanges(draft: KeptDraft, recipe: Recipe): { changed: Part
   const parts: [string, string[], string[]][] = [
     ['כותרת', [draft.title], [recipe.title]],
     ['כמות מנות', [draft.servings ?? 'לא צוין'], [recipe.servings ?? 'לא צוין']],
-    ['קטגוריה', [categoryLabel(draft.category, draft.subcategory)], [categoryLabel(recipe.category, recipe.subcategory)]],
+    ['קטגוריה', classification(draft.category, draft.subcategory, draft.healthy), classification(recipe.category, recipe.subcategory, recipe.healthy)],
     ['מצרכים', ingredientLines(draft.ingredient_groups), ingredientLines(recipe.ingredient_groups)],
     ['אופן ההכנה', stepLines(draft.step_groups), stepLines(recipe.step_groups)],
     ['הערות', draft.notes, recipe.notes],

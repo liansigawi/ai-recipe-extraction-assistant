@@ -12,6 +12,7 @@ const input: RecipeInput = {
   title: 'עוגה',
   category_id: null,
   subcategory_id: null,
+  healthy: null,
   servings: null,
   ingredient_groups: [],
   step_groups: [],

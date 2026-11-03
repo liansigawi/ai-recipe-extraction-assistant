@@ -25,6 +25,7 @@ export const sampleRecipes: Recipe[] = [
     title: 'עוגת שוקולד עם גנאש',
     category: desserts,
     subcategory: null,
+    healthy: null,
     servings: '12 פרוסות',
     ingredient_groups: [
       {
@@ -83,6 +84,7 @@ export const sampleRecipes: Recipe[] = [
     title: 'עוף בסיר עם אורז',
     category: cooking,
     subcategory: null,
+    healthy: null,
     servings: '4 מנות',
     ingredient_groups: [
       {
@@ -132,6 +134,7 @@ export const sampleRecipes: Recipe[] = [
     title: 'פיצה מבצק יוגורט',
     category: lightMeals,
     subcategory: null,
+    healthy: null,
     servings: '2 פיצות אישיות',
     ingredient_groups: [
       {
@@ -181,6 +184,7 @@ export const sampleRecipes: Recipe[] = [
     // Ambiguous between desserts and light meals, so it stays unclassified.
     category: null,
     subcategory: null,
+    healthy: null,
     servings: '12 bars',
     ingredient_groups: [
       {

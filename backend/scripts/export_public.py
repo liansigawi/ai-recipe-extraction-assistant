@@ -60,6 +60,7 @@ class KeptDraft(ContractModel):
     servings: str | None
     category: schemas.CategoryRef | None
     subcategory: schemas.CategoryRef | None
+    healthy: bool | None = None  # a dessert's healthy style, as the saved recipes have it since migration 0014
     ingredient_groups: list[schemas.IngredientGroup]
     step_groups: list[schemas.StepGroup]
     notes: list[str]
@@ -209,10 +210,15 @@ def _used_categories(categories: list[schemas.Category], recipes: list[schemas.R
             "name": category.name,
             "description": None,
             "subcategories": [{"id": s.id, "name": s.name, "description": None} for s in category.subcategories if s.id in used],
+            "healthy_style": category.healthy_style,
         }
         for category in categories
         if category.id in used
     ]
+
+
+# The two subcategories that migration 0014 turned into the healthy-style attribute.
+OLD_STYLES = {"קינוחים בריאים": True, "קינוחים רגילים": False}
 
 
 def find_kept_draft(database_path: Path, recipe_id: int) -> tuple[KeptDraft | None, str | None]:
@@ -238,12 +244,18 @@ def find_kept_draft(database_path: Path, recipe_id: int) -> tuple[KeptDraft | No
         def ref(category_id: int | None) -> dict | None:
             return {"id": category_id, "name": names[category_id]} if category_id is not None else None
 
+        # A backup from before migration 0014 has the healthy style as a subcategory; shown as the saved
+        # recipes have it since (the same decision, the same translation), so review is not said to have changed it.
+        subcategory, healthy = ref(row["subcategory_id"]), row["healthy"] if "healthy" in row.keys() else None
+        if "healthy" not in row.keys() and subcategory is not None and subcategory["name"] in OLD_STYLES:
+            subcategory, healthy = None, OLD_STYLES[subcategory["name"]]
         try:
             draft = KeptDraft(
                 title=row["title"],
                 servings=row["servings"],
                 category=ref(row["category_id"]),
-                subcategory=ref(row["subcategory_id"]),
+                subcategory=subcategory,
+                healthy=None if healthy is None else bool(healthy),
                 ingredient_groups=json.loads(row["ingredient_groups"]),
                 step_groups=json.loads(row["step_groups"]),
                 notes=json.loads(row["notes"]),

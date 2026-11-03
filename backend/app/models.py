@@ -38,6 +38,8 @@ class Category(Base):
     name: Mapped[str]  # Mapped[str]: NOT NULL; Mapped[str | None]: may be NULL
     description: Mapped[str | None]
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"))
+    # Whether its recipes can be marked "קינוח בריא" (recipes.healthy): the desserts (migration 0014).
+    healthy_style: Mapped[bool] = mapped_column(default=False, server_default=text("0"))
 
     subcategories: Mapped[list["Category"]] = relationship(order_by="Category.id")
 
@@ -68,6 +70,9 @@ class Recipe(Base):
     issues: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default="[]")
     # Whether you have cooked it: yours to mark, separate from the category and the draft status.
     cooked: Mapped[bool] = mapped_column(default=False, server_default=text("0"))
+    # A dessert in your healthy style: True, False, or None (not decided). Only in a category with
+    # healthy_style (app/crud.py checks), separate from its subcategory, the dessert's type.
+    healthy: Mapped[bool | None] = mapped_column(default=None)
 
     # Read-only shortcuts to the category rows (the ids above are what we write).
     category: Mapped[Category | None] = relationship(
