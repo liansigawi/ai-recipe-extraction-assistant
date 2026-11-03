@@ -73,8 +73,8 @@ def test_a_page_with_recipe_data_becomes_a_draft_in_its_own_words(client, use, s
     draft = response.json()
     assert draft["title"] == "עוגת תפוזים & שקדים" and draft["status"] == "draft"
     assert draft["ingredient_groups"] == [{"name": None, "ingredients": [
-        {"text": "200 גרם קמח", "quantity": "200 גרם"}, {"text": "2 ביצים L", "quantity": "2"},
-        {"text": "מיץ מ-3 תפוזים", "quantity": "3"}, {"text": "קורט מלח", "quantity": "קורט"}]}]  # the usual quantity rules
+        {"text": "200 גרם קמח", "quantity": "200 גרם", "derived_from": None}, {"text": "2 ביצים L", "quantity": "2", "derived_from": None},
+        {"text": "מיץ מ-3 תפוזים", "quantity": "3", "derived_from": None}, {"text": "קורט מלח", "quantity": "קורט", "derived_from": None}]}]
     assert draft["step_groups"] == [
         {"name": "לבצק", "steps": ["מערבבים את הקמח עם הביצים.", "מוסיפים את מיץ התפוזים."]},
         {"name": "אפייה", "steps": ["אופים 40 דקות ב-180 מעלות."]},
@@ -266,3 +266,21 @@ def test_a_page_whose_recipe_data_flattens_its_steps_is_imported_with_the_page_s
     assert draft["sources"][0]["creators"] == [{"name": "צלמת האתר", "username": None}]
     original = draft["original"]["text"]
     assert "\n1. טוחנים בבלנדר" in original and "caption" not in original and "בשיתוף" not in original
+
+
+def test_a_page_whose_steps_fry_in_oil_it_does_not_list_gets_a_derived_line_and_keeps_its_original(client, use, site):
+    data = {"@type": "Recipe", "name": "חביתת ירק", "author": {"@type": "Person", "name": "שף"},
+            "recipeIngredient": ["3 ביצים", "צרור פטרוזיליה"],
+            "recipeInstructions": ["טורפים את הביצים עם הפטרוזיליה.", "מחממים מעט שמן במחבת ויוצקים פנימה את התערובת."]}
+    use(Classifier())
+    site({PAGE: html("<h1>חביתת ירק</h1>", ld(data))})
+    draft = link(client).json()
+    [line] = [item for group in draft["ingredient_groups"] for item in group["ingredients"] if item["derived_from"]]
+    assert line == {"text": "מעט שמן לטיגון", "quantity": "מעט", "derived_from": "מחממים מעט שמן במחבת ויוצקים פנימה את התערובת."}
+    assert not any(issue["kind"] == "ingredient_only_in_steps" for issue in draft["issues"])
+    assert "לטיגון" not in draft["original"]["text"]  # the original is what the page gave, nothing added
+
+    saved = client.put(f"/api/recipes/{draft['id']}", json={
+        "title": draft["title"], "ingredient_groups": draft["ingredient_groups"], "step_groups": draft["step_groups"],
+        "notes": draft["notes"], "sources": draft["sources"], "category_id": 1, "status": "saved", "issues": []}).json()
+    assert saved["ingredient_groups"] == draft["ingredient_groups"]  # saved with where it comes from

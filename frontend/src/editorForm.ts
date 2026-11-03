@@ -21,6 +21,8 @@ export interface IngredientRow {
   text: string
   /** The amount as written in `text`; '' means the recipe gives no quantity. */
   quantity: string
+  /** A line the app added from the preparation: the sentence it comes from (kept while the row stays). */
+  derivedFrom: string | null
 }
 export interface IngredientGroupForm {
   key: string
@@ -72,7 +74,7 @@ export interface RecipeForm {
 /** Error messages by field path, e.g. "ingredient_groups.0.ingredients.2.quantity". */
 export type FieldErrors = Record<string, string>
 
-export const emptyIngredient = (): IngredientRow => ({ key: newKey(), text: '', quantity: '' })
+export const emptyIngredient = (): IngredientRow => ({ key: newKey(), text: '', quantity: '', derivedFrom: null })
 export const emptyIngredientGroup = (): IngredientGroupForm => ({ key: newKey(), name: '', ingredients: [emptyIngredient()] })
 export const emptyStep = (): StepRow => ({ key: newKey(), text: '' })
 export const emptyStepGroup = (): StepGroupForm => ({ key: newKey(), name: '', steps: [emptyStep()] })
@@ -113,6 +115,7 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
               key: newKey(),
               text: ingredient.text,
               quantity: ingredient.quantity ?? '',
+              derivedFrom: ingredient.derived_from ?? null,
             })),
           })),
     step_groups:
@@ -167,7 +170,11 @@ export function formToInput(
     })
     ingredient_groups.push({
       name: orNull(group.name),
-      ingredients: rows.map(({ row }) => ({ text: row.text.trim(), quantity: orNull(row.quantity) })),
+      ingredients: rows.map(({ row }) => ({
+        text: row.text.trim(),
+        quantity: orNull(row.quantity),
+        ...(row.derivedFrom !== null && { derived_from: row.derivedFrom }),
+      })),
     })
   })
 

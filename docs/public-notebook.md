@@ -77,7 +77,8 @@ Each run lists what becomes public, recipe by recipe: its credit, whether its or
 its cover.
 
 Public, per recipe: title, category and subcategory names (a dessert's type), a dessert's healthy style,
-servings, ingredient and step groups, notes,
+servings, ingredient and step groups (a line the app derived from a step, with its label and the step's
+sentence), notes,
 sources with their credit and links, the cooked mark, the creation and last-saved times, and the cover
 picture (for a video, a still from it, with the link to the post; never the video). For the recipes in
 `show_processing`, also: the imported original text as it was read (a caption's hashtags, mentions and

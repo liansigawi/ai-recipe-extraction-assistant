@@ -35,6 +35,7 @@ from pydantic import ValidationError
 from app import schemas
 from app.errors import ApiError
 from app.extraction import ingredient_words
+from app.extraction.derived import add_oil_from_steps
 from app.extraction.output import Classification, ExtractionOutput, ReferenceLabels, ReferenceOutput
 from app.extraction.ingredient_words import HEBREW as INGREDIENT_WORDS
 from app.extraction.ingredient_words import mentions_ingredient
@@ -390,11 +391,13 @@ def is_recipe(output: ExtractionOutput | ReferenceLabels) -> bool:
 def make_draft(
     output: ExtractionOutput | ReferenceOutput, source_text: str, categories: list[schemas.Category]
 ) -> schemas.RecipeInput:
-    """The draft for either kind of answer."""
+    """The draft for either kind of answer, with the oil its steps clearly fry or grease with (derived.py)."""
     if isinstance(output, ReferenceOutput):
         # The same text always gives the same passages, so these are the numbers the model saw.
-        return build_draft_from_references(output, source_text, segment_text(source_text), categories)
-    return build_draft(output, source_text, categories)
+        draft = build_draft_from_references(output, source_text, segment_text(source_text), categories)
+    else:
+        draft = build_draft(output, source_text, categories)
+    return add_oil_from_steps(draft, only_in_step_point)
 
 
 def build_draft_from_references(
@@ -981,7 +984,7 @@ def _referenced_issues(
     return issues
 
 
-def _only_in_step_point(words: str, step: str) -> schemas.Issue:
+def only_in_step_point(words: str, step: str) -> schemas.Issue:
     return schemas.Issue(
         kind="ingredient_only_in_steps",
         message=f'המצרך "{words}" מופיע באופן ההכנה אבל לא ברשימת המצרכים. ייתכן שהמתכון המקורי לא מפרט אותו; '
@@ -1000,7 +1003,7 @@ def _only_in_steps(
     has them (in any of their usual forms: "התותים", "בתותים", "תות"). One point per ingredient."""
     listed = normalize(" | ".join(lines)).lower()
     found = ingredient_words.only_in_steps(lines, steps)
-    issues = [_only_in_step_point(words, step) for words, step in found]
+    issues = [only_in_step_point(words, step) for words, step in found]
     shown = normalize(" | ".join(words for words, _ in found)).lower()
     for item in output.only_in_steps[:MAX_MODEL_ISSUES]:
         words = _clean(item.words)
@@ -1013,7 +1016,7 @@ def _only_in_steps(
             continue  # not a step
         if _listed(words, listed) or shown and _listed(words, shown):
             continue  # in the list, or already pointed out
-        issues.append(_only_in_step_point(words, passage))
+        issues.append(only_in_step_point(words, passage))
         shown = f"{shown} | {normalize(words).lower()}"
     return issues
 
@@ -1035,7 +1038,7 @@ def _listed(words: str, listed: str) -> bool:
 def content_points(lines: list[str], steps: list[str], source_text: str) -> list[schemas.Issue]:
     """The checks that need no model, for a draft built without one (a page's own recipe data):
     ingredients only the steps mention, and what baking needs that the text does not give."""
-    return [_only_in_step_point(words, step) for words, step in ingredient_words.only_in_steps(lines, steps)] + _missing_information(
+    return [only_in_step_point(words, step) for words, step in ingredient_words.only_in_steps(lines, steps)] + _missing_information(
         source_text, steps
     )
 

@@ -12,6 +12,9 @@ export interface Ingredient {
   text: string
   /** The amount exactly as written ("2 כוסות"), or null when the recipe gives none. */
   quantity: string | null
+  /** A line the app added from the preparation (e.g. "מעט שמן לטיגון"): the sentence of the steps it comes
+   * from, shown with DERIVED_LABEL. null or absent: a line of the recipe's own list, or one typed in. */
+  derived_from?: string | null
 }
 
 export interface IngredientGroup {

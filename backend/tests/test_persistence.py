@@ -20,7 +20,8 @@ NEW_RECIPE = {
     "category_id": 1,
     "servings": "10 פרוסות",
     "ingredient_groups": [
-        {"name": "לבצק", "ingredients": [{"text": "200 גרם קמח", "quantity": "200 גרם"}, {"text": "מלח", "quantity": None}]},
+        {"name": "לבצק", "ingredients": [
+            {"text": "200 גרם קמח", "quantity": "200 גרם", "derived_from": None}, {"text": "מלח", "quantity": None, "derived_from": None}]},
     ],
     "step_groups": [{"name": None, "steps": ["מערבבים.", "אופים 30–35 דקות ב-180 מעלות."]}],
     "notes": ["אפשר להחליף בלימון."],
@@ -225,3 +226,15 @@ def test_changes_from_another_site_are_refused(client):
     assert len(client.get("/api/recipes").json()) == before
     # The notebook page (Vite dev server) is allowed.
     assert client.post("/api/recipes", json=NEW_RECIPE, headers={"Origin": "http://localhost:5173"}).status_code == 201
+
+
+def test_a_line_derived_from_the_steps_keeps_where_it_comes_from_through_saves_and_a_restart(client):
+    oil = {"text": "מעט שמן לטיגון", "quantity": "מעט", "derived_from": "מחממים מעט שמן במחבת."}
+    body = {**NEW_RECIPE, "ingredient_groups": [{"name": None, "ingredients": [{"text": "3 ביצים", "quantity": "3"}, oil]}]}
+    created = client.post("/api/recipes", json=body).json()
+    edited = {**body, "ingredient_groups": [{"name": None, "ingredients": [{"text": "3 ביצים", "quantity": "3"}, {**oil, "text": "מעט שמן זית לטיגון"}]}]}
+    client.put(f"/api/recipes/{created['id']}", json=edited)  # its wording changed by hand: still from the steps
+    with restarted() as again:
+        lines = again.get(f"/api/recipes/{created['id']}").json()["ingredient_groups"][0]["ingredients"]
+    assert lines[1] == {"text": "מעט שמן זית לטיגון", "quantity": "מעט", "derived_from": "מחממים מעט שמן במחבת."}
+    assert lines[0]["derived_from"] is None

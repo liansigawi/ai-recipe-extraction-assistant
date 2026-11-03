@@ -215,3 +215,10 @@ def test_a_draft_kept_from_before_the_healthy_attribute_is_shown_as_saved_recipe
     kept, backup = find_kept_draft(notebook, 2)
     assert backup.endswith("-before-0014.db")
     assert (kept.category.name, kept.subcategory, kept.healthy) == ("קינוחים", None, False)
+
+
+def test_a_line_derived_from_the_steps_is_public_with_where_it_comes_from(client, data_dir, tmp_path):
+    oil = {"text": "מעט שמן לטיגון", "quantity": "מעט", "derived_from": "מחממים מעט שמן במחבת."}
+    recipe = new_recipe(client, "חביתה", ingredient_groups=[{"name": None, "ingredients": [{"text": "3 ביצים", "quantity": "3"}, oil]}])
+    data, _ = export(data_dir, tmp_path / "export", recipes=[recipe["id"]])
+    assert data["recipes"][0]["ingredient_groups"][0]["ingredients"][1] == oil

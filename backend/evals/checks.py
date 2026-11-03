@@ -114,7 +114,9 @@ def check(
         return result
 
     original = normalize(source)
-    lines = [(g.name, item.text, item.quantity) for g in draft.ingredient_groups for item in g.ingredients]
+    # A line the app derived from the steps (app/extraction/derived.py, Ingredient.derived_from) is not a line
+    # of the source's list: the cases' lists are compared with the extracted lines only.
+    lines = [(g.name, item.text, item.quantity) for g in draft.ingredient_groups for item in g.ingredients if item.derived_from is None]
     steps = [step for g in draft.step_groups for step in g.steps]
     headings = [g.name for g in draft.ingredient_groups if g.name] + [g.name for g in draft.step_groups if g.name]
     found: list[Finding] = []

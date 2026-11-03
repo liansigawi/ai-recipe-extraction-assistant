@@ -75,6 +75,9 @@ class CategoryRef(ContractModel):
 class Ingredient(ContractModel):
     text: NonEmptyStr  # the line exactly as written, e.g. "2 כוסות אורז בסמטי"
     quantity: NonEmptyStr | None = None  # the amount exactly as written ("2 כוסות"), or None when none is given
+    # A line the app added from the preparation (app/extraction/derived.py, e.g. "מעט שמן לטיגון"): the
+    # sentence of the steps it comes from. None: a line of the recipe's own list, or one typed in.
+    derived_from: Annotated[NonEmptyStr, Field(max_length=500)] | None = None
 
     @model_validator(mode="after")
     def _quantity_is_quoted_from_text(self) -> "Ingredient":

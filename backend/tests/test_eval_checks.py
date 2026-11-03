@@ -279,3 +279,9 @@ def test_a_line_written_in_two_groups_is_matched_once_in_each():
               {"name": "לקרם", "ingredients": [{"text": "כוס סוכר", "quantity": "כוס"}]}]
     result = check(expect, draft=draft(ingredient_groups=groups, notes=[]), error_code=None, categories=CATEGORIES, source=source)
     assert [f.kind for f in result.findings if f.area in ("ingredient lines", "groups")] == []
+
+
+def test_a_line_the_app_derived_from_the_steps_is_not_compared_with_the_case_s_list():
+    oil = {"text": "מעט שמן לטיגון", "quantity": "מעט", "derived_from": "מחממים מעט שמן במחבת."}
+    groups = [{"name": None, "ingredients": [{"text": "200 גרם קמח", "quantity": "200 גרם"}, {"text": "מלח", "quantity": None}, oil]}]
+    assert kinds(EXPECT, SOURCE, ingredient_groups=groups) == []

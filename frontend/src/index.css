@@ -285,6 +285,29 @@ p {
   white-space: nowrap;
 }
 
+/* A line the app added from a step ("מעט שמן לטיגון"): said quietly, never hidden. */
+.derived-label {
+  unicode-bidi: isolate;
+  margin-inline-start: 0.25rem;
+  padding: 0 0.45rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.derived-note {
+  margin: 0.25rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.derived-note .derived-label {
+  margin-inline-start: 0;
+}
+
 /* ---- Buttons ----------------------------------------------------------------- */
 
 .button,

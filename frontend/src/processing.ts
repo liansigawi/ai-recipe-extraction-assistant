@@ -1,5 +1,6 @@
 // How a recipe went from its source to the saved recipe, for the public copy's comparison page. No React.
 import { categoryLabel, healthyLabel } from './categoryLook'
+import { DERIVED_LABEL } from './labels'
 import type { CategoryRef, IngredientGroup, KeptDraft, Recipe, StepGroup } from './types'
 
 export interface LineChange {
@@ -44,7 +45,10 @@ export function diffLines(before: string[], after: string[]): LineChange[] {
 function ingredientLines(groups: IngredientGroup[]): string[] {
   return groups.flatMap((group) => [
     ...(group.name !== null ? [`${group.name}:`] : []),
-    ...group.ingredients.map((item) => `${item.text} · ${item.quantity === null ? 'ללא כמות' : `כמות: ${item.quantity}`}`),
+    ...group.ingredients.map(
+      (item) =>
+        `${item.text} · ${item.quantity === null ? 'ללא כמות' : `כמות: ${item.quantity}`}${item.derived_from != null ? ` · ${DERIVED_LABEL}` : ''}`,
+    ),
   ])
 }
 

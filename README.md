@@ -484,7 +484,14 @@ The model still decides a few things, and the backend checks each:
   passage, and appear once. An ingredient a step uses that the list leaves out ("מקשטים בתותים"
   with no strawberries listed) is also found by the backend itself, from a general list of
   ingredient words: the recipe is kept as your source wrote it, nothing is added, no amount is
-  guessed, and a review point tells you. Missing information (an oven temperature, a baking time)
+  guessed, and a review point tells you. One exception, since 2026-11-03: oil that a step clearly
+  fries or greases with ("מחממים מעט שמן במחבת", "משמנים את התבנית בשמן") when the list has no oil
+  for it. The app then adds a line in the step's own words ("מעט שמן לטיגון", "שמן לשימון התבנית";
+  "מעט" only if the step says it, no other amount, no oil type it does not name), marked
+  **"מופיע בהוראות ההכנה"** with the sentence it comes from, instead of a point to mark "טופל". It is
+  an ordinary line otherwise: edit or remove it. Oil a step measures ("חצי כוס שמן"), mentions as
+  optional, or puts into a batter, a dough or a sauce keeps the review point; "ללא שמן" adds nothing
+  and raises nothing; and frying with no oil named adds nothing. Missing information (an oven temperature, a baking time)
   is checked by the backend from the text itself.
 
 Anything the backend cannot place is flagged, never guessed: a passage without a role, or one

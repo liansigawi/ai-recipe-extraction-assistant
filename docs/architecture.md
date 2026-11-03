@@ -158,7 +158,14 @@ How it encodes the brief's fidelity rules:
 - **Headings mid-method:** steps after a heading stay under it until the next heading. No unnamed
   "continuation" groups.
 - **An ingredient mentioned only in the steps** (strawberries in one real caption) is flagged for
-  review with its source context. It is never added as an ingredient line.
+  review with its source context. It is never added as an ingredient line, with one exception (since
+  2026-11-03, `app/extraction/derived.py`): oil that a step clearly fries or greases with, when the list
+  has no oil for it, becomes a line the app derives in the step's own words, with `derived_from` (below).
+
+**Derived lines (2026-11-03).** An ingredient may carry `derived_from`: the sentence of the steps that
+the app derived it from ("מעט שמן לטיגון" from "מחממים מעט שמן במחבת."), shown as "מופיע בהוראות ההכנה".
+`null` for a line of the recipe's own list or one typed in. It is saved and exported with the line; the
+original text never has it.
 
 **Review fields (milestone 4).** `status` is `draft` (imported, not reviewed) or `saved`.
 `issues` lists what to check, each with a `kind`, a Hebrew `message` and, when it is about specific
@@ -451,7 +458,8 @@ redirect; a redirect would send the browser past the Vite proxy.
 │   │   ├── api/              recipes.py, categories.py, imports.py, media.py: the routes
 │   │   ├── extraction/       output.py (answer schema), prompt.py, claude.py / ollama.py (the model call),
 │   │   │                     choose.py (which one), segments.py (numbered passages), review.py (checks),
-│   │   │                     quantity.py (quantities), ingredient_words.py (ingredients only in the steps)
+│   │   │                     quantity.py (quantities), ingredient_words.py (ingredients only in the steps),
+│   │   │                     derived.py (the oil a step fries or greases with, as a derived line)
 │   │   └── importers/        instagram.py (milestone 1); website.py, screenshots.py (milestone 5)
 │   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py … 0010_cooked.py
 │   ├── scripts/              probe_instagram.py: live checks, run by hand
@@ -548,6 +556,7 @@ redirect; a redirect would send the browser past the Vite proxy.
 | 2026-10-28 (4) | Recipe websites: the page's Schema.org recipe data is copied word for word into the draft, and the model only classifies it; without recipe data the page's main text goes through the usual extraction | The site's own data is the most faithful source: nothing to mis-copy, and seconds instead of a minute. The model is still the only one choosing a category, by the same rules. |
 | 2026-10-28 (4) | One link endpoint chooses the importer by the host name; the website reader checks every address (before connecting and after), sends an honest User-Agent and runs no scripts | Pasting any link must never reach this computer or the home network (SSRF). Sites that block such readers are reported as blocking, not worked around; pasting the text always works. |
 | 2026-10-28 (4) | A page-text draft with no ingredient lines or no steps is refused as incomplete, and a bot-check page as blocked | Seen live: a page whose ingredient lists are drawn by its scripts, and a site that answered with a robot check. A half recipe saved as a draft looks complete enough to trust. |
+| 2026-11-03 (4) | Oil a step clearly fries or greases with, and the list has none for, becomes a line the app derives (`Ingredient.derived_from`), by a fixed rule, instead of a review point | The point was right but repeated on nearly every frying recipe. The line uses only the step's words ("מעט", the oil it names, frying or greasing what), says where it comes from and that the app added it, and stays editable. A measured, optional or component use of oil ("חצי כוס שמן לבלילה") keeps the point; no model is involved. |
 | 2026-11-03 (3) | The category request stays as it was; the model chooses a dessert's type but never its healthy style | One focused candidate (one request, three decisions in order: what kind of dish, category and type, healthy style; and the kind must agree with the category) was measured against it on 19 cases, 7 held out, two runs each ([extraction-quality.md](extraction-quality.md)): better on the healthy style (10 against 8 right, 3 against 5 wrong), not on the category (the drinks still went to the desserts) nor the type; and it called three of the person's own five healthy desserts "no". Not clearly better, so not adopted; the healthy style is the person's to set. |
 | 2026-11-03 (2) | Desserts by type: six subcategories of "קינוחים", and "קינוח בריא" as one nullable column (`recipes.healthy`), not a tagging system | The person's request: a type for navigation, and the healthy style apart from it (a frozen dessert can be healthy). One attribute, on one category, needs no tag tables. NULL is "not decided", so nothing undecided becomes a decision; the migration keeps every earlier healthy or regular choice. |
 | 2026-11-03 | A website's recipe data is checked against the page's own lists | Recipe data is not clean because it exists: Foody's flattens its numbered steps into one string (heading in front, a photo's `[caption]` shortcode and the sponsor after them) and drops its ingredient groups and each line's comment. Where the page's lists hold the same lines, their items and headings are the source's boundaries; nothing is split by guessing, and a list that misses any of the words leaves the data as it is. |

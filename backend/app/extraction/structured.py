@@ -5,7 +5,8 @@ as every import (only an existing category, or none)."""
 from app import schemas
 from app.extraction.output import Classification
 from app.extraction.quantity import find_quantity
-from app.extraction.review import content_points, resolve_classification
+from app.extraction.derived import add_oil_from_steps
+from app.extraction.review import content_points, only_in_step_point, resolve_classification
 from app.importers.website import StructuredRecipe
 
 
@@ -16,7 +17,8 @@ def structured_draft(
     classification: Classification | None,
     unclassified_because: str | None = None,
 ) -> schemas.RecipeInput:
-    """The draft: title, ingredient lines in their groups (each with the amount it writes, as for any
+    """The draft: title, ingredient lines in their groups (and the oil its steps clearly fry or grease
+    with, derived.py) (each with the amount it writes, as for any
     import), steps in their sections, servings, and the page's times as one note. Without a classification: unclassified,
     with `unclassified_because` as the review point (None: no point, e.g. before the model is asked)."""
     issues: list[schemas.Issue] = []
@@ -43,7 +45,7 @@ def structured_draft(
     elif unclassified_because is not None:
         issues.append(schemas.Issue(kind="classification_unresolved", message=unclassified_because))
     times = " · ".join(f"{label}: {value}" for label, value in recipe.times.items())
-    return schemas.RecipeInput(
+    draft = schemas.RecipeInput(
         title=title,
         servings=recipe.servings,
         ingredient_groups=ingredient_groups,
@@ -55,3 +57,4 @@ def structured_draft(
         status="draft",
         issues=issues,
     )
+    return add_oil_from_steps(draft, only_in_step_point)

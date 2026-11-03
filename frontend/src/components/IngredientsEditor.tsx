@@ -9,6 +9,7 @@ import {
   type IngredientGroupForm,
   type IngredientRow,
 } from '../editorForm'
+import { DERIVED_LABEL } from '../labels'
 import FieldError from './FieldError'
 import RowButtons from './RowButtons'
 
@@ -91,7 +92,10 @@ export default function IngredientsEditor({ groups, errors, onChange }: Ingredie
                         value={row.text}
                         placeholder="200 גרם קמח"
                         aria-invalid={textError !== undefined}
-                        aria-describedby={textError !== undefined ? `${id}-${path}.text` : undefined}
+                        aria-describedby={
+                          [textError !== undefined && `${id}-${path}.text`, row.derivedFrom !== null && `${id}-${path}.derived`].filter(Boolean).join(' ') ||
+                          undefined
+                        }
                         onChange={(event) => changeRow(g, i, { ...row, text: event.target.value })}
                       />
                       <input
@@ -113,6 +117,13 @@ export default function IngredientsEditor({ groups, errors, onChange }: Ingredie
                         onRemove={() => changeGroup(g, { ...group, ingredients: removeAt(group.ingredients, i) })}
                       />
                     </div>
+                    {/* Added by the app from a step, not a line of the source's own list: said, never hidden. */}
+                    {row.derivedFrom !== null && (
+                      <p id={`${id}-${path}.derived`} className="derived-note">
+                        <span className="derived-label">{DERIVED_LABEL}</span>{' '}
+                        <q dir="auto">{row.derivedFrom}</q>
+                      </p>
+                    )}
                     <FieldError id={`${id}-${path}.text`} message={textError} />
                     <FieldError id={`${id}-${path}.quantity`} message={quantityError} />
                   </li>

@@ -30,3 +30,6 @@ export const ISSUE_LABELS: Record<IssueKind, string> = {
   caption_incomplete: 'כיתוב חלקי',
   media_incomplete: 'תמונות וסרטונים',
 }
+
+/** Beside an ingredient line that the app added from the preparation (Ingredient.derived_from). */
+export const DERIVED_LABEL = 'מופיע בהוראות ההכנה'
