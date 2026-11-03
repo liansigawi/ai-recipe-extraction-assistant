@@ -27,6 +27,29 @@ Also live: the same food.unl.edu page again, as `http://` with a tracking parame
 במחברת" before anything was read; an Instagram post already in the notebook → its duplicate warning,
 then "another copy" read live as before (caption, credit, 3 pictures and videos).
 
+## 2026-11-03: recipe data checked against the page
+
+A Foody recipe ("הנודלס הירוק", `foody.co.il/foody_recipe/...`) came in with one long step that began
+"אופן הכנה" and ended "...שיהיה בתיאבון![caption id=״attachment_151593״ ...] ... צילום: דר טייב[ caption]בשיתוף
+עם טעם הטבע". Traced: the import used the page's JSON-LD (no model wrote the steps; the model only chose
+the category), and the JSON-LD itself had `recipeInstructions` as that one string, its quotes already ״ and
+its closing slash already gone. The page shows `<h2>אופן הכנה</h2>`, an `<ol>` of three steps, the photo as a
+`<figure>` with its caption, and `<p>בשיתוף עם טעם הטבע</p>`; its ingredients are in two groups ("רוטב",
+"נודלס מוקפץ"), each line with a comment ("או סילאן", "לא חובה") that the JSON-LD drops. Nothing was lost
+in saving or showing: the importer trusted the data as given.
+
+Now the importer checks the data against the page's own lists (`checked_with_page`): the three list items
+are the steps, in the page's words; the two groups and their lines (comments included) are the
+ingredients; the caption and the sponsor are in no step; the credit is still the recipe data's author. A
+list that misses any word of the steps (a paragraph between items, say) leaves the data as it is, never
+split by guessing. Without matching lists, a `[caption]...[/caption]` (or `[embed]`, `[gallery]`...)
+shortcode and a line that only names a sponsor are still taken out of the steps.
+
+Checked on pages saved once each (2026-11-03), old code against new: the Foody recipe above and two more
+Foody recipes (1 step became 5 and 7, with their groups); hidabroot.org (JSON-LD), food.unl.edu
+(microdata), adikosh.co.il, oogio.net and ronyohananov.com (page text): unchanged. A saved recipe is never
+changed by this: importing the page again makes a new draft.
+
 ## Tested with fixtures only (offline tests)
 
 Every address rule (private, loopback, link-local and shared ranges, IPv6 and IPv4-mapped addresses,
@@ -50,8 +73,8 @@ picture, a model that cannot classify, and imports without a model.
   refused (incomplete, or no recipe) rather than imported half-filled.
 - **Several recipes on a page**: with recipe data, the one the page's heading names, or none
   (ambiguous). In page text, the extraction takes the main recipe and may flag "כמה מתכונים בטקסט".
-- **Ingredient groups** ("לבצק", "למלית") are not part of Schema.org's ingredient list: a page's
-  recipe data gives one list. Steps keep their sections.
+- **Ingredient groups** ("לבצק", "למלית") are not part of Schema.org's ingredient list: they come from
+  the page's own lists when those show every line of the recipe data in order; otherwise one list.
 - **Only the main picture** is saved; a page's other pictures and its videos are not.
 - **The text extraction is a heuristic**: it removes what the page's markup calls navigation,
   comments, ads, sharing and related posts. The element that holds the main content (the largest

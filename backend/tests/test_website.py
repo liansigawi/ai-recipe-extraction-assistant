@@ -380,3 +380,96 @@ def test_the_recipe_data_as_readable_text_for_the_review_screen():
     assert "מצרכים\n200 גרם קמח\n2 ביצים L" in text
     assert "אופן ההכנה\nלבצק\n1. מערבבים את הקמח עם הביצים.\n2. מוסיפים את מיץ התפוזים.\nאפייה\n1. אופים" in text
     assert "כמות: 10 פרוסות" in text and "זמן בישול: שעה" in text
+
+
+# --- Recipe data checked against the page --------------------------------------------------------------
+# Modelled on a Foody page (seen live, 2026-11-03): its recipe data flattens the page's numbered steps into
+# one string, with the heading in front and a photo's [caption] shortcode and the sponsor after them (quotes
+# turned into ״, the closing slash dropped), and has no ingredient groups and none of the lines' comments.
+
+FLATTENED = {
+    "@context": "http://schema.org/", "@type": "Recipe", "name": "אטריות ירוקות ברוטב קוקוס",
+    "author": {"@type": "Person", "name": "צלמת האתר"},
+    "recipeIngredient": ["1 פחית קרם קוקוס", "1 כף סוכר חום", "400 גרם אטריות", "1 בצל"],
+    "recipeInstructions": (
+        "אופן הכנה טוחנים בבלנדר את מרכיבי הרוטב עד שהוא חלק. אם רוצים מסמיכים בקורנפלור. מחממים ווק ומקפיצים את הבצל "
+        "3–4 דקות. מוסיפים את האטריות ואת הרוטב ומקפיצים עוד 2–3 דקות. בתיאבון![caption id=״attachment_51593״ "
+        "align=״aligncenter״ width=״500״] אטריות ירוקות. צילום: צלמת האתר[ caption]בשיתוף עם מותג ירקות"
+    ),
+}
+FLATTENED_PAGE = """
+<h1>אטריות ירוקות ברוטב קוקוס</h1>
+<section class="recipe-ingredients"><h2>מצרכים</h2>
+  <div class="ingredients-group"><h2 class="ingredients-group-title">רוטב</h2>
+    <ul><li><span class="amount">1</span> <span class="unit">פחית</span> <a href="/i/1">קרם קוקוס</a></li>
+        <li><span class="amount">1</span> <span class="unit">כף</span> <a href="/i/2">סוכר חום</a> <div class="comment">או סילאן</div></li></ul></div>
+  <div class="ingredients-group"><h2 class="ingredients-group-title">מוקפץ</h2>
+    <ul><li>400 גרם אטריות <div class="comment">מבושלות</div></li><li>1 בצל</li></ul></div>
+</section>
+<section class="recipe-content"><div class="foody-content"><h2>אופן הכנה</h2>
+<ol><li>טוחנים בבלנדר את מרכיבי הרוטב עד שהוא חלק. אם רוצים מסמיכים בקורנפלור.</li>
+<li>מחממים ווק ומקפיצים את הבצל 3-4 דקות.</li>
+<li>מוסיפים את האטריות ואת הרוטב ומקפיצים עוד 2-3 דקות.&nbsp;בתיאבון!</li></ol>
+<figure class="wp-caption"><img src="/p.jpg" alt=""><figcaption>אטריות ירוקות. צילום: צלמת האתר</figcaption></figure>
+<p>בשיתוף עם מותג ירקות</p></div></section>
+<ul class="menu"><li>מתכונים</li><li>כתבות</li></ul>
+"""
+THREE_STEPS = [
+    "טוחנים בבלנדר את מרכיבי הרוטב עד שהוא חלק. אם רוצים מסמיכים בקורנפלור.",
+    "מחממים ווק ומקפיצים את הבצל 3-4 דקות.",
+    "מוסיפים את האטריות ואת הרוטב ומקפיצים עוד 2-3 דקות. בתיאבון!",
+]
+
+
+def test_flattened_steps_are_the_page_s_own_list_items_without_its_caption_or_sponsor():
+    recipe = analyze(FLATTENED_PAGE, ld(FLATTENED)).recipe
+    assert recipe.found_in == "json_ld" and recipe.from_page == ["steps", "ingredients"]
+    assert recipe.step_groups == [(None, THREE_STEPS)]  # the page's words ("3-4"), not split into sentences
+    assert recipe.authors == ["צלמת האתר"]  # the credit stays the credit
+
+
+def test_ingredient_groups_and_each_line_s_comment_come_from_the_page_s_lists():
+    recipe = analyze(FLATTENED_PAGE, ld(FLATTENED)).recipe
+    assert recipe.ingredient_groups == [
+        ("רוטב", ["1 פחית קרם קוקוס", "1 כף סוכר חום או סילאן"]),
+        ("מוקפץ", ["400 גרם אטריות מבושלות", "1 בצל"]),
+    ]
+    text = website.render(recipe)
+    assert "מצרכים\nרוטב\n1 פחית קרם קוקוס\n1 כף סוכר חום או סילאן\nמוקפץ\n400 גרם אטריות מבושלות" in text
+    assert "אופן ההכנה\n1. טוחנים בבלנדר" in text and "\n3. מוסיפים את האטריות" in text
+    assert "caption" not in text and "צילום" not in text and "בשיתוף" not in text
+
+
+def test_without_the_page_s_lists_the_recipe_data_is_kept_but_its_shortcode_and_sponsor_are_not():
+    recipe = analyze("<h1>אטריות ירוקות ברוטב קוקוס</h1><p>טקסט</p>", ld(FLATTENED)).recipe
+    assert recipe.from_page == []
+    assert recipe.ingredient_groups == [(None, FLATTENED["recipeIngredient"])]
+    [(name, [step])] = recipe.step_groups  # one step, as the data gives it: never split by guessing
+    assert name is None and step.startswith("אופן הכנה טוחנים") and step.endswith("עוד 2–3 דקות. בתיאבון!")
+
+
+def test_a_list_that_misses_words_of_the_steps_leaves_the_recipe_data_as_it_is():
+    # "מחממים ווק..." is a paragraph on the page, not a list item: taking the list would lose it.
+    page = FLATTENED_PAGE.replace("<li>מחממים ווק ומקפיצים את הבצל 3-4 דקות.</li>", "</ol><p>מחממים ווק ומקפיצים את הבצל 3-4 דקות.</p><ol>")
+    recipe = analyze(page, ld(FLATTENED)).recipe
+    assert recipe.from_page == ["ingredients"] and len(recipe.steps) == 1
+
+
+def test_recipe_data_whose_steps_are_already_the_page_s_items_is_not_changed():
+    data = {**FLATTENED, "recipeInstructions": [{"@type": "HowToStep", "text": step} for step in THREE_STEPS]}
+    recipe = analyze(FLATTENED_PAGE.replace("<li>1 בצל</li>", ""), ld(data)).recipe  # a line the page does not show
+    assert recipe.from_page == [] and recipe.step_groups == [(None, THREE_STEPS)]
+    assert recipe.ingredient_groups == [(None, FLATTENED["recipeIngredient"])]
+
+
+@pytest.mark.parametrize(
+    ("instructions", "expected"),
+    [
+        ("מערבבים הכול.\n[embed]https://youtu.be/x[/embed]\nאופים 20 דקות.", ["מערבבים הכול.", "אופים 20 דקות."]),
+        ("מערבבים הכול. [gallery ids=״1,2״] אופים.\nבחסות חברת קמח", ["מערבבים הכול.", "אופים."]),
+        ("מגישים בשיתוף עם הילדים, שכל אחד יקשט את שלו.", ["מגישים בשיתוף עם הילדים, שכל אחד יקשט את שלו."]),
+    ],
+)
+def test_shortcodes_and_a_sponsor_s_line_are_never_steps_but_a_step_that_mentions_sharing_is(instructions, expected):
+    data = {"@type": "Recipe", "name": "עוגה", "recipeIngredient": ["קמח"], "recipeInstructions": instructions}
+    assert analyze("<h1>עוגה</h1>", ld(data)).recipe.steps == expected

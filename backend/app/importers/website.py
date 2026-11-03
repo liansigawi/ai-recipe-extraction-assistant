@@ -6,8 +6,11 @@
 2. The page: one GET, at most MAX_REDIRECTS redirects, MAX_PAGE_BYTES, PAGE_DEADLINE_S; HTML only. The
    client says what it is (USER_AGENT); it does not pretend to be a browser.
 3. The recipe: the page's Schema.org Recipe data when it has it (JSON-LD, then microdata), in its own
-   words. Otherwise the page's main text, with navigation, comments, advertisements and the like left
-   out as far as their markup shows, for the same extraction as pasted text.
+   words, checked against the page itself: recipe data is not clean just because it exists. Where the
+   page shows the same lines as lists, their items and the headings above them are the recipe's steps,
+   lines and groups; a site's leftover markup, photo captions and sponsorship lines are not steps.
+   Otherwise the page's main text, with navigation, comments, advertisements and the like left out as
+   far as their markup shows, for the same extraction as pasted text.
 
 Everything read here is data from a stranger's page: it is never followed as instructions.
 """
@@ -26,7 +29,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import httpx2
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 USER_AGENT = "RecipeNotebook/0.5 (a personal recipe notebook; reads one page when its owner imports it)"
 MAX_PAGE_BYTES = 3_000_000  # a recipe page is a few hundred KB
@@ -266,7 +269,7 @@ class WebReader:
 @dataclass
 class StructuredRecipe:
     title: str
-    ingredients: list[str]
+    ingredient_groups: list[tuple[str | None, list[str]]]  # the recipe data's one list, or the page's groups
     step_groups: list[tuple[str | None, list[str]]]
     servings: str | None
     times: dict[str, str]  # "זמן הכנה" -> "20 דקות"
@@ -275,6 +278,11 @@ class StructuredRecipe:
     description: str | None
     found_in: str  # "json_ld" or "microdata"
     raw: dict[str, Any] = field(repr=False)
+    from_page: list[str] = field(default_factory=list)  # what the page's own lists gave: "steps", "ingredients"
+
+    @property
+    def ingredients(self) -> list[str]:
+        return [line for _, lines in self.ingredient_groups for line in lines]
 
     @property
     def steps(self) -> list[str]:
@@ -365,11 +373,25 @@ def json_ld_documents(soup: BeautifulSoup) -> list[Any]:
 
 
 _LEADING_NUMBER = re.compile(r"^\s*(\d{1,2}[.)]|step\s*\d{1,2}\s*[:.)-]|שלב\s*\d{1,2}\s*[:.)-])\s*", re.I)
+# WordPress shortcodes that some sites leave in their recipe data instead of rendering them. Seen live
+# (Foody): a photo with its caption inside the instructions, its quotes turned into ״ and its closing
+# slash dropped: '[caption id=״attachment_151593״ ...] the caption. צילום: ...[ caption]'. A captioned
+# block is a photo's, never a step; it ends the step before it.
+_SHORTCODE_BLOCK = re.compile(r"\[\s*(caption|embed|video|audio|gallery|playlist)\b[^\]]*\].*?\[\s*/?\s*\1\s*\]", re.I | re.S)
+_SHORTCODE = re.compile(r"\[\s*/?\s*(caption|embed|video|audio|gallery|playlist|vc_\w+|et_pb_\w+)\b[^\]]*\]", re.I)
+# A line that only says who sponsored the post ("בשיתוף עם טעם הטבע"): the post's, not a step.
+_SPONSORSHIP = re.compile(
+    r"^(בשיתוף(\s+פעולה)?\s+עם|בחסות|תוכן\s+(שיווקי|ממומן)|sponsored\s+by|in\s+partnership\s+with)(\s+[^\s.!?]+){0,6}\s*[.!]?$", re.I
+)
 
 
 def _step_lines(text: str) -> list[str]:
-    """A step's text: one step per line; a leading "1." is the list's numbering, not its words."""
-    return [_LEADING_NUMBER.sub("", line).strip() for line in _text(text).splitlines() if _LEADING_NUMBER.sub("", line).strip()]
+    """A step's text: one step per line; a leading "1." is the list's numbering, not its words. A site's
+    leftover shortcodes, the photo captions inside them and a line naming a sponsor are left out."""
+    if isinstance(text, str):
+        text = _SHORTCODE.sub("\n", _SHORTCODE_BLOCK.sub("\n", text))
+    lines = (_LEADING_NUMBER.sub("", line).strip() for line in _text(text).splitlines())
+    return [line for line in lines if line and not _SPONSORSHIP.match(line)]
 
 
 def _instruction_groups(value: Any) -> list[tuple[str | None, list[str]]]:
@@ -458,7 +480,7 @@ def read_recipe(data: dict[str, Any], base: str, found_in: str) -> StructuredRec
     description = _text(data.get("description")) or None
     return StructuredRecipe(
         title=_text(data.get("name")).replace("\n", " ")[:300],
-        ingredients=ingredients,
+        ingredient_groups=[(None, ingredients)] if ingredients else [],
         step_groups=_instruction_groups(data.get("recipeInstructions")),
         servings=_yield(data.get("recipeYield")),
         times=times,
@@ -529,6 +551,130 @@ def choose_recipe(recipes: list[StructuredRecipe], page_names: list[str]) -> tup
     if len(named) == 1:
         return named[0], []
     return None, [recipe.title or "(ללא שם)" for recipe in recipes]
+
+
+# --- The recipe data, checked against what the page shows ---------------------------------------------
+#
+# Schema.org has no ingredient groups, and some sites flatten their steps when they write the data (seen
+# live, Foody: an <ol> of three steps as one string, its heading in front and a caption and a sponsor after
+# it; its ingredient groups "רוטב" and "נודלס מוקפץ" gone, and each line's comment, like "או סילאן", too).
+# When the page's own lists hold the same lines, their boundaries are the source's: list items and the
+# headings above them. The lines are matched as they are, never split or merged by guessing.
+
+_HEADINGS = ["h1", "h2", "h3", "h4", "h5", "h6"]
+_BLOCK_BREAKS = {"br", "div", "p", "li", "ul", "ol", "td", "tr", "table", "section"}
+# Headings that only say "the ingredients" or "the steps": the recipe has those sections anyway.
+_GENERIC_HEADINGS = {
+    "מצרכים", "המצרכים", "רכיבים", "מרכיבים", "חומרים", "ingredients", "אופן הכנה", "אופן ההכנה", "הוראות הכנה",
+    "שלבי הכנה", "שלבי ההכנה", "הכנה", "ההכנה", "instructions", "directions", "method", "preparation",
+}
+
+
+@dataclass
+class PageList:
+    heading: str | None  # the nearest heading above the list
+    items: list[str]  # its items as the page shows them
+
+
+def _visible_text(tag: Tag) -> str:
+    """An element's text as the page shows it: a space between its blocks, none added inside a word."""
+    parts = []
+    for node in tag.descendants:
+        if isinstance(node, Tag) and node.name in _BLOCK_BREAKS:
+            parts.append(" ")
+        elif isinstance(node, NavigableString) and type(node) is NavigableString:  # not a comment or a script's code
+            parts.append(str(node))
+    return re.sub(r"\s+", " ", "".join(parts)).strip()
+
+
+def page_lists(soup: BeautifulSoup) -> list[PageList]:
+    """Every list the page shows, in its order, with the heading above it."""
+    lists = []
+    for tag in soup.find_all(["ol", "ul"]):
+        items = [_LEADING_NUMBER.sub("", _visible_text(item)).strip() for item in tag.find_all("li", recursive=False)]
+        items = [item for item in items if _norm(item)]
+        if items:
+            heading = tag.find_previous(_HEADINGS)
+            name = _text(heading.get_text(" ")).replace("\n", " ") if heading is not None else ""
+            lists.append(PageList(name or None, items))
+    return lists
+
+
+def _named(heading: str | None) -> str | None:
+    return heading if heading is not None and _norm(heading) not in _GENERIC_HEADINGS else None
+
+
+def _steps_from_page(recipe: StructuredRecipe, lists: list[PageList]) -> list[tuple[str | None, list[str]]] | None:
+    """The page's lists of steps, when they hold the recipe data's steps with nothing left over but their
+    headings and a sponsor's line, and more of them (a flattened list); else None."""
+    flat = _norm(" ".join(recipe.steps))
+    if not flat:
+        return None
+    position, chosen, spans = 0, [], []
+    for page_list in lists:
+        found, at = [], position
+        for item in page_list.items:
+            start = flat.find(_norm(item), at)
+            if start < 0 or len(_norm(item)) < 4:
+                break
+            found.append((start, start + len(_norm(item))))
+            at = start + len(_norm(item))
+        else:
+            chosen.append(page_list)
+            spans.extend(found)
+            position = at
+    if len(spans) <= len(recipe.steps):
+        return None
+    headings = {_norm(page_list.heading) for page_list in chosen if page_list.heading}
+    edges = [0, *(edge for span in spans for edge in span), len(flat)]
+    for left, right in zip(edges[::2], edges[1::2], strict=True):
+        rest = flat[left:right].strip()
+        for heading in headings:
+            rest = rest.replace(heading, " ").strip()
+        if rest and not _SPONSORSHIP.match(rest):
+            return None  # words the lists do not have: the recipe data stays as it is
+    if len(chosen) == 1:
+        return [(None, chosen[0].items)]
+    return [(_named(page_list.heading), page_list.items) for page_list in chosen]
+
+
+def _ingredients_from_page(recipe: StructuredRecipe, lists: list[PageList]) -> list[tuple[str | None, list[str]]] | None:
+    """The page's lists of ingredients, when consecutive lists show every line of the recipe data in its
+    order, one item each (an item may add words after the line, like "או סילאן"); else None."""
+    wanted = [_norm(line) for line in recipe.ingredients]
+    if len(wanted) < 2:
+        return None
+    for start in range(len(lists)):
+        chosen, count = [], 0
+        for page_list in lists[start:]:
+            items = [_norm(item) for item in page_list.items]
+            if count == len(wanted) or len(items) > len(wanted) - count:
+                break
+            if not all(item.startswith(line) for item, line in zip(items, wanted[count:], strict=False)):
+                break
+            chosen.append(page_list)
+            count += len(items)
+        if count == len(wanted):
+            if len(chosen) == 1:
+                return [(None, chosen[0].items)]
+            return [(_named(page_list.heading), page_list.items) for page_list in chosen]
+    return None
+
+
+def checked_with_page(recipe: StructuredRecipe, soup: BeautifulSoup) -> StructuredRecipe:
+    """The recipe data, with the steps and the ingredient groups the page itself shows, where it shows them."""
+    lists = page_lists(soup)
+    steps = _steps_from_page(recipe, lists)
+    ingredients = _ingredients_from_page(recipe, lists)
+    if ingredients is not None and ingredients == recipe.ingredient_groups:
+        ingredients = None  # the same lines, already one list: nothing the page adds
+    if steps is not None:
+        recipe.step_groups = steps
+        recipe.from_page.append("steps")
+    if ingredients is not None:
+        recipe.ingredient_groups = ingredients
+        recipe.from_page.append("ingredients")
+    return recipe
 
 
 # --- The page's main text, when it has no recipe data -------------------------------------------------
@@ -664,6 +810,8 @@ def analyze(page: Page) -> PageAnalysis:
     h1 = _text(heading.get_text(" ")) if heading is not None else None
     recipes = find_recipes(soup, url)
     recipe, ambiguous = choose_recipe(recipes, [name for name in (h1, og_title, page_title) if name])
+    if recipe is not None:
+        recipe = checked_with_page(recipe, soup)
     blocked = recipe is None and not ambiguous and is_block_page(soup)
     text, truncated = ("", False) if recipe is not None or blocked else main_text(page.html, h1 or og_title or page_title)
     image = _meta(soup, "og:image", "og:image:url", "twitter:image")
@@ -690,7 +838,12 @@ def render(recipe: StructuredRecipe) -> str:
     if facts:
         parts.append("\n".join(facts))
     if recipe.ingredients:
-        parts.append("מצרכים\n" + "\n".join(recipe.ingredients))
+        lines = []
+        for name, group in recipe.ingredient_groups:
+            if name:
+                lines.append(name)
+            lines.extend(group)
+        parts.append("מצרכים\n" + "\n".join(lines))
     if recipe.steps:
         lines = []
         for name, steps in recipe.step_groups:

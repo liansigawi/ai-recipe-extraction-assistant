@@ -275,7 +275,7 @@ def _import_website(data: LinkImport, session: Session, new_extractor: Extractor
     analysis = website.analyze(page)
     log.info(
         "Website %s: %s", url,
-        f"recipe data ({analysis.recipe.found_in})" if analysis.recipe else f"{len(analysis.ambiguous)} recipes" if analysis.ambiguous else f"main text, {len(analysis.text)} characters",
+        f"recipe data ({analysis.recipe.found_in}{', ' + ' and '.join(analysis.recipe.from_page) + ' as the page shows them' if analysis.recipe.from_page else ''})" if analysis.recipe else f"{len(analysis.ambiguous)} recipes" if analysis.ambiguous else f"main text, {len(analysis.text)} characters",
     )
     details = {"url": url}
     if analysis.blocked:

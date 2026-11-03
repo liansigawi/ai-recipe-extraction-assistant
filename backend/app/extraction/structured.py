@@ -16,17 +16,21 @@ def structured_draft(
     classification: Classification | None,
     unclassified_because: str | None = None,
 ) -> schemas.RecipeInput:
-    """The draft: title, ingredient lines (each with the amount it writes, as for any import), steps in
-    their sections, servings, and the page's times as one note. Without a classification: unclassified,
+    """The draft: title, ingredient lines in their groups (each with the amount it writes, as for any
+    import), steps in their sections, servings, and the page's times as one note. Without a classification: unclassified,
     with `unclassified_because` as the review point (None: no point, e.g. before the model is asked)."""
     issues: list[schemas.Issue] = []
     title = recipe.title.strip()
     if not title:
         title = "מתכון מהאתר"
         issues.append(schemas.Issue(kind="missing_title", message='בנתוני המתכון שבדף אין שם. הכותרת "מתכון מהאתר" זמנית; שנו אותה.'))
-    ingredients = [schemas.Ingredient(text=line, quantity=find_quantity(line)) for line in recipe.ingredients]
+    ingredient_groups = [
+        schemas.IngredientGroup(name=name, ingredients=[schemas.Ingredient(text=line, quantity=find_quantity(line)) for line in lines])
+        for name, lines in recipe.ingredient_groups
+        if lines
+    ]
     groups = [schemas.StepGroup(name=name, steps=steps) for name, steps in recipe.step_groups if steps]
-    if not ingredients:
+    if not ingredient_groups:
         issues.append(schemas.Issue(kind="missing_information", message="בנתוני המתכון שבדף אין רשימת מצרכים. העתיקו אותם מהדף אם צריך."))
     if not groups:
         issues.append(schemas.Issue(kind="missing_information", message="בנתוני המתכון שבדף אין שלבי הכנה. העתיקו אותם מהדף אם צריך."))
@@ -42,7 +46,7 @@ def structured_draft(
     return schemas.RecipeInput(
         title=title,
         servings=recipe.servings,
-        ingredient_groups=[schemas.IngredientGroup(name=None, ingredients=ingredients)] if ingredients else [],
+        ingredient_groups=ingredient_groups,
         step_groups=groups,
         notes=[times] if times else [],
         sources=[schemas.Source(kind="website")],

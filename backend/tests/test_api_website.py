@@ -250,3 +250,19 @@ def test_an_instagram_link_goes_to_the_instagram_importer(client, use, reads, si
     draft = response.json()
     assert draft["original"]["kind"] == "instagram" and draft["sources"][0]["creators"][0]["username"] == "baker"
     assert link(client, POST).json()["error"]["code"] == "duplicate_link"  # its duplicate check, as before
+
+
+def test_a_page_whose_recipe_data_flattens_its_steps_is_imported_with_the_page_s_steps_and_groups(client, use, site):
+    from tests.test_website import FLATTENED, FLATTENED_PAGE, THREE_STEPS
+
+    use(Classifier())
+    site({PAGE: html(FLATTENED_PAGE, ld(FLATTENED))})
+    draft = link(client).json()
+    assert draft["step_groups"] == [{"name": None, "steps": THREE_STEPS}]
+    assert [(group["name"], [item["text"] for item in group["ingredients"]]) for group in draft["ingredient_groups"]] == [
+        ("רוטב", ["1 פחית קרם קוקוס", "1 כף סוכר חום או סילאן"]),
+        ("מוקפץ", ["400 גרם אטריות מבושלות", "1 בצל"]),
+    ]
+    assert draft["sources"][0]["creators"] == [{"name": "צלמת האתר", "username": None}]
+    original = draft["original"]["text"]
+    assert "\n1. טוחנים בבלנדר" in original and "caption" not in original and "בשיתוף" not in original
