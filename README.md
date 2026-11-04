@@ -490,7 +490,8 @@ The model still decides a few things, and the backend checks each:
   "מעט" only if the step says it, no other amount, no oil type it does not name), marked
   **"מופיע בהוראות ההכנה"** with the sentence it comes from, instead of a point to mark "טופל". It is
   an ordinary line otherwise: edit or remove it. Oil a step measures ("חצי כוס שמן"), mentions as
-  optional, or puts into a batter, a dough or a sauce keeps the review point; "ללא שמן" adds nothing
+  optional, offers as one choice ("מעט חמאה או תרסיס שמן") or as a spray, or puts into a batter, a dough
+  or a sauce keeps the review point; "ללא שמן" adds nothing
   and raises nothing; and frying with no oil named adds nothing. Missing information (an oven temperature, a baking time)
   is checked by the backend from the text itself.
 

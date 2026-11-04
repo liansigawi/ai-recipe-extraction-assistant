@@ -7,7 +7,8 @@ has one, the oil it names, what it is for) and it says so: Ingredient.derived_fr
 comes from. It is not presented as a line of the source's list, and the original text is not changed.
 It replaces the review point "המצרך שמן מופיע באופן ההכנה..." for that use, because nothing is left to
 check. Oil that a step uses in any other way keeps the point: measured ("חצי כוס שמן"), optional
-("אפשר לשמן"), or going into a batter, a dough, a sauce, a marinade or another component ("לבלילה").
+("אפשר לשמן"), one choice among others ("מעט חמאה או תרסיס שמן") or a spray, or going into a batter, a
+dough, a sauce, a marinade or another component ("לבלילה").
 A step that cooks without oil ("מטגנים ללא שמן") neither adds oil nor raises the point; frying with no
 oil named adds nothing.
 """
@@ -34,10 +35,15 @@ _COMPONENT = re.compile(
 _INTO = re.compile(
     r"(?<!\w)(?:ו?ל|(?:אל|לתוך)\s+ה?)(?:בלילה|בצק|עיסה|רוטב|מרינדה|תערובת|קרם|ויניגרט|סלט|פסטו|מטבל|ממרח|ציפוי)(?!\w)"
 )
-_FRYING = re.compile(r"(?<!\w)ו?(?:מטגנים|מטגנות|מטגן|מטגנת|לטגן|טגנו|תטגנו|מקפיצים|מקפיץ|להקפיץ|הקפיצו|מזהיבים|להזהיב|הזהיבו)(?!\w)")
-_HEATING = re.compile(r"(?<!\w)ו?(?:מחממים|מחמם|מחממת|לחמם|חממו|תחממו)(?!\w)")
+# The verbs as recipes write them: present, infinitive, imperative, and "we will" ("נטגן", "נחמם").
+_FRYING = re.compile(
+    r"(?<!\w)ו?(?:מטגנים|מטגנות|מטגן|מטגנת|לטגן|טגנו|טגני|תטגנו|נטגן|מקפיצים|מקפיץ|להקפיץ|הקפיצו|נקפיץ|מזהיבים|להזהיב|הזהיבו|נזהיב)(?!\w)"
+)
+_HEATING = re.compile(r"(?<!\w)ו?(?:מחממים|מחמם|מחממת|לחמם|חממו|חממי|תחממו|נחמם)(?!\w)")
 _PAN = re.compile(r"(?<!\w)[ובה]{0,3}(?:מחבת|סיר|ווק|קדרה)(?!\w)")
-_GREASING = re.compile(r"(?<!\w)ו?(?:משמנים|משמן|משמנת|לשמן|שמנו|תשמנו|מרססים|לרסס|ריססו|מברישים|להבריש)(?!\w)")
+_GREASING = re.compile(r"(?<!\w)ו?(?:משמנים|משמן|משמנת|לשמן|שמנו|שמני|תשמנו|נשמן|מרססים|לרסס|ריססו|נרסס|מברישים|להבריש|נבריש)(?!\w)")
+# Oil offered as one choice among others ("מעט חמאה או תרסיס שמן", "שמן או חמאה"): which one is not clear.
+_CHOICE = re.compile(r"(?<!\w)או(?!\w)")
 _GREASED = re.compile(r"(?<!\w)(?:את\s+)?[ובה]{0,2}(?P<object>תבנית|תבניות|מחבת|מגש|מגשים|שקעים|צלחת|כלי)(?!\w)")
 _SENTENCE = re.compile(r"[^.;!?\n]+[.;!?]?")
 _GENERIC_GROUP = {"מצרכים", "המצרכים", "רכיבים", "מרכיבים", "ingredients"}
@@ -73,6 +79,9 @@ def _use(sentence: str, step: str, match: re.Match, before: str) -> OilUse:
 
     if _OPTIONAL.search(sentence) or _MEASURED.search(before) or _INTO.search(sentence):
         return other()
+    near = " ".join(before.split()[-4:] + sentence[match.end() :].split()[:2])
+    if _CHOICE.search(near) or re.fullmatch(r"[ובה]{0,2}תרסיס", (before.split() or [""])[-1]):
+        return other()  # one of several fats, or a spray: not "oil" as such
     amount_match = _AMOUNT.search(before) if not match.group("prefix") else None  # "במעט שמן": the ב is the amount's
     amount = amount_match.group("amount") if amount_match else None
     oil = "שמן" + (match.group("kind") or "")

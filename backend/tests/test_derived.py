@@ -56,6 +56,8 @@ def test_greasing_the_pan_adds_oil_for_greasing_it_without_an_amount():
         ("משמנים תבנית במעט שמן זית.", "מעט שמן זית לשימון התבנית"),  # the oil the step names, never another
         ("מטגנים את הקציצות בקצת שמן משני הצדדים.", "קצת שמן לטיגון"),
         ("מערבבים את הבלילה ומטגנים בשמן חם.", "שמן לטיגון"),  # the batter is fried: the oil does not go into it
+        ("במחבת עם מעט שמן נטגן בצל עד הזהבה.", "מעט שמן לטיגון"),  # "we will fry", as many captions write it
+        ("נחמם מעט שמן זית בסיר.", "מעט שמן זית לטיגון"),
     ],
 )
 def test_the_line_uses_only_the_step_s_own_words(step, line):
@@ -70,6 +72,9 @@ def test_the_line_uses_only_the_step_s_own_words(step, line):
         "מערבבים שמן זית, מיץ לימון ומלח לרוטב.",  # a sauce
         "אפשר לשמן את התבנית בשמן.",  # optional
         "מוסיפים שמן ומערבבים היטב.",  # not frying or greasing
+        "מחממים מחבת עם מעט חמאה או תרסיס שמן.",  # butter or oil: which one is not said
+        "מטגנים בשמן או בחמאה עד הזהבה.",
+        "מחממים מחבת ומרססים תרסיס שמן.",  # a spray, not "oil"
     ],
 )
 def test_oil_that_is_part_of_the_recipe_or_not_clearly_used_keeps_the_normal_review_point(step):
