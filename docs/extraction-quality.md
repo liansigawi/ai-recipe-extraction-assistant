@@ -135,6 +135,44 @@ uv run python -m evals.run_extraction --extractor ollama --case 38-chicken-soup-
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
 
+### 2026-11-04: dessert types, one candidate with definitions from ingredients and preparation
+
+After the person reviewed the types of their desserts, the classifier's mistakes were of three kinds: cakes
+called tarts (12, 34, 35, 42), cakes called cookies (25, 52), and creams for other desserts given a type
+(22, 23; 9, chocolate bites, called a cup dessert). One bounded attempt to improve it for new imports,
+measured with the category request alone, local `qwen3:8b`, two runs each, alternating.
+
+- **Cases**, expected answers written before any run. **dev**: 29 of the person's desserts, expected the
+  type they approved (a correction made in review counts as right only when the model itself answers it),
+  and the two creams they left without a type; recipe 25 as completed from its page; 47 (a cream under a
+  cheesecake's title, no type decided) shown, not scored. **Held out**, run only for the final check: 14
+  invented recipes on the three confusions (a cheesecake on a crumb base, a lemon tart, an apple pie, a
+  layered cake, muffins, cupcakes, a mug cake; cut-out cookies, no-bake balls; a pastry cream and a ganache
+  for other desserts, a mousse, a trifle and a pudding served on their own).
+- **The candidate**, written before any run and not reworded after: the current request plus general
+  definitions that tell the kinds apart by ingredients and steps, naming no category (a baked or cooked
+  batter is a cake, in single portions too, and so is a cheesecake or layered cake on a crumb base; a tart
+  or pie is a pastry shell holding a filling; cookies and bites are many small pieces; a cream, frosting or
+  filling for another dessert gets no type; a cream served on its own is a dessert).
+
+| (run 1 / run 2) | Current request | Candidate |
+|---|---|---|
+| dev, 29 scored | 21 / 21 right, 8 / 8 wrong type | 17 / 19 right, 12 / 10 wrong type |
+| held out, 14 | 11 / 10 right, 3 / 4 wrong type | 11 / 11 right, 3 / 3 wrong type |
+| the 7 corrected in review (both runs) | 3 of 14 | 5 of 14 |
+
+- **Better with the candidate**: three cakes (25, 34, 42) and the cupcakes (held out).
+- **Worse**: its "batter" made cakes of the pancakes (28), the doughnuts (29) and the yeast ספינג׳ (43),
+  the cottage-cheese ice cream (19) became a cup dessert, and the alfajores cheesecake (35) a tart.
+- **Wrong with both**: the vanilla torte (12) is a tart; the muffins (held out) and the banana soufflé
+  muffins (52) are cookies; the chocolate peanut-butter cups (9) are a cup dessert; every cream made for
+  another dessert (22, 23, the pastry cream, the ganache) gets a type: in no run of either request did the
+  model leave a dessert without a type, so "no subcategory" is not an answer it gives.
+
+Not clearly better (worse on the person's own desserts), so **the current request stays**. Results, the
+cases and the scripts: `data/evals/extraction/20261104-dessert-types/` (git-ignored: it holds the person's
+recipes).
+
 ### 2026-11-03: dessert types and the healthy style, one candidate against the current request
 
 The person replaced "קינוחים רגילים / בריאים" with six dessert types and a separate healthy-style attribute
