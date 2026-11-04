@@ -492,7 +492,8 @@ The model still decides a few things, and the backend checks each:
   an ordinary line otherwise: edit or remove it. Oil a step measures ("חצי כוס שמן"), mentions as
   optional, offers as one choice ("מעט חמאה או תרסיס שמן") or as a spray, or puts into a batter, a dough
   or a sauce keeps the review point; "ללא שמן" adds nothing
-  and raises nothing; and frying with no oil named adds nothing. Missing information (an oven temperature, a baking time)
+  and raises nothing; and frying with no oil named adds nothing. Recipes saved before such an improvement
+  can get it too, from a reviewed batch: [docs/maintenance.md](docs/maintenance.md). Missing information (an oven temperature, a baking time)
   is checked by the backend from the text itself.
 
 Anything the backend cannot place is flagged, never guessed: a passage without a role, or one

@@ -1,0 +1,221 @@
+"""Bringing saved recipes up to the importer's current rules (scripts/maintain_recipes.py): the read-only audit
+and its report, applying an approved batch in place (only approved fields, never over newer work, never
+twice), and undoing it. A stand-in page and a stand-in classifier: nothing reaches a website or a model."""
+
+import hashlib
+import json
+import sqlite3
+
+import httpx2
+import pytest
+
+from app import schemas
+from app.extraction.output import Classification
+from app.importers import website
+from app.importers.website import WebReader
+from scripts.maintain_recipes import MaintenanceError, apply_batch, audit, undo_batch, write_batch
+from tests.test_export_public import attach, new_recipe
+from tests.test_media import JPEG
+from tests.test_website import FLATTENED, FLATTENED_PAGE, THREE_STEPS, ld
+
+PAGE = "https://www.example.co.il/recipes/green-noodles/"
+CAKES, COOKIES = 11, 12  # dessert types (a new database's ids)
+OLD_STEP = FLATTENED["recipeInstructions"]  # as the importer saved it before it checked the page's lists
+
+
+@pytest.fixture
+def notebook(client, data_dir):
+    """A flattened website import saved long ago (cooked, with a picture and its credit); a recipe that fries in
+    oil it does not list; two desserts without a type and one with; a recipe nothing applies to."""
+    old = schemas.RecipeInput(
+        title=FLATTENED["name"], ingredient_groups=[{"name": None, "ingredients": [{"text": t} for t in FLATTENED["recipeIngredient"]]}],
+        step_groups=[{"name": None, "steps": [OLD_STEP]}], sources=[{"kind": "website", "url": PAGE, "creators": [{"name": "צלמת האתר"}]}],
+        category_id=3, status="saved",
+    )
+    as_read = website.read_recipe(FLATTENED, PAGE, "json_ld")
+    as_read.step_groups = [(None, [OLD_STEP])]  # the import's own text, from before the cleaning
+    original = website.render(as_read)
+    with client.app.state.session_factory() as session:
+        from app import crud
+
+        noodles = crud.create_import(session, old, original_text=original, model="qwen3:8b", kind="website", url=PAGE,
+                                     retrieved_from="json_ld", source_details={"author": {"name": "צלמת האתר", "username": None}, "structured_data": FLATTENED})
+    attach(client, data_dir, noodles.id, kind="image", file=JPEG, origin="website", post_url=PAGE, is_cover=True)
+    client.put(f"/api/recipes/{noodles.id}/cooked", json={"cooked": True}, headers={"Origin": "http://localhost:5173"})
+    omelette = new_recipe(client, "חביתה", category_id=3, ingredient_groups=[{"name": None, "ingredients": [{"text": "3 ביצים", "quantity": "3"}]}],
+                          step_groups=[{"name": None, "steps": ["מחממים מעט שמן במחבת.", "יוצקים פנימה את הביצים."]}])
+    cake = new_recipe(client, "עוגת שוקולד", healthy=False)
+    cookies = new_recipe(client, "עוגיות", healthy=True)
+    typed = new_recipe(client, "עוגת גבינה", subcategory_id=CAKES)
+    salad = new_recipe(client, "סלט", category_id=7)
+    return {"noodles": noodles.id, "omelette": omelette["id"], "cake": cake["id"], "cookies": cookies["id"], "typed": typed["id"], "salad": salad["id"]}
+
+
+def reader() -> WebReader:
+    page = httpx2.Response(200, headers={"content-type": "text/html; charset=utf-8"},
+                           content=f"<html><head>{ld(FLATTENED)}</head><body>{FLATTENED_PAGE}</body></html>".encode())
+    return WebReader(transport=httpx2.MockTransport(lambda request: page), resolve=lambda host: ["93.184.216.34"], verify_peer=False)
+
+
+class Classifier:
+    """Cakes for "עוגת שוקולד"; for anything else, a different type each time (two runs disagree)."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self, draft: schemas.RecipeInput, categories) -> Classification:
+        self.calls += 1
+        sub = CAKES if draft.title == "עוגת שוקולד" else (CAKES if self.calls % 2 else COOKIES)
+        return Classification(fit="clear", category_id=1, subcategory_id=sub, candidate_category_ids=[])
+
+
+@pytest.fixture
+def batch(notebook, data_dir, tmp_path):
+    folder = tmp_path / "maintenance" / "batch-1"
+    write_batch(audit(data_dir / "recipes.db", reader(), Classifier(), out=lambda _: None), folder)
+    return folder
+
+
+def changes(folder) -> dict[str, dict]:
+    return {c["id"]: c for r in json.loads((folder / "batch.json").read_text(encoding="utf-8"))["recipes"] for c in r["changes"]}
+
+
+def table(data_dir, name: str) -> list[tuple]:
+    with sqlite3.connect(data_dir / "recipes.db") as db:
+        return db.execute(f"SELECT * FROM {name} ORDER BY id").fetchall()
+
+
+def recipe(client, recipe_id: int) -> dict:
+    return client.get(f"/api/recipes/{recipe_id}").json()
+
+
+def test_the_audit_proposes_only_what_the_sources_support_and_changes_nothing(notebook, data_dir, tmp_path):
+    before = hashlib.sha256((data_dir / "recipes.db").read_bytes()).hexdigest()
+    folder = tmp_path / "batch"
+    write_batch(audit(data_dir / "recipes.db", reader(), Classifier(), out=lambda _: None), folder)
+    assert hashlib.sha256((data_dir / "recipes.db").read_bytes()).hexdigest() == before  # opened read-only
+    found = changes(folder)
+    n, o, c = notebook["noodles"], notebook["omelette"], notebook["cake"]
+    assert sorted(found) == sorted([f"{n}-steps", f"{n}-ingredients", f"{o}-oil", f"{c}-type"])
+    assert found[f"{n}-steps"]["after"] == [{"name": None, "steps": THREE_STEPS}]
+    assert any("3 items" in line for line in found[f"{n}-steps"]["evidence"])  # the page's own list
+    assert "no sign of an edit" in found[f"{n}-steps"]["uncertainty"]  # the saved step is the import's own
+    assert [g["name"] for g in found[f"{n}-ingredients"]["after"]] == ["רוטב", "מוקפץ"]
+    assert found[f"{o}-oil"]["after"] == [{"text": "מעט שמן לטיגון", "quantity": "מעט", "derived_from": "מחממים מעט שמן במחבת."}]
+    assert found[f"{c}-type"]["after"] == {"id": CAKES, "name": "עוגות"}
+    data = json.loads((folder / "batch.json").read_text(encoding="utf-8"))
+    assert [u["id"] for u in data["unresolved"]] == [notebook["cookies"]]  # two answers that disagree: no type
+    assert {r["id"] for r in data["no_change"]} >= {notebook["typed"], notebook["salad"]}  # a type you set stays
+    assert json.loads((folder / "before.json").read_text(encoding="utf-8"))["label"] == "before this maintenance update"
+    assert "nothing applied yet" in (folder / "report.html").read_text(encoding="utf-8")
+
+
+def test_applying_changes_only_the_approved_fields_in_place_and_keeps_everything_else(client, notebook, batch, data_dir):
+    n = notebook["noodles"]
+    keep = {name: table(data_dir, name) for name in ("recipe_imports", "recipe_media", "recipe_sources", "media_files")}
+    then = recipe(client, n)
+    log = apply_batch(data_dir / "recipes.db", batch, exclude=[f"{n}-ingredients"], out=lambda _: None)
+    assert sorted(item["id"] for item in log["applied"]) == sorted([n, notebook["omelette"], notebook["cake"]])
+    now = recipe(client, n)
+    assert now["step_groups"] == [{"name": None, "steps": THREE_STEPS}]
+    assert now["ingredient_groups"] == then["ingredient_groups"]  # left out: unchanged
+    for field in ("id", "title", "status", "cooked", "category", "healthy", "sources", "media", "cover_id", "original", "created_at"):
+        assert now[field] == then[field], field
+    assert now["updated_at"] > then["updated_at"]
+    assert {name: table(data_dir, name) for name in keep} == keep  # originals, media, credits: not a row touched
+    assert recipe(client, notebook["cake"])["subcategory"] == {"id": CAKES, "name": "עוגות"}
+    assert recipe(client, notebook["cake"])["healthy"] is False  # the healthy style stays yours
+    assert list(data_dir.glob("recipes.backup-*-before-maintenance-batch-1.db"))
+
+
+def test_the_backup_is_verified_and_holds_the_notebook_as_it_was(client, notebook, batch, data_dir):
+    before = table(data_dir, "recipes")
+    log = apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    with sqlite3.connect(log["backup"]) as copy:
+        assert copy.execute("SELECT * FROM recipes ORDER BY id").fetchall() == before
+
+
+def test_a_recipe_changed_after_the_report_is_skipped_and_named_never_overwritten(client, notebook, batch, data_dir):
+    o = notebook["omelette"]
+    mine = {**recipe(client, o), "notes": ["אני מוסיפה עירית."]}
+    body = {k: mine[k] for k in ("title", "servings", "ingredient_groups", "step_groups", "notes", "sources", "status", "issues")}
+    client.put(f"/api/recipes/{o}", json={**body, "category_id": 3}, headers={"Origin": "http://localhost:5173"})
+    log = apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    assert [item["id"] for item in log["skipped"]] == [o] and "changed after the report" in log["skipped"][0]["why"]
+    assert recipe(client, o)["notes"] == ["אני מוסיפה עירית."] and len(recipe(client, o)["ingredient_groups"][0]["ingredients"]) == 1
+
+
+def test_applying_the_same_batch_again_adds_nothing_twice(client, notebook, batch, data_dir):
+    apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    first = table(data_dir, "recipes")
+    again = apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    assert again["applied"] == [] and len(again["already_applied"]) == 3
+    assert table(data_dir, "recipes") == first
+    lines = [i["text"] for g in recipe(client, notebook["omelette"])["ingredient_groups"] for i in g["ingredients"]]
+    assert lines.count("מעט שמן לטיגון") == 1
+
+
+def test_what_was_left_out_can_be_applied_later_on_top(client, notebook, batch, data_dir):
+    n = notebook["noodles"]
+    apply_batch(data_dir / "recipes.db", batch, only=[f"{n}-steps"], out=lambda _: None)
+    later = apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    assert n in [item["id"] for item in later["applied"]]
+    now = recipe(client, n)
+    assert now["step_groups"] == [{"name": None, "steps": THREE_STEPS}] and [g["name"] for g in now["ingredient_groups"]] == ["רוטב", "מוקפץ"]
+
+
+def test_undo_puts_back_what_the_batch_wrote_and_leaves_your_later_edits(client, notebook, batch, data_dir):
+    before = {key: recipe(client, rid) for key, rid in notebook.items()}
+    apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    c = notebook["cake"]
+    edited = recipe(client, c)
+    body = {k: edited[k] for k in ("title", "servings", "ingredient_groups", "step_groups", "notes", "sources", "status", "issues", "healthy")}
+    client.put(f"/api/recipes/{c}", json={**body, "title": "עוגת שוקולד שלי", "category_id": 1, "subcategory_id": COOKIES},
+               headers={"Origin": "http://localhost:5173"})
+    result = undo_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    assert sorted(result["restored"]) == sorted([notebook["noodles"], notebook["omelette"]])
+    assert [item["id"] for item in result["skipped"]] == [c]  # edited after the batch: yours, left as it is
+    for key in ("noodles", "omelette"):
+        assert recipe(client, notebook[key]) == before[key]  # updated_at too
+    assert recipe(client, c)["title"] == "עוגת שוקולד שלי"
+    assert undo_batch(data_dir / "recipes.db", batch, out=lambda _: None)["restored"] == []  # twice: nothing more
+
+
+def test_an_unknown_change_is_refused_before_anything_is_backed_up_or_changed(notebook, batch, data_dir):
+    before = table(data_dir, "recipes")
+    with pytest.raises(MaintenanceError, match="no change 999-steps"):
+        apply_batch(data_dir / "recipes.db", batch, exclude=["999-steps"], out=lambda _: None)
+    assert table(data_dir, "recipes") == before and not list(data_dir.glob("recipes.backup-*maintenance*"))
+
+
+def test_without_reading_the_page_only_the_saved_data_s_own_cleaning_is_proposed(notebook, data_dir, tmp_path):
+    data = audit(data_dir / "recipes.db", None, None, out=lambda _: None)
+    n = notebook["noodles"]
+    [entry] = [r for r in data["recipes"] if r["id"] == n]
+    [steps] = [c for c in entry["changes"] if c["kind"] == "steps"]
+    [[step]] = [g["steps"] for g in steps["after"]]
+    assert "caption" not in step and "בשיתוף" not in step and step.startswith("אופן הכנה")  # cleaned, never split
+    assert any("not read" in line for line in steps["evidence"])
+    assert all(c["kind"] != "type" for r in data["recipes"] for c in r["changes"])  # no classifier: no types
+
+
+def test_a_type_alone_leaves_the_rest_of_the_record_exactly_as_stored(client, notebook, data_dir, tmp_path):
+    cake = notebook["cake"]
+    stored = '[{"name": null, "ingredients": [{"text": "200 גרם קמח", "quantity": "200 גרם"}]}]'  # saved before "derived_from"
+    with sqlite3.connect(data_dir / "recipes.db") as db:
+        db.execute("UPDATE recipes SET ingredient_groups = ? WHERE id = ?", (stored, cake))
+    folder = tmp_path / "batch"
+    write_batch(audit(data_dir / "recipes.db", reader(), Classifier(), out=lambda _: None), folder)
+    apply_batch(data_dir / "recipes.db", folder, only=[f"{cake}-type"], out=lambda _: None)
+    with sqlite3.connect(data_dir / "recipes.db") as db:
+        assert db.execute("SELECT ingredient_groups, subcategory_id FROM recipes WHERE id = ?", (cake,)).fetchone() == (stored, CAKES)
+
+
+def test_undo_uses_only_what_was_applied_to_that_notebook(client, notebook, batch, data_dir, tmp_path):
+    copy = tmp_path / "copy.db"
+    with sqlite3.connect(data_dir / "recipes.db") as live, sqlite3.connect(copy) as target:
+        live.backup(target)
+    apply_batch(copy, batch, out=lambda _: None)  # a test copy, with the same batch
+    with pytest.raises(MaintenanceError, match="was applied to"):
+        undo_batch(data_dir / "recipes.db", batch, out=lambda _: None)  # the notebook itself was never changed
+    assert undo_batch(copy, batch, out=lambda _: None)["restored"]
