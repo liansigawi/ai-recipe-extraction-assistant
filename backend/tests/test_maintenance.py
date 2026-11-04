@@ -230,6 +230,15 @@ def test_undo_uses_only_what_was_applied_to_that_notebook(client, notebook, batc
     assert undo_batch(copy, batch, out=lambda _: None)["restored"]
 
 
+def test_a_second_apply_in_the_same_second_keeps_the_first_one_s_log_for_undo(client, notebook, batch, data_dir):
+    before = recipe(client, notebook["omelette"])
+    apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)  # nothing to add: a log of its own, beside the first
+    assert len(list(batch.glob("applied-*.json"))) == 2
+    undo_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    assert recipe(client, notebook["omelette"]) == before
+
+
 def test_a_batch_is_found_by_its_path_from_the_project_root_or_by_its_id(batch, data_dir, monkeypatch):
     monkeypatch.chdir(REPO_ROOT / "backend")  # where maintain-recipes.cmd runs the script
     assert batch_folder(batch, data_dir) == batch

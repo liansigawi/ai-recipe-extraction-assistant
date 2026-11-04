@@ -524,7 +524,7 @@ def apply_batch(database_path: Path, folder: Path, exclude: list[str] | None = N
             session.commit()
     finally:
         engine.dispose()
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")  # to the microsecond: two runs never share a log
     (folder / f"applied-{stamp}.json").write_text(json.dumps(log, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     if str(database_path.resolve()) == str(Path(batch["notebook"]).resolve()):
         write_report(folder)  # the report now says which changes are applied
@@ -593,7 +593,7 @@ def undo_batch(database_path: Path, folder: Path, out: Callable[[str], None] = p
             session.commit()
     finally:
         engine.dispose()
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
     (folder / f"undone-{stamp}.json").write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     if mine == str(Path(read_batch(folder)["notebook"]).resolve()):
         write_report(folder)
