@@ -4,6 +4,7 @@
     .\\maintain-recipes.cmd audit                                   read-only: proposals, a report, snapshots
     .\\maintain-recipes.cmd apply <batch folder> [--exclude ID ...] [--only ID ...] --yes
     .\\maintain-recipes.cmd undo <batch folder> --yes
+    .\\maintain-recipes.cmd propose-from-page <recipe id> <page address> [--reviewed FILE]   read-only
 
 The audit opens the notebook read-only and proposes, per recipe, separate changes with their own ids:
 - "<id>-steps", "<id>-ingredients": for a recipe imported from a page's recipe data (JSON-LD or microdata),
@@ -13,12 +14,16 @@ The audit opens the notebook read-only and proposes, per recipe, separate change
 - "<id>-oil": the line that the oil rule (app/extraction/derived.py) adds to a new import with these steps.
 - "<id>-type": for a dessert without a type, the type the local classifier chooses in two requests that agree;
   otherwise none (unresolved). The main category and the healthy style are never changed.
+propose-from-page makes a batch for one recipe from a page that holds its recipe: "<id>-ingredients", "-steps"
+and "-notes" as the website importer reads them from the page (on a temporary copy of the notebook), or a reviewed
+version of that draft holding only the page's own lines; "<id>-source" adds the page after the sources it has.
 
 Applying a batch: a verified backup of the notebook first; then each recipe is changed in place, only in the
 fields of its approved changes, and only if its content is still what the report saw, or that plus changes of
 this batch already applied (else it is skipped and named: your newer work wins). A change already applied is
-not applied again. Its id, status, media and cover, credits and sources, cooked mark and imported original are
-never touched. Undo puts back what the batch wrote, only where it still holds what the batch wrote.
+not applied again. Its id, status, media and cover, credits, cooked mark and imported original are never touched;
+a source is only ever added, after the ones it has. Undo puts back what the batch wrote, only where it still
+holds what the batch wrote.
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ import itertools
 import json
 import sqlite3
 import sys
+import tempfile
 from collections.abc import Callable
 from contextlib import closing
 from datetime import UTC, datetime
@@ -37,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from bs4 import BeautifulSoup
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
@@ -51,7 +58,7 @@ from app.importers import website
 from app.migrate import backup_database
 from scripts.export_public import open_read_only
 
-KINDS = ["steps", "ingredients", "oil", "type"]  # the order they are applied in
+KINDS = ["steps", "ingredients", "notes", "source", "oil", "type"]  # the order they are applied in
 CONTENT = ["title", "servings", "ingredient_groups", "step_groups", "notes", "sources", "category_id", "subcategory_id", "healthy", "status", "issues"]
 TYPE_RUNS = 2  # the classifier's requests per dessert; a type is proposed only when they all agree
 Classifier = Callable[[schemas.RecipeInput, list[schemas.Category]], Classification]
@@ -86,6 +93,10 @@ def apply_changes(content: schemas.RecipeInput, changes: list[dict]) -> schemas.
             content = content.model_copy(update={"step_groups": [schemas.StepGroup.model_validate(g) for g in change["after"]]})
         elif change["kind"] == "ingredients":
             content = content.model_copy(update={"ingredient_groups": [schemas.IngredientGroup.model_validate(g) for g in change["after"]]})
+        elif change["kind"] == "notes":
+            content = content.model_copy(update={"notes": list(change["after"])})
+        elif change["kind"] == "source":
+            content = content.model_copy(update={"sources": [schemas.Source.model_validate(s) for s in change["after"]]})
         elif change["kind"] == "oil":
             content = add_oil_from_steps(content, only_in_step_point)  # the rule itself: never twice the same line
         elif change["kind"] == "type":
@@ -349,6 +360,141 @@ def propose_types(database_path: Path, reviewed: dict, out: Callable[[str], None
         engine.dispose()
 
 
+# --- Completing a recipe from a page that holds it --------------------------------------------------------------
+
+
+def propose_from_page(database_path: Path, recipe_id: int, url: str, reader: website.WebReader, new_extractor: Callable[[], Any],
+                      reviewed: dict | None = None, out: Callable[[str], None] = print) -> dict:
+    """A batch that completes a saved recipe from a page that holds its recipe (read-only): the ingredients, steps
+    and notes the website importer reads from the page, and the page as one more source. The import runs as a new
+    import would, on a temporary copy of the notebook, so the notebook itself is only read; its draft is shown
+    beside each proposal. A reviewed version ("reviewed") may correct the draft, saying each difference, but holds
+    only the page's own lines: a line that is not in the text read from the page is refused. The recipe's title,
+    category and type, media, cooked mark, review points and imported original are not part of the batch."""
+    engine = open_read_only(database_path)
+    try:
+        with Session(engine) as session:
+            try:
+                recipe = crud.get_recipe(session, recipe_id)
+            except ApiError:
+                raise MaintenanceError(f"There is no recipe {recipe_id}.") from None
+    finally:
+        engine.dispose()
+    if recipe.is_sample:
+        raise MaintenanceError(f"{recipe_id} is an invented sample.")
+    out(f"Reading {url} with the website importer, on a temporary copy of the notebook…")
+    draft, record = _import_on_copy(database_path, url, reader, new_extractor)
+    text = record.original_text
+    current = content_of(recipe)
+    proposed = content_of(draft)
+    if reviewed is not None:
+        if reviewed.get("recipe_id") != recipe_id:
+            raise MaintenanceError(f"The reviewed version is for recipe {reviewed.get('recipe_id')}, not {recipe_id}.")
+        try:  # the same checks as a save (a quantity is quoted from its own line, for one)
+            proposed = schemas.RecipeInput.model_validate({**proposed.model_dump(), **{k: reviewed[k] for k in ("ingredient_groups", "step_groups", "notes")}})
+        except ValidationError as error:
+            raise MaintenanceError(f"The reviewed version is not valid: {error}") from None
+        missing = _not_in_page(proposed, text, reviewed.get("labeled", {}))
+        if missing:
+            raise MaintenanceError("The reviewed version has lines that are not in the text read from the page: " + "; ".join(missing))
+    in_page = _not_in_page(content_of(draft), text)
+    review = (reviewed or {}).get("differences", {})
+    labeled = {line: words for line, words in (reviewed or {}).get("labeled", {}).items() if line in proposed.notes}
+    basis = "the website importer's draft, corrected in review" if reviewed else "the website importer's draft"
+    read_as = f"Read from the page by the website importer ({record.retrieved_from}, {len(text):,} characters" + (f"; the model {record.model} read it" if record.model else "") + ")."
+    caution = f" The draft has lines that are not word for word in the text read: {'; '.join(in_page)}." if in_page else " Every line of the draft is in the text read from the page."
+    changes = []
+    for kind, field, now, after, drafted in (
+        ("ingredients", "ingredient_groups", current.ingredient_groups, proposed.ingredient_groups, draft.ingredient_groups),
+        ("steps", "step_groups", current.step_groups, proposed.step_groups, draft.step_groups),
+        ("notes", "notes", current.notes, proposed.notes, draft.notes),
+    ):
+        dump = lambda items: [i.model_dump() if hasattr(i, "model_dump") else i for i in items]  # noqa: E731
+        if dump(after) == dump(now):
+            continue
+        changes.append({
+            "id": f"{recipe_id}-{kind}", "recipe_id": recipe_id, "kind": kind, "group": "content", "field": field,
+            "before": dump(now), "after": dump(after), "draft": dump(drafted), "basis": basis,
+            "evidence": [read_as + caution] + [f"Corrected in review: {d}" for d in review.get(kind, [])]
+            + [f"Labeled in review (only \"{words}\" is the page's): \"{line}\"" for line, words in labeled.items() if kind == "notes"],
+            "why": f"The page holds the recipe; the saved recipe has {_count(kind, now)} now.",
+            "uncertainty": "Replaces what the recipe has now in this field." if now else "",
+        })
+    page_source = draft.sources[0]
+    if all(source.url != page_source.url for source in current.sources):
+        details = record.source_details or {}
+        credit = "the page's author" if details.get("author") and details.get("author", {}).get("name") != details.get("site_name") else "the site's name (the page names no author)"
+        changes.append({
+            "id": f"{recipe_id}-source", "recipe_id": recipe_id, "kind": "source", "group": "content", "field": "sources (one added)",
+            "before": [s.model_dump() for s in current.sources], "after": [s.model_dump() for s in [*current.sources, page_source]],
+            "basis": basis, "evidence": [f"The page's address, with the credit a website import gives it: {credit}."],
+            "why": "The recipe's content comes from this page. The sources it has stay first, as they are, and so does its imported original.",
+            "uncertainty": "",
+        })
+    out(f"{len(changes)} changes proposed for {recipe_id}.")
+    batch: dict[str, Any] = {
+        "label": "proposed changes of this maintenance update", "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "notebook": str(database_path), "basis": (reviewed or {}).get("basis") or f"Recipe {recipe_id} completed from {url}: {basis}.",
+        "page": {"url": page_source.url, "retrieved_from": record.retrieved_from, "model": record.model, "text": text,
+                 "points": [issue.model_dump() for issue in draft.issues], "points_review": (reviewed or {}).get("points", "")},
+        "recipes": [], "no_change": [], "unresolved": [], "skipped_samples": [],
+    }
+    if changes:
+        batch["recipes"].append({"id": recipe_id, "title": recipe.title, "status": recipe.status, "updated_at": recipe.updated_at.isoformat(),
+                                 "fingerprint": fingerprint(current), "before": current.model_dump(mode="json"), "changes": changes})
+    else:
+        batch["no_change"].append({"id": recipe_id, "title": recipe.title})
+    result = apply_changes(current, changes)
+    batch["snapshots"] = {
+        "before": {"label": "before this maintenance update", "taken_at": batch["created_at"], "recipes": [recipe.model_dump(mode="json")]},
+        "after": {"label": "after this maintenance update, if every proposal is approved (not applied)",
+                  "recipes": [{**recipe.model_dump(mode="json"), **result.model_dump(mode="json", include={"ingredient_groups", "step_groups", "notes", "sources"})}]},
+    }
+    return batch
+
+
+def _import_on_copy(database_path: Path, url: str, reader: website.WebReader, new_extractor: Callable[[], Any]) -> tuple[schemas.Recipe, models.RecipeImport]:
+    """The draft a link import of the page makes today, and its import record: the import's own code, run on a
+    temporary copy of the notebook (its categories), which is then deleted with the draft and its picture."""
+    from app.api.imports import _import_website as import_website_draft  # the link import itself, without its endpoint
+
+    with tempfile.TemporaryDirectory() as temp:
+        copy = Path(temp) / "recipes.db"
+        with closing(sqlite3.connect(f"{database_path.resolve().as_uri()}?mode=ro", uri=True)) as live, closing(sqlite3.connect(copy)) as target:
+            live.backup(target)
+        engine = make_engine(copy)
+        try:
+            with Session(engine) as session:
+                try:
+                    draft = import_website_draft(schemas.LinkImport(url=url, allow_duplicate=True), session, new_extractor, reader, Path(temp) / "media")
+                except ApiError as error:
+                    raise MaintenanceError(f"The page gave no complete recipe ({error.code}): {error.message}") from None
+                record = session.query(models.RecipeImport).filter_by(recipe_id=draft.id).one()
+                session.expunge(record)
+                return draft, record
+        finally:
+            engine.dispose()  # before the folder is deleted (Windows keeps open files)
+
+
+def _not_in_page(content: schemas.RecipeInput, text: str, labeled: dict[str, str] | None = None) -> list[str]:
+    """The content's lines (and group names) that are not word for word in the text read from the page. A note
+    labeled in review ({note: the page's words in it}, such as a time the page shows only beside an icon) passes
+    when those words are in it and in the page."""
+    page = " ".join(text.split())
+    lines = [g.name for g in [*content.ingredient_groups, *content.step_groups] if g.name]
+    lines += [i.text for g in content.ingredient_groups for i in g.ingredients] + [s for g in content.step_groups for s in g.steps] + list(content.notes)
+    labeled = {line: words for line, words in (labeled or {}).items() if line in content.notes}
+    return [line for line in lines if " ".join((labeled[line] if line in labeled and labeled[line] in line else line).split()) not in page]
+
+
+def _count(kind: str, value: list) -> str:
+    if not value:
+        return {"ingredients": "no ingredient lines", "steps": "no steps", "notes": "no notes"}[kind]
+    if kind == "notes":
+        return f"{len(value)} notes"
+    return f"{sum(len(g.ingredients if kind == 'ingredients' else g.steps) for g in value)} {'ingredient lines' if kind == 'ingredients' else 'steps'}"
+
+
 def _ref(categories: list[schemas.Category], subcategory_id: int | None) -> dict | None:
     for category in categories:
         for sub in category.subcategories:
@@ -408,6 +554,12 @@ def _value(kind: str, value: Any) -> str:
         return "<p class='none'>(none)</p>"
     if kind == "type":
         return f"<p>{html.escape(value['name'])}</p>"
+    if kind == "notes":
+        return "<ul>" + "".join(f"<li>{html.escape(note)}</li>" for note in value) + "</ul>" if value else "<p class='none'>(none)</p>"
+    if kind == "source":
+        return "<ul>" + "".join(
+            f"<li>{html.escape(s['kind'])}: <bdi>{html.escape(s['url'] or '')}</bdi>, {html.escape(', '.join(c['name'] for c in s['creators']) or '(no credit)')}</li>" for s in value
+        ) + "</ul>"
     parts = []
     for group in value:
         if "derived_from" in group:  # an added line
@@ -417,7 +569,19 @@ def _value(kind: str, value: Any) -> str:
         title = f"<h5>{html.escape(group['name'])}</h5>" if group.get("name") else ""
         tag = "ol" if "steps" in group else "ul"
         parts.append(title + f"<{tag}>" + "".join(f"<li>{html.escape(item)}</li>" for item in items) + f"</{tag}>")
-    return "".join(parts)
+    return "".join(parts) or "<p class='none'>(none)</p>"
+
+
+def _page_section(page: dict | None) -> str:
+    """For a batch made from a page: what was read, and the review points its import raised (never written)."""
+    if not page:
+        return ""
+    points = "".join(f"<li dir='auto'>{html.escape(p['message'])}</li>" for p in page["points"]) or "<li>(none)</li>"
+    review = f"<p>{html.escape(page['points_review'])}</p>" if page.get("points_review") else ""
+    return (f"<h2>The page</h2><p><bdi>{html.escape(page['url'])}</bdi>: read by the website importer ({html.escape(page['retrieved_from'] or '')}"
+            + (f"; the model {html.escape(page['model'])} read its text" if page.get("model") else "") + "). The middle column of each change is the draft that import made.</p>"
+            f"<h4>Review points the import raised (shown here, not added to the recipe)</h4><ul class='evidence'>{points}</ul>{review}"
+            f"<details><summary>The text read from the page ({len(page['text']):,} characters)</summary><pre class='text'>{html.escape(page['text'])}</pre></details>")
 
 
 def report_html(batch: dict, folder: Path) -> str:
@@ -439,10 +603,12 @@ def report_html(batch: dict, folder: Path) -> str:
                    else f"<span class='proposed'>replaced by the batch {batch['superseded']['by']}</span>" if change["id"] in replaced
                    else "<span class='proposed'>proposal</span>")
                 + "</h3>"
-                f"<div class='pair'><div><h4>Now</h4>{_value(change['kind'], change['before'])}</div>"
-                f"<div><h4>Proposed</h4>{_value(change['kind'], change['after'])}</div></div>"
+                f"<div class='pair{' three' if 'draft' in change else ''}'><div><h4>Now</h4>{_value(change['kind'], change['before'])}</div>"
+                + (f"<div><h4>The import's draft</h4>{_value(change['kind'], change['draft'])}</div>" if "draft" in change else "")
+                + f"<div><h4>Proposed{' (' + html.escape(change['basis']) + ')' if 'basis' in change else ''}</h4>{_value(change['kind'], change['after'])}</div></div>"
                 "<h4>Support</h4><ul class='evidence'>" + "".join(f"<li dir='auto'>{html.escape(e)}</li>" for e in change["evidence"]) + "</ul>"
-                f"<p><b>Why:</b> {html.escape(change['why'])}</p><p class='uncertain'><b>Uncertainty:</b> {html.escape(change['uncertainty'])}</p></article>"
+                f"<p><b>Why:</b> {html.escape(change['why'])}</p>"
+                + (f"<p class='uncertain'><b>Uncertainty:</b> {html.escape(change['uncertainty'])}</p>" if change["uncertainty"] else "") + "</article>"
             )
         rows.append("</section>")
     unresolved = "".join(
@@ -456,9 +622,10 @@ def report_html(batch: dict, folder: Path) -> str:
 body{{font-family:system-ui,sans-serif;margin:0 auto;max-width:1100px;padding:16px;color:#222;background:#fafaf7;line-height:1.5}}
 section{{background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px 16px;margin:16px 0}}
 article{{border-top:1px solid #eee;padding-top:8px;margin-top:8px}} article.type{{background:#f4faf6}}
-.pair{{display:grid;grid-template-columns:1fr 1fr;gap:16px}} .pair>div{{direction:rtl;background:#f7f7f7;border-radius:8px;padding:4px 12px}}
-@media (max-width:700px){{.pair{{grid-template-columns:1fr}}}}
-.evidence li{{direction:rtl;text-align:right;unicode-bidi:plaintext}} .uncertain{{color:#7a4b00}} .none{{color:#888}}
+.pair{{display:grid;grid-template-columns:1fr 1fr;gap:16px}} .pair.three{{grid-template-columns:1fr 1fr 1fr}} .pair>div{{direction:rtl;background:#f7f7f7;border-radius:8px;padding:4px 12px}}
+@media (max-width:700px){{.pair,.pair.three{{grid-template-columns:1fr}}}} pre.text{{direction:rtl;white-space:pre-wrap;unicode-bidi:plaintext}}
+.evidence{{padding:0 20px}} .evidence li{{direction:rtl;text-align:right;unicode-bidi:plaintext}} .uncertain{{color:#7a4b00}} .none{{color:#888}}
+bdi,li,p{{overflow-wrap:anywhere}}
 .tag{{font-size:.75rem;border:1px dashed #aaa;border-radius:99px;padding:0 6px;color:#666}} code{{background:#eee;padding:0 4px;border-radius:4px}}
 .status{{font-size:.8rem;color:#666}} pre{{background:#eee;padding:8px;overflow-x:auto;direction:ltr}}
 .applied{{font-size:.8rem;background:#1d6b50;color:#fff;border-radius:99px;padding:1px 8px}} .proposed{{font-size:.8rem;border:1px solid #aaa;border-radius:99px;padding:0 8px;color:#555}}
@@ -476,6 +643,7 @@ proposal is approved). Neither is a model draft from an import.</p>
 Content repairs: <code>{content_ids}</code>. Dessert types: <code>{type_ids}</code>.</p>
 <p>Undo, afterwards: <pre>.\\maintain-recipes.cmd undo data\\maintenance\\{folder.name} --yes</pre></p>
 <h2>Not resolved (no change proposed)</h2><ul>{unresolved or '<li>(none)</li>'}</ul>
+{_page_section(batch.get('page'))}
 {''.join(rows)}
 </body></html>
 """
@@ -557,6 +725,16 @@ def _apply_one(session: Session, entry: dict, changes: list[dict]) -> dict:
     if target.subcategory_id != row.subcategory_id:
         written["subcategory_id"] = row.subcategory_id
         row.subcategory_id = target.subcategory_id
+    if list(target.notes) != row.notes:
+        written["notes"] = row.notes
+        row.notes = list(target.notes)
+    if target.sources != current.sources:
+        # Only added at the end: the sources the recipe has keep their own rows, exactly as stored.
+        written["sources"] = [s.model_dump() for s in current.sources]
+        row.sources.extend(
+            models.RecipeSource(position=index, kind=s.kind, url=s.url, creators=[c.model_dump() for c in s.creators])
+            for index, s in enumerate(target.sources) if index >= len(current.sources)
+        )
     row.updated_at = utc_now()
     session.flush()
     return {**done, "result": "applied", "previous": written, "fingerprint": fingerprint(target)}
@@ -586,7 +764,10 @@ def undo_batch(database_path: Path, folder: Path, out: Callable[[str], None] = p
                         continue
                     row = session.get(models.Recipe, item["id"])
                     for field, value in item["previous"].items():
-                        setattr(row, field, datetime.fromisoformat(value) if field == "updated_at" else value)
+                        if field == "sources":  # the batch only added sources: their rows go, the others stay
+                            row.sources = row.sources[:len(value)]
+                        else:
+                            setattr(row, field, datetime.fromisoformat(value) if field == "updated_at" else value)
                     session.flush()
                     result["restored"].append(item["id"])
                     out(f"  {item['id']}: put back")
@@ -622,6 +803,10 @@ def main(argv: list[str] | None = None) -> int:
     audit_cmd.add_argument("--no-types", action="store_true", help="do not ask the classifier for dessert types")
     review = sub.add_parser("propose-types", help="read-only: a batch of dessert types from a reviewed list (JSON)")
     review.add_argument("reviewed", type=Path, help='{"basis": "...", "assignments": [{"id": 12, "type": "עוגות", "basis": "...", "note": "..."}]}')
+    page = sub.add_parser("propose-from-page", help="read-only: complete a saved recipe from a page that holds it")
+    page.add_argument("recipe", type=int, help="the recipe's id")
+    page.add_argument("url", help="the page's address")
+    page.add_argument("--reviewed", type=Path, help="a reviewed version of the import's draft (JSON), in place of the draft")
     for name in ("apply", "undo"):
         command = sub.add_parser(name)
         command.add_argument("batch", type=Path, help="the batch folder (data/maintenance/<id>)")
@@ -657,6 +842,17 @@ def main(argv: list[str] | None = None) -> int:
             folder = database.parent / "maintenance" / (datetime.now(UTC).strftime("%Y%m%d-%H%M%S") + "-types")
             reviewed = args.reviewed if args.reviewed.exists() else REPO_ROOT / args.reviewed  # the .cmd runs in backend/
             write_batch(propose_types(database, json.loads(reviewed.read_text(encoding="utf-8"))), folder)
+            print(f"Report: {folder / 'report.html'}")
+            return 0
+        if args.command == "propose-from-page":
+            from app.extraction.choose import make_extractor
+
+            folder = database.parent / "maintenance" / (datetime.now(UTC).strftime("%Y%m%d-%H%M%S") + f"-page-{args.recipe}")
+            reviewed = None
+            if args.reviewed:
+                path = args.reviewed if args.reviewed.exists() else REPO_ROOT / args.reviewed  # the .cmd runs in backend/
+                reviewed = json.loads(path.read_text(encoding="utf-8"))
+            write_batch(propose_from_page(database, args.recipe, args.url, website.WebReader(), lambda: make_extractor(settings), reviewed), folder)
             print(f"Report: {folder / 'report.html'}")
             return 0
         if not args.yes:

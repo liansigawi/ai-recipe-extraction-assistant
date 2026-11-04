@@ -10,6 +10,7 @@ import httpx2
 import pytest
 
 from app import schemas
+from app.errors import ApiError
 from app.extraction.output import Classification
 from app.importers import website
 from app.importers.website import WebReader
@@ -19,13 +20,14 @@ from scripts.maintain_recipes import (
     apply_batch,
     audit,
     batch_folder,
+    propose_from_page,
     propose_types,
     undo_batch,
     write_batch,
 )
 from tests.test_export_public import attach, new_recipe
 from tests.test_media import JPEG
-from tests.test_website import FLATTENED, FLATTENED_PAGE, THREE_STEPS, ld
+from tests.test_website import FLATTENED, FLATTENED_PAGE, HEBREW_GRAPH, THREE_STEPS, ld
 
 PAGE = "https://www.example.co.il/recipes/green-noodles/"
 CAKES, COOKIES = 11, 12  # dessert types (a new database's ids)
@@ -287,3 +289,108 @@ def test_proposals_a_reviewed_batch_replaced_are_never_applied_from_the_old_one(
         apply_batch(data_dir / "recipes.db", batch, only=[cake], out=lambda _: None)
     log = apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)
     assert recipe(client, notebook["cake"])["subcategory"] is None and all(cake not in item["changes"] for item in log["applied"])
+
+
+# --- Completing a saved recipe from a page that holds it ----------------------------------------------------------
+
+POST_URL = "https://www.instagram.com/p/ABC123/"
+
+
+@pytest.fixture
+def from_post(client, data_dir):
+    """A saved post import whose caption had no recipe (it sends you to the creator's site): cooked, with a video."""
+    with client.app.state.session_factory() as session:
+        from app import crud
+
+        post = crud.create_import(session, schemas.RecipeInput(
+            title="עוגת תפוזים ושקדים", sources=[{"kind": "instagram", "url": POST_URL, "creators": [{"name": "רותי כהן", "username": "ruti"}]}],
+            category_id=1, subcategory_id=CAKES, healthy=False, status="saved"), original_text="עוגת תפוזים! המתכון המלא באתר", model="qwen3:8b",
+            kind="instagram", url=POST_URL)
+    attach(client, data_dir, post.id, kind="image", file=JPEG, origin="instagram", post_url=POST_URL, is_cover=True)
+    client.put(f"/api/recipes/{post.id}/cooked", json={"cooked": True}, headers={"Origin": "http://localhost:5173"})
+    return post.id
+
+
+def page_reader(body: str, head: str) -> WebReader:
+    def answer(request):
+        if request.url.path.endswith(".jpg"):
+            return httpx2.Response(404)
+        return httpx2.Response(200, headers={"content-type": "text/html; charset=utf-8"}, content=f"<html><head>{head}</head><body>{body}</body></html>".encode())
+
+    return WebReader(transport=httpx2.MockTransport(answer), resolve=lambda host: ["93.184.216.34"], verify_peer=False)
+
+
+def completion(data_dir, recipe_id, **extra):
+    from tests.test_api_website import Classifier as PageClassifier
+
+    reader = page_reader("<h1>עוגת תפוזים ושקדים</h1>", ld(HEBREW_GRAPH) + '<meta property="og:site_name" content="המטבח של רותי">')
+    return propose_from_page(data_dir / "recipes.db", recipe_id, PAGE, reader, PageClassifier, out=lambda _: None, **extra)
+
+
+def test_a_recipe_is_completed_from_its_page_in_place_with_the_page_as_one_more_source(client, from_post, data_dir, tmp_path):
+    kept = {name: table(data_dir, name) for name in ("recipes", "recipe_sources", "recipe_imports", "recipe_media", "media_files")}
+    folder = tmp_path / "maintenance" / "page"
+    write_batch(completion(data_dir, from_post), folder)
+    assert {name: table(data_dir, name) for name in kept} == kept  # read-only: no draft, nothing written
+    found = changes(folder)
+    assert sorted(found) == sorted(f"{from_post}-{kind}" for kind in ("ingredients", "steps", "notes", "source"))
+    assert found[f"{from_post}-steps"]["after"] == found[f"{from_post}-steps"]["draft"]  # unreviewed: the import's own draft
+    assert "The import's draft" in (folder / "report.html").read_text(encoding="utf-8")
+    before = recipe(client, from_post)
+
+    log = apply_batch(data_dir / "recipes.db", folder, out=lambda _: None)
+    assert [item["id"] for item in log["applied"]] == [from_post]
+    after = recipe(client, from_post)
+    assert [i["text"] for g in after["ingredient_groups"] for i in g["ingredients"]] == ["200 גרם קמח", "2 ביצים L", "מיץ מ-3 תפוזים", "קורט מלח"]
+    assert [g["name"] for g in after["step_groups"]] == ["לבצק", "אפייה"]
+    assert [s["kind"] for s in after["sources"]] == ["instagram", "website"] and after["sources"][1]["creators"][0]["name"] == "רותי כהן"
+    for key in ("title", "category", "subcategory", "healthy", "status", "issues", "cooked", "original", "media", "cover_id", "created_at"):
+        assert after[key] == before[key], key
+    assert table(data_dir, "recipe_imports") == kept["recipe_imports"]  # the post's import, as it was
+    assert table(data_dir, "recipe_sources")[0] == kept["recipe_sources"][0]  # the post's source row, untouched
+    assert apply_batch(data_dir / "recipes.db", folder, out=lambda _: None)["already_applied"]  # never twice
+
+    undo_batch(data_dir / "recipes.db", folder, out=lambda _: None)
+    assert {name: table(data_dir, name) for name in ("recipe_sources", "recipe_imports", "recipe_media")} == {k: kept[k] for k in ("recipe_sources", "recipe_imports", "recipe_media")}
+    assert recipe(client, from_post) == before
+
+
+def test_a_reviewed_version_may_correct_the_draft_but_holds_only_the_page_s_lines(client, from_post, data_dir):
+    draft = changes_of(completion(data_dir, from_post))
+    steps = draft[f"{from_post}-steps"]["draft"]
+    reviewed = {"recipe_id": from_post, "basis": "Reviewed against the page.", "ingredient_groups": draft[f"{from_post}-ingredients"]["draft"],
+                "step_groups": [{"name": None, "steps": [s for g in steps for s in g["steps"]]}], "notes": [],
+                "differences": {"steps": ["one list of steps"], "notes": ["the times left out"]}}
+    batch = completion(data_dir, from_post, reviewed=reviewed)
+    found = changes_of(batch)
+    assert found[f"{from_post}-steps"]["after"] == reviewed["step_groups"] and found[f"{from_post}-steps"]["draft"] == steps
+    assert f"{from_post}-notes" not in found  # the recipe has no notes, and the reviewed version none either
+    assert "Corrected in review: one list of steps" in found[f"{from_post}-steps"]["evidence"]
+
+    invented = {**reviewed, "notes": ["אפשר להוסיף שוקולד צ'יפס"]}
+    with pytest.raises(MaintenanceError, match="not in the text read from the page"):
+        completion(data_dir, from_post, reviewed=invented)
+    # A label around the page's own words is allowed only when declared, and only around words of the page.
+    labeled = {**reviewed, "notes": ["זמן שהאתר מציין: 10 פרוסות"], "labeled": {"זמן שהאתר מציין: 10 פרוסות": "10 פרוסות"}}
+    found = changes_of(completion(data_dir, from_post, reviewed=labeled))
+    assert found[f"{from_post}-notes"]["after"] == ["זמן שהאתר מציין: 10 פרוסות"]
+    assert any(e.startswith("Labeled in review (only \"10 פרוסות\"") for e in found[f"{from_post}-notes"]["evidence"])
+    with pytest.raises(MaintenanceError, match="not in the text read from the page"):
+        completion(data_dir, from_post, reviewed={**labeled, "labeled": {}})
+    with pytest.raises(MaintenanceError, match="not in the text read from the page"):
+        completion(data_dir, from_post, reviewed={**labeled, "notes": ["זמן שהאתר מציין: 12 פרוסות"], "labeled": {"זמן שהאתר מציין: 12 פרוסות": "12 פרוסות"}})
+    wrong_amount = {**reviewed, "ingredient_groups": [{"name": None, "ingredients": [{"text": "200 גרם קמח", "quantity": "300 גרם"}]}]}
+    with pytest.raises(MaintenanceError, match="not valid"):
+        completion(data_dir, from_post, reviewed=wrong_amount)
+
+
+def test_a_page_without_a_complete_recipe_proposes_nothing(client, from_post, data_dir):
+    from tests.test_api_website import Classifier as PageClassifier
+
+    reader = page_reader("<article><h1>עוגת תפוזים</h1><p>" + "מילים על עוגות. " * 20 + "</p></article>", "")
+    with pytest.raises(MaintenanceError, match="no complete recipe"):
+        propose_from_page(data_dir / "recipes.db", from_post, PAGE, reader, lambda: PageClassifier(ApiError(422, "not_a_recipe", "none")), out=lambda _: None)
+
+
+def changes_of(batch: dict) -> dict[str, dict]:
+    return {c["id"]: c for r in batch["recipes"] for c in r["changes"]}

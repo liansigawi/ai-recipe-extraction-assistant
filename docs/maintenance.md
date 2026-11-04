@@ -46,6 +46,32 @@ review), so a reviewed correction is never shown as the model's prediction. A re
 already has a type gets nothing. The earlier batch's type proposals are then marked as replaced by it: its
 report says so, and applying that batch skips them.
 
+## Completing a recipe from its page
+
+A saved recipe whose source had no recipe (a post that sends you to the creator's site, say) can be completed
+from the page that holds it:
+
+```powershell
+.\maintain-recipes.cmd propose-from-page 25 "https://example.co.il/recipes/..." [--reviewed data\maintenance\reviewed-page-25.json]
+```
+
+Read-only: the page is read and imported exactly as a new link import would, on a temporary copy of the
+notebook (deleted afterwards, with that draft and its picture). The batch proposes `<id>-ingredients`,
+`<id>-steps` and `<id>-notes` from that draft, and `<id>-source`: the page added after the sources the
+recipe has, with the credit a website import gives it. The report shows three columns (now, the import's
+draft, the proposal), the review points the import raised (shown, never added) and the text read from the
+page. The title, category and type, media, cooked mark and the recipe's imported original are not part of
+the batch; applying only adds the source's row, so the existing sources keep theirs.
+
+The model's draft can differ from one run to the next. A reviewed version (JSON: `recipe_id`, `basis`,
+`ingredient_groups`, `step_groups`, `notes`, and `differences` with the corrections per field) replaces the
+draft in the proposal, with each correction listed under its change. It may hold only the page's own lines: a
+line, a group name or a note that is not word for word in the text read from the page is refused, and so is
+anything a save would refuse (a quantity not quoted from its own line, for one). A note that needs a few words
+around the page's own (a time the page shows only beside an icon, say) is declared in `labeled`
+(`{"<the note>": "<the page's words in it>"}`): those words must be in the page, and the report shows the note
+as labeled in review.
+
 ## The report shows where things stand
 
 After an apply or an undo, `report.html` is written again: each change says whether it is applied (and when)
@@ -55,9 +81,10 @@ or still a proposal, or replaced by a later batch.
 
 - First a backup of the notebook (`recipes.backup-<time>-before-maintenance-<batch>.db`), checked: intact, the
   same recipes. If that fails, nothing changes.
-- Each recipe is updated in place, only in the fields of its approved changes (ingredients, steps, the type),
-  and its last-saved time is updated. Its id, status, media and cover, credits and sources, cooked mark,
-  imported original and place in the public selection stay as they are.
+- Each recipe is updated in place, only in the fields of its approved changes (ingredients, steps, notes,
+  the type, an added source), and its last-saved time is updated. Its id, status, media and cover, the
+  sources it has (with their credits), cooked mark, imported original and place in the public selection stay
+  as they are.
 - A recipe whose content changed after the report is skipped and named: make a new report. A change already
   applied is not applied again (applying the batch twice adds nothing). What was left out can be applied later.
 - `applied-<time>.json` in the batch folder records what was written, for this notebook file only.
