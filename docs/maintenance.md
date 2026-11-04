@@ -10,6 +10,7 @@ what you approve, in place.
 .\maintain-recipes.cmd apply data\maintenance\<batch> --exclude 12-type 34-type --yes
 .\maintain-recipes.cmd apply data\maintenance\<batch> --only 51-steps 51-ingredients --yes
 .\maintain-recipes.cmd undo data\maintenance\<batch> --yes
+.\maintain-recipes.cmd propose-types data\maintenance\reviewed-types.json   # read-only: a batch from a reviewed list
 ```
 
 (`backend/scripts/maintain_recipes.py`; `--database <file>` before the command works on another notebook file,
@@ -34,6 +35,21 @@ a model draft from an import, and no draft is reconstructed). Each change has it
   main category, the healthy style and a type you set are never changed. Invented samples are left out.
 
 The same code as an import makes every proposal; nothing is re-extracted.
+
+## Reviewed dessert types
+
+Two classifier answers that agree are not evidence that they are right. A reviewed list of types (JSON:
+`{"basis": "...", "assignments": [{"id": 12, "type": "עוגות", "basis": "...", "note": "..."}]}`, with `"type": null`
+to leave one unassigned) becomes a batch of its own with `propose-types`, applied and undone like any other.
+Each assignment says what it rests on (the classifier's proposal confirmed in review, or a correction made in
+review), so a reviewed correction is never shown as the model's prediction. A recipe that is not a dessert or
+already has a type gets nothing. The earlier batch's type proposals are then marked as replaced by it: its
+report says so, and applying that batch skips them.
+
+## The report shows where things stand
+
+After an apply or an undo, `report.html` is written again: each change says whether it is applied (and when)
+or still a proposal, or replaced by a later batch.
 
 ## What applying does, and never does
 

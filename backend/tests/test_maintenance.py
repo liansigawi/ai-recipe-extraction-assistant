@@ -13,7 +13,16 @@ from app import schemas
 from app.extraction.output import Classification
 from app.importers import website
 from app.importers.website import WebReader
-from scripts.maintain_recipes import MaintenanceError, apply_batch, audit, undo_batch, write_batch
+from scripts.maintain_recipes import (
+    REPO_ROOT,
+    MaintenanceError,
+    apply_batch,
+    audit,
+    batch_folder,
+    propose_types,
+    undo_batch,
+    write_batch,
+)
 from tests.test_export_public import attach, new_recipe
 from tests.test_media import JPEG
 from tests.test_website import FLATTENED, FLATTENED_PAGE, THREE_STEPS, ld
@@ -219,3 +228,53 @@ def test_undo_uses_only_what_was_applied_to_that_notebook(client, notebook, batc
     with pytest.raises(MaintenanceError, match="was applied to"):
         undo_batch(data_dir / "recipes.db", batch, out=lambda _: None)  # the notebook itself was never changed
     assert undo_batch(copy, batch, out=lambda _: None)["restored"]
+
+
+def test_a_batch_is_found_by_its_path_from_the_project_root_or_by_its_id(batch, data_dir, monkeypatch):
+    monkeypatch.chdir(REPO_ROOT / "backend")  # where maintain-recipes.cmd runs the script
+    assert batch_folder(batch, data_dir) == batch
+    moved = data_dir / "maintenance" / "20990101-000000"
+    moved.parent.mkdir(parents=True, exist_ok=True)
+    batch.rename(moved)
+    assert batch_folder(type(batch)("20990101-000000"), data_dir) == moved
+
+
+def test_the_report_says_which_changes_are_applied_and_which_are_still_proposals(client, notebook, data_dir, tmp_path):
+    folder = tmp_path / "batch"
+    batch = audit(data_dir / "recipes.db", reader(), Classifier(), out=lambda _: None)
+    write_batch(batch, folder)
+    apply_batch(data_dir / "recipes.db", folder, only=[f"{notebook['omelette']}-oil"], out=lambda _: None)
+    report = (folder / "report.html").read_text(encoding="utf-8")
+    assert "1 of 4 changes applied" in report and report.count("APPLIED to the notebook") == 1 and report.count(">proposal<") == 3
+    undo_batch(data_dir / "recipes.db", folder, out=lambda _: None)
+    assert "nothing applied yet" in (folder / "report.html").read_text(encoding="utf-8")
+
+
+def test_reviewed_types_become_a_batch_that_says_what_each_rests_on(client, notebook, data_dir, tmp_path):
+    reviewed = {"basis": "Reviewed by hand.", "assignments": [
+        {"id": notebook["cake"], "type": "עוגות", "basis": "The local classifier's proposal, confirmed in review."},
+        {"id": notebook["cookies"], "type": "עוגיות וחיתוכיות", "basis": "Assigned in review (the classifier's two answers differed).", "note": "Cookies."},
+        {"id": notebook["typed"], "type": "עוגות", "basis": "x"},  # you set its type already: left alone
+        {"id": notebook["salad"], "type": "עוגות", "basis": "x"},  # not a dessert
+    ]}
+    with pytest.raises(MaintenanceError, match="no dessert type"):
+        propose_types(data_dir / "recipes.db", {"basis": "x", "assignments": [{"id": notebook["cake"], "type": "פחזניות", "basis": "x"}]}, out=lambda _: None)
+    folder = tmp_path / "types"
+    write_batch(propose_types(data_dir / "recipes.db", reviewed, out=lambda _: None), folder)
+    found = changes(folder)
+    assert sorted(found) == sorted([f"{notebook['cake']}-type", f"{notebook['cookies']}-type"])
+    assert found[f"{notebook['cookies']}-type"]["evidence"][-1].startswith("Assigned in review")
+    apply_batch(data_dir / "recipes.db", folder, out=lambda _: None)
+    assert recipe(client, notebook["cookies"])["subcategory"] == {"id": COOKIES, "name": "עוגיות וחיתוכיות"}
+    assert recipe(client, notebook["typed"])["subcategory"]["id"] == CAKES and recipe(client, notebook["salad"])["subcategory"] is None
+
+
+def test_proposals_a_reviewed_batch_replaced_are_never_applied_from_the_old_one(client, notebook, batch, data_dir):
+    data = json.loads((batch / "batch.json").read_text(encoding="utf-8"))
+    cake = f"{notebook['cake']}-type"
+    data["superseded"] = {"changes": [cake], "by": "later-types"}
+    (batch / "batch.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(MaintenanceError, match="replaced by the batch later-types"):
+        apply_batch(data_dir / "recipes.db", batch, only=[cake], out=lambda _: None)
+    log = apply_batch(data_dir / "recipes.db", batch, out=lambda _: None)
+    assert recipe(client, notebook["cake"])["subcategory"] is None and all(cake not in item["changes"] for item in log["applied"])

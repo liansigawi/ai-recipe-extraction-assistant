@@ -297,6 +297,58 @@ def _title_clue(title: str, chosen: str) -> str:
     return ""
 
 
+def propose_types(database_path: Path, reviewed: dict, out: Callable[[str], None] = print) -> dict:
+    """A batch of dessert types from a reviewed list (read-only), in the same form as an audit's: each assignment
+    says what it rests on ("basis"), so a correction made in review is never shown as the model's prediction.
+    A recipe that is not a dessert, or already has a type, gets nothing; a type must be an existing one."""
+    engine = open_read_only(database_path)
+    try:
+        with Session(engine) as session:
+            categories = crud.list_categories(session)
+            batch: dict[str, Any] = {
+                "label": "proposed changes of this maintenance update", "basis": reviewed["basis"],
+                "created_at": datetime.now(UTC).isoformat(timespec="seconds"), "notebook": str(database_path),
+                "recipes": [], "no_change": [], "unresolved": [], "skipped_samples": [],
+            }
+            before, after = [], []
+            for item in reviewed["assignments"]:
+                try:
+                    recipe = crud.get_recipe(session, item["id"])
+                except ApiError:
+                    batch["unresolved"].append({"id": item["id"], "title": "?", "items": [{"what": "dessert type", "why": "no such recipe"}]})
+                    continue
+                if not _needs_type(recipe, categories):
+                    batch["unresolved"].append({"id": recipe.id, "title": recipe.title, "items": [{"what": "dessert type", "why": "not a dessert without a type: left as it is"}]})
+                    continue
+                desserts = next(c for c in categories if c.id == recipe.category.id)
+                if item.get("type") is None:
+                    batch["unresolved"].append({"id": recipe.id, "title": recipe.title, "items": [{"what": "dessert type", "why": item["note"]}]})
+                    continue
+                sub = next((s for s in desserts.subcategories if s.name == item["type"]), None)
+                if sub is None:
+                    raise MaintenanceError(f"{recipe.id}: there is no dessert type {item['type']!r}.")
+                change = {
+                    "id": f"{recipe.id}-type", "recipe_id": recipe.id, "kind": "type", "group": "type", "field": "subcategory_id",
+                    "before": None, "after": {"id": sub.id, "name": sub.name},
+                    "evidence": [f"The type's description: {sub.description}" if sub.description else f"The type: {sub.name}", item["basis"]],
+                    "why": "A dessert without a type; the category and the healthy style stay as they are.",
+                    "uncertainty": item.get("note") or "",
+                }
+                current = content_of(recipe)
+                batch["recipes"].append({"id": recipe.id, "title": recipe.title, "status": recipe.status, "updated_at": recipe.updated_at.isoformat(),
+                                         "fingerprint": fingerprint(current), "before": current.model_dump(mode="json"), "changes": [change]})
+                before.append(recipe.model_dump(mode="json"))
+                after.append({**recipe.model_dump(mode="json"), "subcategory": {"id": sub.id, "name": sub.name}})
+            batch["snapshots"] = {
+                "before": {"label": "before this maintenance update", "taken_at": batch["created_at"], "recipes": before},
+                "after": {"label": "after this maintenance update, if every proposal is approved (not applied)", "recipes": after},
+            }
+            out(f"{len(batch['recipes'])} type assignments, {len(batch['unresolved'])} left unassigned.")
+            return batch
+    finally:
+        engine.dispose()
+
+
 def _ref(categories: list[schemas.Category], subcategory_id: int | None) -> dict | None:
     for category in categories:
         for sub in category.subcategories:
@@ -308,13 +360,39 @@ def _ref(categories: list[schemas.Category], subcategory_id: int | None) -> dict
 # --- The batch on disk and its report ----------------------------------------------------------------------
 
 
+def applied_changes(folder: Path, database: str) -> dict[str, str]:
+    """change id -> when it was applied to that notebook file, and not undone since (from the batch's logs)."""
+    events: list[tuple[str, str, dict]] = []
+    for path in folder.glob("applied-*.json"):
+        log = json.loads(path.read_text(encoding="utf-8"))
+        if log.get("database") == database:
+            events += [(log["applied_at"], "applied", item) for item in log["applied"]]
+    for path in folder.glob("undone-*.json"):
+        log = json.loads(path.read_text(encoding="utf-8"))
+        if log.get("database") == database:
+            events += [(log["undone_at"], "undone", {"id": rid}) for rid in log["restored"]]
+    state: dict[str, str] = {}
+    for at, what, item in sorted(events, key=lambda e: e[0]):
+        if what == "applied":
+            state.update({change: at for change in item["changes"]})
+        else:
+            state = {change: when for change, when in state.items() if not change.startswith(f"{item['id']}-")}
+    return state
+
+
+def write_report(folder: Path) -> None:
+    """The report again, from the batch and what has been applied to its notebook since."""
+    batch = read_batch(folder)
+    (folder / "report.html").write_text(report_html(batch, folder), encoding="utf-8")
+
+
 def write_batch(batch: dict, folder: Path) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     snapshots = batch.pop("snapshots")
     (folder / "batch.json").write_text(json.dumps(batch, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     (folder / "before.json").write_text(json.dumps(snapshots["before"], ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     (folder / "after.json").write_text(json.dumps(snapshots["after"], ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    (folder / "report.html").write_text(report_html(batch, folder), encoding="utf-8")
+    write_report(folder)
 
 
 def read_batch(folder: Path) -> dict:
@@ -345,12 +423,22 @@ def _value(kind: str, value: Any) -> str:
 def report_html(batch: dict, folder: Path) -> str:
     content = [c for r in batch["recipes"] for c in r["changes"] if c["group"] == "content"]
     types = [c for r in batch["recipes"] for c in r["changes"] if c["group"] == "type"]
+    applied = applied_changes(folder, str(Path(batch["notebook"]).resolve()))
+    replaced = set(batch.get("superseded", {}).get("changes", []))
+    total = len(content) + len(types)
+    open_ = total - len(applied) - len(replaced - set(applied))
+    heading = "proposed changes (nothing applied yet)" if not applied and not replaced else (
+        f"{len(applied)} of {total} changes applied, {len(replaced - set(applied))} replaced by a later batch, {open_} still proposals")
     rows = []
     for recipe in batch["recipes"]:
         rows.append(f"<section><h2>#{recipe['id']} <bdi>{html.escape(recipe['title'])}</bdi> <span class='status'>{recipe['status']}</span></h2>")
         for change in recipe["changes"]:
             rows.append(
-                f"<article class='{change['group']}'><h3><code>{change['id']}</code> {html.escape(change['field'])}</h3>"
+                f"<article class='{change['group']}'><h3><code>{change['id']}</code> {html.escape(change['field'])} "
+                + (f"<span class='applied'>APPLIED to the notebook {applied[change['id']]}</span>" if change["id"] in applied
+                   else f"<span class='proposed'>replaced by the batch {batch['superseded']['by']}</span>" if change["id"] in replaced
+                   else "<span class='proposed'>proposal</span>")
+                + "</h3>"
                 f"<div class='pair'><div><h4>Now</h4>{_value(change['kind'], change['before'])}</div>"
                 f"<div><h4>Proposed</h4>{_value(change['kind'], change['after'])}</div></div>"
                 "<h4>Support</h4><ul class='evidence'>" + "".join(f"<li dir='auto'>{html.escape(e)}</li>" for e in change["evidence"]) + "</ul>"
@@ -373,8 +461,10 @@ article{{border-top:1px solid #eee;padding-top:8px;margin-top:8px}} article.type
 .evidence li{{direction:rtl;text-align:right;unicode-bidi:plaintext}} .uncertain{{color:#7a4b00}} .none{{color:#888}}
 .tag{{font-size:.75rem;border:1px dashed #aaa;border-radius:99px;padding:0 6px;color:#666}} code{{background:#eee;padding:0 4px;border-radius:4px}}
 .status{{font-size:.8rem;color:#666}} pre{{background:#eee;padding:8px;overflow-x:auto;direction:ltr}}
+.applied{{font-size:.8rem;background:#1d6b50;color:#fff;border-radius:99px;padding:1px 8px}} .proposed{{font-size:.8rem;border:1px solid #aaa;border-radius:99px;padding:0 8px;color:#555}}
 </style></head><body>
-<h1>Recipe maintenance: proposed changes (nothing applied yet)</h1>
+<h1>Recipe maintenance: {heading}</h1>
+<p class='label'>{html.escape(batch.get('basis', 'Proposals made by the importer\'s own code and the local classifier.'))}</p>
 <p>Batch <code>{folder.name}</code>, made {batch['created_at']} from <code>{html.escape(batch['notebook'])}</code>, read-only.
 Snapshots: <code>before.json</code> (the recipes before this maintenance update) and <code>after.json</code> (as they would be if every
 proposal is approved). Neither is a model draft from an import.</p>
@@ -413,7 +503,10 @@ def apply_batch(database_path: Path, folder: Path, exclude: list[str] | None = N
     unknown = sorted((set(exclude or []) | set(only or [])) - known)
     if unknown:
         raise MaintenanceError(f"The batch has no change {', '.join(unknown)}.")
-    approved = lambda c: (only is None or c["id"] in only) and c["id"] not in set(exclude or [])  # noqa: E731
+    replaced = set(batch.get("superseded", {}).get("changes", []))  # proposals a later, reviewed batch replaces
+    if replaced & set(only or []):
+        raise MaintenanceError(f"{', '.join(sorted(replaced & set(only)))}: replaced by the batch {batch['superseded']['by']}; apply that one.")
+    approved = lambda c: (only is None or c["id"] in only) and c["id"] not in set(exclude or []) and c["id"] not in replaced  # noqa: E731
     backup = verified_backup(database_path, f"before-maintenance-{folder.name}")
     out(f"Backup, verified: {backup}")
     log: dict[str, Any] = {"label": "what this maintenance update changed", "batch": folder.name, "database": str(database_path.resolve()), "backup": str(backup),
@@ -433,6 +526,8 @@ def apply_batch(database_path: Path, folder: Path, exclude: list[str] | None = N
         engine.dispose()
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     (folder / f"applied-{stamp}.json").write_text(json.dumps(log, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    if str(database_path.resolve()) == str(Path(batch["notebook"]).resolve()):
+        write_report(folder)  # the report now says which changes are applied
     return log
 
 
@@ -474,7 +569,8 @@ def undo_batch(database_path: Path, folder: Path, out: Callable[[str], None] = p
     if not logs:
         raise MaintenanceError(f"Nothing of the batch in {folder} was applied to {database_path}.")
     backup = verified_backup(database_path, f"before-undo-{folder.name}")
-    result: dict[str, Any] = {"label": "what undoing this maintenance update put back", "backup": str(backup), "restored": [], "skipped": []}
+    result: dict[str, Any] = {"label": "what undoing this maintenance update put back", "database": mine, "backup": str(backup),
+                              "undone_at": datetime.now(UTC).isoformat(timespec="seconds"), "restored": [], "skipped": []}
     engine = make_engine(database_path)  # the app's own: foreign keys enforced
     try:
         with Session(engine) as session:
@@ -499,10 +595,23 @@ def undo_batch(database_path: Path, folder: Path, out: Callable[[str], None] = p
         engine.dispose()
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     (folder / f"undone-{stamp}.json").write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    if mine == str(Path(read_batch(folder)["notebook"]).resolve()):
+        write_report(folder)
     return result
 
 
 # --- The command ---------------------------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def batch_folder(given: Path, data_dir: Path) -> Path:
+    """The batch folder as given: a path from here or from the project root (maintain-recipes.cmd runs in
+    backend/), or the batch's id alone ("20261103-175228")."""
+    for candidate in (given, REPO_ROOT / given, data_dir / "maintenance" / given):
+        if (candidate / "batch.json").exists():
+            return candidate
+    return given
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -511,6 +620,8 @@ def main(argv: list[str] | None = None) -> int:
     audit_cmd = sub.add_parser("audit", help="read-only: write a batch of proposals and its report")
     audit_cmd.add_argument("--no-fetch", action="store_true", help="never read a page again")
     audit_cmd.add_argument("--no-types", action="store_true", help="do not ask the classifier for dessert types")
+    review = sub.add_parser("propose-types", help="read-only: a batch of dessert types from a reviewed list (JSON)")
+    review.add_argument("reviewed", type=Path, help='{"basis": "...", "assignments": [{"id": 12, "type": "עוגות", "basis": "...", "note": "..."}]}')
     for name in ("apply", "undo"):
         command = sub.add_parser(name)
         command.add_argument("batch", type=Path, help="the batch folder (data/maintenance/<id>)")
@@ -542,14 +653,21 @@ def main(argv: list[str] | None = None) -> int:
                   f"{len(batch['unresolved'])} with something unresolved.")
             print(f"Report: {folder / 'report.html'}")
             return 0
+        if args.command == "propose-types":
+            folder = database.parent / "maintenance" / (datetime.now(UTC).strftime("%Y%m%d-%H%M%S") + "-types")
+            reviewed = args.reviewed if args.reviewed.exists() else REPO_ROOT / args.reviewed  # the .cmd runs in backend/
+            write_batch(propose_types(database, json.loads(reviewed.read_text(encoding="utf-8"))), folder)
+            print(f"Report: {folder / 'report.html'}")
+            return 0
         if not args.yes:
             print(f"Nothing changed: add --yes to {args.command} the batch {args.batch}.", file=sys.stderr)
             return 1
+        folder = batch_folder(args.batch, settings.data_dir)
         if args.command == "apply":
-            log = apply_batch(database, args.batch, args.exclude, args.only)
+            log = apply_batch(database, folder, args.exclude, args.only)
             print(f"Applied: {len(log['applied'])}; already applied: {len(log['already_applied'])}; skipped: {len(log['skipped'])}.")
             return 0 if not log["skipped"] else 2
-        result = undo_batch(database, args.batch)
+        result = undo_batch(database, folder)
         print(f"Put back: {len(result['restored'])}; left as they are: {len(result['skipped'])}.")
         return 0
     except MaintenanceError as error:
