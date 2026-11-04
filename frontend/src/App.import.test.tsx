@@ -363,7 +363,7 @@ describe('importing a recipe page from a website', () => {
 
   it.each([
     ['website_no_recipe', 'הדף נקרא, אבל לא נמצא בו מתכון.'],
-    ['website_incomplete', 'בטקסט שהאתר שולח יש רק חלק מהמתכון'],
+    ['website_incomplete', 'לא הצלחנו לחלץ מהעמוד מתכון מלא'],
     ['website_ambiguous', 'בדף יש כמה מתכונים, ולא ברור איזה מהם הוא המתכון של הדף.'],
     ['website_not_found', 'האתר אומר שאין דף כזה.'],
     ['website_timeout', 'האתר לא ענה בזמן.'],

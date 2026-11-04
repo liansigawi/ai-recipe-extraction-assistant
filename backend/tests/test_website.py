@@ -473,3 +473,41 @@ def test_recipe_data_whose_steps_are_already_the_page_s_items_is_not_changed():
 def test_shortcodes_and_a_sponsor_s_line_are_never_steps_but_a_step_that_mentions_sharing_is(instructions, expected):
     data = {"@type": "Recipe", "name": "עוגה", "recipeIngredient": ["קמח"], "recipeInstructions": instructions}
     assert analyze("<h1>עוגה</h1>", ld(data)).recipe.steps == expected
+
+
+# --- A page builder's template (seen live, 2026-11-04: an Elementor recipe site) ------------------------------
+# Every box of the page is an "elementor-widget"; the "post content" box holds only the method, and the
+# ingredient lists, the introduction and a note are boxes of their own in the same single-post template.
+
+ELEMENTOR = """
+<div data-elementor-type="header" class="elementor elementor-location-header"><nav>תפריט</nav></div>
+<div data-elementor-type="single-post" class="elementor elementor-210 elementor-location-single">
+  <div class="elementor-element elementor-widget elementor-widget-heading"><div class="elementor-widget-container"><h1>עוגת שכבות פטל</h1></div></div>
+  <div class="elementor-element elementor-widget elementor-widget-text-editor"><div class="elementor-widget-container"><p>עוגה בלי אפייה.</p></div></div>
+  <div class="elementor-element elementor-widget elementor-widget-heading"><div class="elementor-widget-container"><h2>מצרכים למתכון:</h2></div></div>
+  <div class="elementor-element elementor-widget elementor-widget-text-editor"><div class="elementor-widget-container">
+    <p>250 גרם ביסקוויטים</p><p>לקרם:</p><p>1 מיכל שמנת להקצפה</p><p>כף ממרח לבן - אופציונלי</p></div></div>
+  <div class="elementor-element elementor-widget elementor-widget-theme-post-content"><div class="elementor-widget-container">
+    <p>מקציפים את השמנת.</p><p>מסדרים שכבת ביסקוויטים ומכסים בקרם.</p><p>מקררים 8 שעות.</p></div></div>
+  <div class="elementor-element elementor-widget elementor-widget-text-editor"><div class="elementor-widget-container">
+    <h3>הערות חשובות</h3><p>את השמנת אפשר להחליף בשמנת צמחית.</p></div></div>
+  <div class="elementor-element elementor-widget elementor-widget-theme-post-comments"><div class="elementor-widget-container"><p>תגובה: איזה יופי של עוגה!</p></div></div>
+  <div class="jet-listing-grid jet-listing"><div class="jet-listing-grid__item"><p>עוגת שוקולד אחרת: 200 גרם שוקולד</p></div></div>
+</div>
+<div data-elementor-type="footer" class="elementor elementor-location-footer"><p>כל הזכויות שמורות</p></div>
+"""
+
+
+def test_a_page_builder_s_template_is_read_whole_with_its_ingredients_and_notes():
+    text = analyze(ELEMENTOR).text
+    for line in ("250 גרם ביסקוויטים", "לקרם:", "כף ממרח לבן - אופציונלי", "מקציפים את השמנת.", "מקררים 8 שעות.",
+                 "את השמנת אפשר להחליף בשמנת צמחית."):
+        assert line in text
+    assert text.index("מצרכים למתכון:") < text.index("מקציפים את השמנת.") < text.index("הערות חשובות")  # the page's order
+    for noise in ("תגובה", "עוגת שוקולד אחרת", "כל הזכויות שמורות", "תפריט"):  # comments, other posts, footer, menu
+        assert noise not in text
+
+
+def test_a_sidebar_widget_outside_a_page_builder_is_still_left_out():
+    text = analyze(RECIPE_IN_PARAGRAPHS + '<div class="widget widget_recent_entries"><p>פוסטים אחרונים: עוגת גבינה</p></div>').text
+    assert "פוסטים אחרונים" not in text and "עוגת גבינה" not in text

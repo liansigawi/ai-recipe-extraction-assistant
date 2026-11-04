@@ -304,10 +304,10 @@ def _import_website(data: LinkImport, session: Session, new_extractor: Extractor
                 raise ApiError(422, "website_no_recipe", "The page's text was read, but the model found no recipe in it.", details) from None
             raise ApiError(error.status_code, error.code, error.message, _merged(error.details, details)) from None
         if data.use_model and (not any(group.ingredients for group in draft.ingredient_groups) or not any(group.steps for group in draft.step_groups)):
-            # A recipe page whose text has no ingredient lines, or no steps: the page shows them some
-            # other way (seen live: lists drawn by the page's scripts, absent from the page it sends).
-            # Nothing half-filled is saved; the person can paste the recipe from the page.
-            raise ApiError(422, "website_incomplete", "Only part of the recipe is in the page's text (no ingredients, or no steps).", details)
+            # A draft with no ingredient lines, or no steps. Seen live for more than one reason: lists
+            # drawn by the page's scripts (absent from the page it sends), and lists in boxes the text
+            # selection left out. Nothing half-filled is saved; the person can paste the recipe.
+            raise ApiError(422, "website_incomplete", "No complete recipe could be extracted from the page (no ingredient lines, or no steps).", details)
         if analysis.truncated:
             draft = draft.model_copy(update={"issues": [*draft.issues, WEBSITE_TEXT_CUT]})
         retrieved_from = "page_text"

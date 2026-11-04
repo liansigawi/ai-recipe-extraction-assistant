@@ -145,7 +145,7 @@ export function errorMessage(error: unknown): string {
     case 'website_no_recipe':
       return 'הדף נקרא, אבל לא נמצא בו מתכון.'
     case 'website_incomplete':
-      return 'בטקסט שהאתר שולח יש רק חלק מהמתכון (למשל בלי רשימת המצרכים, שהדף מציג רק בדפדפן). המחברת לא משלימה מתכון בעצמה.'
+      return 'לא הצלחנו לחלץ מהעמוד מתכון מלא (חסרו מצרכים או שלבי הכנה). המחברת לא משלימה מתכון בעצמה.'
     case 'website_ambiguous':
       return 'בדף יש כמה מתכונים, ולא ברור איזה מהם הוא המתכון של הדף. המחברת לא מערבבת מתכונים.'
     // Pictures and videos (backend/app/media.py).

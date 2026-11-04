@@ -50,6 +50,27 @@ Foody recipes (1 step became 5 and 7, with their groups); hidabroot.org (JSON-LD
 (microdata), adikosh.co.il, oogio.net and ronyohananov.com (page text): unchanged. A saved recipe is never
 changed by this: importing the page again makes a new draft.
 
+## 2026-11-04: a page builder's template read whole
+
+coralhota.co.il, a raspberry and white chocolate biscuit cake (`/recipes/עוגת-ביסקוויטים-פטל-ושוקולד-לבן/`),
+was refused as incomplete. Traced: the site sent the whole page (369,502 characters, the ingredient lists in
+it); it has no recipe data, so its text was read. The page is an Elementor template for one post
+(`data-elementor-type="single-post"`), with the title, the introduction, each ingredient list and the notes
+in boxes of their own; the box named "post content" (`elementor-widget-theme-post-content`) holds only the
+method. That box was taken as the main content, and the ingredient boxes outside it were also removed as
+"widgets" (Elementor names every box a widget). The model got 1,308 characters, the steps without any
+ingredient, and the draft was rightly refused. No script was involved.
+
+Now a single-post template is the main content as a whole, and the word "widget" in Elementor's own box
+names is not taken as noise; what a box is for still is (its comments, sharing buttons, a grid of other
+posts, `jet-listing-grid`). The same page gives 2,973 characters: the four ingredient groups (with the
+pan size and the optional items), the steps in order, and the notes (the substitution among them). The
+refusal stays for a draft without ingredients or steps; its message no longer guesses a cause ("לא
+הצלחנו לחלץ מהעמוד מתכון מלא").
+
+Checked on pages saved once each, old code against new: two Foody recipes, the Foody noodles above,
+hidabroot.org, food.unl.edu, adikosh.co.il, oogio.net and ronyohananov.com read the same text as before.
+
 ## Tested with fixtures only (offline tests)
 
 Every address rule (private, loopback, link-local and shared ranges, IPv6 and IPv4-mapped addresses,
@@ -62,7 +83,8 @@ ambiguous), recipe data without ingredients or steps, a blog page's navigation/a
 posts/comments, a post inside layout wrappers named for a sidebar (oogio.net's theme, and the common
 `content-sidebar-wrap`) with ingredient groups as `<br>` lines and `<h1>` section headings, the recipe
 inside a "print" area or a page builder's "widget" box (with related posts and a long comment section
-beside it, both left out), a cut very long page, the canonical address, the picture failing or not being a
+beside it, both left out), an Elementor single-post template with the ingredients outside its "post
+content" box (comments, a grid of other posts and the site's header and footer left out), a cut very long page, the canonical address, the picture failing or not being a
 picture, a model that cannot classify, and imports without a model.
 
 ## Limits
@@ -70,7 +92,8 @@ picture, a model that cannot classify, and imports without a model.
 - **Sites that block non-browser readers** (HTTP 401/403/429, or a robot check) are reported as
   blocking. The reader does not pretend to be a browser and does not retry.
 - **Pages built by scripts**: whatever is not in the HTML the site sends is not seen. Such pages are
-  refused (incomplete, or no recipe) rather than imported half-filled.
+  refused (incomplete, or no recipe) rather than imported half-filled. A refusal as incomplete says only
+  that the draft had no ingredients or no steps: the cause can also be the text selection (below).
 - **Several recipes on a page**: with recipe data, the one the page's heading names, or none
   (ambiguous). In page text, the extraction takes the main recipe and may flag "כמה מתכונים בטקסט".
 - **Ingredient groups** ("לבצק", "למלית") are not part of Schema.org's ingredient list: they come from
@@ -81,8 +104,9 @@ picture, a model that cannot classify, and imports without a model.
   recipe or post container, else the largest article, else `<main>`, else the heading) and the
   wrappers around it are never removed, whatever their names; nor is a block inside it that holds
   most of its text outside links (the recipe in a "print" area, a page builder's "widget" box).
-  Still removed: a recipe split over *several* such boxes that each hold less than half of the text
-  (some page builders do that), and a recipe inside a block named for comments. Small clutter can
+  An Elementor template for one post is read whole, its boxes included. Still removed: a recipe that
+  another page builder splits over *several* boxes named like noise, each holding less than half of the
+  text, and a recipe inside a block named for comments. Small clutter can
   stay (a view counter, captions, a run-together tag list); the model leaves those out. The review
   screen shows exactly what was read.
 - **The local model's time**: one import waits for the model at most `RECIPES_OLLAMA_TIMEOUT_SECONDS`

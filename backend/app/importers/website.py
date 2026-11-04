@@ -682,7 +682,7 @@ def checked_with_page(recipe: StructuredRecipe, soup: BeautifulSoup) -> Structur
 NOISE = re.compile(
     r"comment|sidebar|related|share|sharing|social|newsletter|subscribe|advert|\bads?\b|adsbygoogle|sponsor|promo|"
     r"cookie|consent|popup|modal|breadcrumb|widget|banner|navbar|\bmenu\b|footer|jump-to|print|rating|author-box|"
-    r"more-recipes|you-may|recommend|tags?-list|\bnav\b",
+    r"more-recipes|you-may|recommend|tags?-list|\bnav\b|listing-grid",  # listing-grid: a grid of other posts (JetEngine)
     re.I,
 )
 RECIPE_CONTAINER = re.compile(
@@ -694,7 +694,18 @@ BLOCKS = ["p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "tr", "section",
 
 
 def _classes(tag: Tag) -> str:
-    return " ".join([*tag.get("class", []), str(tag.get("id", ""))]) if tag.attrs else ""
+    """The element's classes and id. Elementor calls every box of a page a widget ("elementor-widget-container",
+    "elementor-widget-text-editor"), the recipe's own boxes included: there, that word is no sign of noise, but
+    what the box is for still is ("...-post-comments", "...-share-buttons")."""
+    names = " ".join([*tag.get("class", []), str(tag.get("id", ""))]) if tag.attrs else ""
+    return names.replace("elementor-widget", "elementor-box")
+
+
+def _whole_template(tag: Tag) -> Tag:
+    """A page builder's template for one post keeps the post's parts in boxes of their own (seen live, Elementor:
+    the title, the ingredient lists and a note each in a box, the "post content" box holding only the method).
+    There, the whole template is the main content, not the one box named for it."""
+    return tag.find_parent(attrs={"data-elementor-type": "single-post"}) or tag
 
 
 def _main_block(soup: BeautifulSoup) -> Tag | None:
@@ -703,7 +714,7 @@ def _main_block(soup: BeautifulSoup) -> Tag | None:
     containers = [tag for tag in soup.find_all(True) if RECIPE_CONTAINER.search(_classes(tag))]
     for group in (containers[:20], soup.find_all("article")):
         if group:
-            return max(group, key=lambda tag: len(tag.get_text(" ", strip=True)))
+            return _whole_template(max(group, key=lambda tag: len(tag.get_text(" ", strip=True))))
     return soup.find("main") or soup.find("h1")
 
 
@@ -746,7 +757,7 @@ def main_text(html: str, title: str | None) -> tuple[str, bool]:
     candidates = [tag for tag in soup.find_all(True) if not tag.decomposed and RECIPE_CONTAINER.search(_classes(tag))]
     articles = soup.find_all("article")
     if candidates:
-        root = max(candidates[:20], key=lambda tag: len(tag.get_text(" ", strip=True)))
+        root = _whole_template(max(candidates[:20], key=lambda tag: len(tag.get_text(" ", strip=True))))
     elif articles:
         root = max(articles, key=lambda tag: len(tag.get_text(" ", strip=True)))
     else:
