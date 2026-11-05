@@ -11,6 +11,7 @@ the exit code is 0 only when all of them passed.
 
 from __future__ import annotations
 
+import re
 import sys
 
 import httpx2
@@ -138,6 +139,14 @@ def main(argv: list[str] | None = None) -> int:
             page.wait_for_load_state("networkidle")
             original = page.get_by_role("region", name="הטקסט המקורי").inner_text()
             first_line = recipe["original"]["text"].strip().splitlines()[0].strip()
+            if recipe["processing"].get("demonstration"):
+                # Its demonstration is the comparison: the reviewed result beside the original, the draft folded, no controls.
+                result = page.get_by_role("region", name="המתכון לאחר הבדיקה")
+                controls = page.get_by_role("button", name=re.compile("^(הוספת|התעלמות|טופל|ביטול)"))
+                ok = (first_line in original and result.count() == 1 and result.locator("li").count() > 0
+                      and page.get_by_text("הצגת הטיוטה לפני הבדיקה").count() == 1 and controls.count() == 0)
+                check(ok, f"the comparison page of {recipe['id']} shows its original and its demonstration, read-only")
+                continue
             saved = page.get_by_role("region", name="המתכון השמור")
             ok = first_line in original and saved.count() == 1 and saved.locator("li").count() > 0
             check(ok, f"the comparison page of {recipe['id']} shows its original and its saved recipe")

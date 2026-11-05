@@ -287,7 +287,8 @@ def publish(folder: Path, *, deploy_site: bool = True, project: str | None = Non
     for line in describe(notebook):
         out(line)
     for recipe_id, backup in report.drafts.items():
-        out(f"    comparison page for {recipe_id}: {'with the import draft a backup kept' if backup else 'no draft was kept'}")
+        demonstration = f"; a demonstration, {report.demonstrations[recipe_id]}" if recipe_id in report.demonstrations else ""
+        out(f"    comparison page for {recipe_id}: {'with the import draft a backup kept' if backup else 'no draft was kept'}{demonstration}")
 
     out("2/4 Building and checking the site…")
     site = build_site(folder, runner)

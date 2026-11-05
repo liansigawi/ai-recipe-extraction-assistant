@@ -197,6 +197,35 @@ export interface Recipe extends RecipeContent {
 export interface Processing {
   /** The import's own draft from before any review, as a backup of the database kept it; null: no copy was kept. */
   draft: KeptDraft | null
+  /** A later import of the same original text, recorded with its review. Absent or null: none was made. */
+  demonstration?: Demonstration | null
+}
+
+/** The original text imported again, on a separate copy of the notebook: the draft as the import made it,
+ * and the review that followed (performed while preparing the demonstration), as it was recorded. Never the
+ * first import's draft. */
+export interface Demonstration {
+  /** When the import ran, and the model that read the text. */
+  run_at: string
+  model: string
+  draft: KeptDraft
+  reviewed: ReviewedDemonstration
+}
+
+/** The demonstration's draft after its review: what was saved, and each point's decision. */
+export interface ReviewedDemonstration {
+  title: string
+  servings: string | null
+  category: CategoryRef | null
+  subcategory: CategoryRef | null
+  healthy: boolean | null
+  ingredient_groups: IngredientGroup[]
+  step_groups: StepGroup[]
+  notes: string[]
+  /** The points resolved in review, and those left open when it was saved. */
+  resolved_issues: ResolvedIssue[]
+  issues: Issue[]
+  saved_at: string
 }
 
 /** An import's draft exactly as the import saved it. */

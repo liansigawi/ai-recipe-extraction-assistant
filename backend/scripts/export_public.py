@@ -9,7 +9,8 @@ Then build the page in frontend/: `npm run build:public` (docs/public-notebook.m
 
 The selection file (yours, git-ignored like the rest of data/):
 
-    {"recipes": [15, 12, 6], "show_processing": [12, 6], "repository_url": "https://github.com/..."}
+    {"recipes": [15, 12, 6], "show_processing": [12, 6], "repository_url": "https://github.com/...",
+     "demonstrations": {"12": "demonstrations/12.json"}}
 
 Only saved recipes can be exported: never a draft, never an invented sample. For each recipe the
 export writes its content, category, credit and sources, its cooked mark and its cover picture
@@ -17,6 +18,9 @@ export writes its content, category, credit and sources, its cooked mark and its
 review points, uploaded pictures (a phone photo can carry its location) and any other file stay out.
 For the recipes in "show_processing" it adds the imported original text and, when a backup of the
 database still holds the import's own draft from before any review, that draft: found, not rebuilt.
+A recipe in "demonstrations" also gets its recorded demonstration (the same original imported again on a
+separate copy of the notebook, and its review), only if it was made from that recipe's original text.
+Review decisions of the notebook's own recipes stay out.
 
 Writes <folder>/export/notebook.json and <folder>/export/media/, replacing the previous export.
 """
@@ -24,6 +28,7 @@ Writes <folder>/export/notebook.json and <folder>/export/media/, replacing the p
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import sqlite3
@@ -32,7 +37,7 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, ConfigDict, Field, ValidationError
 from sqlalchemy import Engine, create_engine
@@ -40,6 +45,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, media, models, schemas
 from app.config import load_settings
+from app.extraction.review import join_closing_remarks
 from app.schemas import ContractModel, NonEmptyStr
 
 
@@ -49,6 +55,8 @@ class Selection(ContractModel):
     recipes: list[int] = Field(min_length=1)  # recipe ids, as in the address of a recipe (#/recipes/12)
     show_processing: list[int] = []  # of those, the ones whose original text and draft are shown
     repository_url: Annotated[str, Field(pattern=r"^https://\S+$")] | None = None
+    # Of those, recipe id -> its recorded demonstration (a JSON file, its path from the selection's folder).
+    demonstrations: dict[int, str] = {}
 
 
 class KeptDraft(ContractModel):
@@ -68,6 +76,38 @@ class KeptDraft(ContractModel):
     saved_at: AwareDatetime  # when the import saved it (it was not changed afterwards)
 
 
+class ReviewedDraft(KeptDraft):
+    """A demonstration's draft after its review, as it was saved: the points resolved, and any left open."""
+
+    resolved_issues: list[schemas.ResolvedIssue]
+
+
+class JoinedRemark(ContractModel):
+    """Evidence of what the import did by a fixed rule, not the model: a remark in brackets that ends a step's
+    sentence on the original's next line, made part of that step (app/extraction/review.py, _closes_the_step)."""
+
+    model_config = ConfigDict(str_strip_whitespace=False)
+
+    kind: Literal["joined_remark"]
+    step: NonEmptyStr  # the step's own line in the original
+    remark: NonEmptyStr  # the line after it: "(...)."
+
+
+class Demonstration(ContractModel):
+    """A recipe's original text imported again on a separate copy of the notebook, as it was recorded: the draft
+    the import made, and the same draft after its review (performed while preparing the demonstration). Never the
+    first import's draft (docs/public-notebook.md)."""
+
+    recipe_id: int
+    source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]  # of the text it imported: the recipe's own original
+    run_at: AwareDatetime
+    model: NonEmptyStr
+    draft: KeptDraft
+    reviewed: ReviewedDraft
+    # Checked against the original and both recorded states; kept as evidence, not published (not a review change).
+    automatic: list[JoinedRemark] = []
+
+
 class ExportError(Exception):
     """Why the selection cannot be exported, for the person running the script."""
 
@@ -78,6 +118,7 @@ class Report:
     files: int = 0
     bytes: int = 0
     drafts: dict[int, str | None] = field(default_factory=dict)  # recipe id -> the backup its draft came from
+    demonstrations: dict[int, str] = field(default_factory=dict)  # recipe id -> when and with which model it ran
     left_out: list[str] = field(default_factory=list)
 
 
@@ -108,10 +149,14 @@ def publishable(recipe: schemas.Recipe) -> str | None:
 
 
 def export_notebook(database_path: Path, media_root: Path, selection: Selection, out: Path) -> Report:
-    """Write the public copy of the selected recipes to `out` (notebook.json and media/)."""
+    """Write the public copy of the selected recipes to `out` (notebook.json and media/). The paths in
+    selection.demonstrations are read from out's folder."""
+    folder = out.parent
     unknown = set(selection.show_processing) - set(selection.recipes)
     if unknown:
         raise ExportError(f"show_processing names recipes that are not in the selection: {sorted(unknown)}")
+    if set(selection.demonstrations) - set(selection.show_processing):
+        raise ExportError(f"demonstrations names recipes not in show_processing: {sorted(set(selection.demonstrations) - set(selection.show_processing))}")
     engine = open_read_only(database_path)
     report = Report()
     staging = out.with_name(out.name + ".partial")  # written in full first, so a failed export leaves the last one
@@ -132,12 +177,19 @@ def export_notebook(database_path: Path, media_root: Path, selection: Selection,
                 if recipe.id in selection.show_processing and recipe.original is None:
                     raise ExportError(f"Recipe {recipe.id} was typed in by hand: it has no original text to compare with.")
             public = [_public_recipe(session, media_root, recipe, selection, staging / "media", report) for recipe in chosen]
+            demonstrations = {rid: read_demonstration(folder / path, by_id[rid]) for rid, path in selection.demonstrations.items()}
             categories = _used_categories(crud.list_categories(session), chosen)
         for recipe in public:
             if recipe["processing"] is not None:
                 draft, backup = find_kept_draft(database_path, recipe["id"])
                 recipe["processing"]["draft"] = draft.model_dump(mode="json") if draft is not None else None
                 report.drafts[recipe["id"]] = backup
+                if recipe["id"] in demonstrations:
+                    demo = demonstrations[recipe["id"]]
+                    # The checks' data stays here: the record's ids, and the evidence of what the import did by a rule
+                    # (the same in its draft and its result, so not a change the page shows).
+                    recipe["processing"]["demonstration"] = demo.model_dump(mode="json", exclude={"recipe_id", "source_sha256", "automatic"})
+                    report.demonstrations[recipe["id"]] = f"run {demo.run_at:%Y-%m-%d %H:%M} UTC with {demo.model}"
         notebook = {
             "exported_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "repository_url": selection.repository_url,
@@ -181,6 +233,28 @@ def _public_recipe(
         report.left_out.append(f"{recipe.id}: {others} more picture(s) or video(s) besides the cover")
     report.recipes.append(f"{recipe.id} {recipe.title}")
     return data
+
+
+def read_demonstration(path: Path, recipe: schemas.Recipe) -> Demonstration:
+    """The recorded demonstration, checked: valid, about this recipe, and made from exactly its original text."""
+    try:
+        demonstration = Demonstration.model_validate_json(path.read_bytes())
+    except FileNotFoundError:
+        raise ExportError(f"The demonstration {path} does not exist.") from None
+    except ValidationError as error:
+        raise ExportError(f"{path} is not a valid demonstration: {error}") from None
+    if demonstration.recipe_id != recipe.id:
+        raise ExportError(f"{path} is a demonstration of recipe {demonstration.recipe_id}, not {recipe.id}.")
+    if recipe.original is None or hashlib.sha256(recipe.original.text.encode()).hexdigest() != demonstration.source_sha256:
+        raise ExportError(f"{path} was not made from recipe {recipe.id}'s original text.")
+    steps = {state: {s for g in getattr(demonstration, state).step_groups for s in g.steps} for state in ("draft", "reviewed")}
+    for joined in demonstration.automatic:
+        # The rule itself joins the two lines of the original, and both the draft and the reviewed recipe hold the result.
+        whole = f"{joined.step} {joined.remark}"
+        by_rule = join_closing_remarks([schemas.StepGroup(steps=[joined.step, joined.remark])], recipe.original.text)[0].steps == [whole]
+        if not (by_rule and whole in steps["draft"] and whole in steps["reviewed"]):
+            raise ExportError(f"{path}: the joined remark {joined.remark!r} is not what the import and its review show.")
+    return demonstration
 
 
 def _public_media(session: Session, media_root: Path, item: schemas.RecipeMediaItem, media_out: Path, report: Report) -> dict:
@@ -314,7 +388,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  {report.files} pictures ({report.bytes / 1_000_000:.1f} MB) in {out / 'media'}")
     for recipe_id, backup in report.drafts.items():
         kept = f"the import's draft, from {backup}" if backup else "no copy of the import's draft was kept"
-        print(f"  source comparison for {recipe_id}: original text; {kept}")
+        demo = f"; a demonstration, {report.demonstrations[recipe_id]}" if recipe_id in report.demonstrations else ""
+        print(f"  source comparison for {recipe_id}: original text; {kept}{demo}")
     if report.left_out:
         print("Left out:")
         print("\n".join(f"  {line}" for line in report.left_out))

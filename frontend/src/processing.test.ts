@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { diffLines, elapsedText, reviewChanges } from './processing'
-import type { KeptDraft, Recipe } from './types'
+import { demonstrationSummary, diffLines, elapsedText, reviewChanges } from './processing'
+import type { Category, Demonstration, Issue, KeptDraft, Recipe } from './types'
 
 describe('the lines that differ', () => {
   it('a changed line is one removal and one addition; the lines around it are left out', () => {
@@ -110,5 +110,55 @@ describe('time between two moments', () => {
     ['2026-11-03T13:35:00Z', '6 ימים'],
   ])('until %s: %s', (to, text) => {
     expect(elapsedText('2026-10-28T13:35:00Z', to)).toBe(text)
+  })
+})
+
+describe('what happened in a demonstration, from its record only', () => {
+  const chocolate: Issue = {
+    kind: 'ingredient_only_in_steps',
+    message: 'המצרך "שוקולד" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.',
+    quote: 'ממיסים 200 גרם שוקולד.',
+    proposed: { text: '200 גרם שוקולד', quantity: '200 גרם', group: null },
+  }
+  const yogurt: Issue = { ...chocolate, message: 'המצרך "יוגורט" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.', proposed: { text: 'יוגורט', quantity: null, group: null } }
+  const categories: Category[] = [
+    { id: 1, name: 'קינוחים', description: null, subcategories: [], healthy_style: true },
+    { id: 3, name: 'ארוחות קלילות', description: null, subcategories: [] },
+  ]
+  const record = (reviewed: Partial<Demonstration['reviewed']>): Demonstration => ({
+    run_at: '2026-11-05T08:31:24Z',
+    model: 'qwen3:8b',
+    draft: { ...draft, category: { id: 3, name: 'ארוחות קלילות' }, healthy: null, issues: [chocolate, yogurt] },
+    reviewed: { ...draft, category: { id: 3, name: 'ארוחות קלילות' }, healthy: null, issues: [], resolved_issues: [], ...reviewed },
+  })
+
+  it('says what was added with its own amount, what was dismissed, and credits the model only with its choices', () => {
+    const added = { ...draft.ingredient_groups[0], ingredients: [...draft.ingredient_groups[0].ingredients] }
+    const { items, unchanged } = demonstrationSummary(
+      record({
+        category: { id: 1, name: 'קינוחים' },
+        ingredient_groups: [added, { name: null, ingredients: [{ text: '200 גרם שוקולד', quantity: '200 גרם', derived_from: chocolate.quote, added_in_review: true }] }],
+        resolved_issues: [{ ...chocolate, resolution: 'added' }, { ...yogurt, resolution: 'dismissed' }],
+        title: 'שייק בננה ותמר',
+      }),
+      categories,
+    )
+    expect(items.map((item) => [item.topic, item.tags])).toEqual([
+      ['שוקולד', ['detected', 'approved']],
+      ['יוגורט', ['detected', 'dismissed']],
+      ['קטגוריה', ['model', 'corrected']],
+      ['תיקונים נוספים', ['corrected']],
+    ])
+    expect(items[0].text).toContain('ו"200 גרם שוקולד" נוסף למצרכים עם הכמות שכתובה בהוראות, "200 גרם".')
+    expect(items[1].text).toContain('בבדיקה הוחלט להתעלם מההתרעה, ולא נוסף דבר.')
+    expect(items[2].text).toBe('המודל הציע "ארוחות קלילות"; בבדיקה זה תוקן ל"קינוחים".')
+    expect(items[3].text).toBe('בבדיקה תוקנו גם: כותרת. הפירוט בטיוטה שלפני הבדיקה.') // the added line is the decision, not another correction
+    expect(unchanged).toEqual(['כמות מנות', 'אופן ההכנה', 'הערות'])
+  })
+
+  it('names nothing review did not record', () => {
+    const { items, unchanged } = demonstrationSummary(record({}), categories)
+    expect(items).toEqual([])
+    expect(unchanged).toEqual(['כותרת', 'כמות מנות', 'קטגוריה', 'מצרכים', 'אופן ההכנה', 'הערות'])
   })
 })

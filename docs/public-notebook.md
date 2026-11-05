@@ -70,6 +70,8 @@ To give it a "מהמקור למתכון" page as well, add its number to `show_p
   notebook no longer has stops the run before anything is built or uploaded.
 - `show_processing`: of those, the recipes that get a "מהמקור למתכון" page.
 - `repository_url`: the project's code, linked from the "about" page; `null` shows no link.
+- `demonstrations` (optional): recipe number -> a recorded demonstration (a JSON file, its path from this
+  folder), shown on that recipe's "מהמקור למתכון" page (below). Only for recipes in `show_processing`.
 
 ## What becomes public, and what never does
 
@@ -85,7 +87,8 @@ picture (for a video, a still from it, with the link to the post; never the vide
 promotions included), where it came from, which model read it and when, and the import's own draft if a
 database backup kept it (below).
 
-Never public: the database, the descriptions written for the model's category choice, review points,
+Never public: the database, the descriptions written for the model's category choice, review points and
+the review decisions of the notebook's recipes (a demonstration's own are part of it),
 drafts and samples, the other recipes' original texts, any picture besides the cover, videos, uploaded
 pictures (a phone photo can carry the place it was taken; a recipe whose cover is an upload shows its
 category's drawing), `.env`, API keys, the Cloudflare login, evaluation data, screenshots and the rest of
@@ -100,7 +103,44 @@ the import's draft with what review changed, only when a copy of that draft exis
 replaces its draft in the database, so a draft survives only in a backup that `app/migrate.py` made while
 the recipe was still an untouched draft. The export looks through `data/recipes.backup-*.db` for one: the
 same recipe (same number and creation time), still a draft, never saved since the import. Without one, the
-page says that no draft was kept. Nothing is reconstructed or re-run.
+page says, in one sentence, that the original import's draft was not kept. Nothing is reconstructed or
+re-run for it.
+
+A recipe with a **demonstration** shows that instead, as what it is: the recipe's original text imported
+again with the current system, on a separate copy of the notebook, and reviewed there. Its file
+(`data/public-notebook/demonstrations/<id>.json`, git-ignored) records:
+- the draft exactly as that import saved it, its review points included;
+- the same recipe after its review, as it was saved, with each point's decision (added, dismissed or
+  handled);
+- the run's time and model, and a fingerprint of the text it imported;
+- under `automatic`, evidence of what the import did by a fixed rule rather than the model (a bracket remark
+  joined to its step).
+
+The export refuses a demonstration that was not made from that recipe's own original text. It also refuses
+an `automatic` entry that the rule, the original and both recorded states do not all show. That evidence is
+not published: what the import already did right is the same in the draft and the result, so it is not a
+change.
+
+The page then has:
+- a one-line introduction ("הדגמה של ייבוא מחדש באמצעות הגרסה המעודכנת של המערכת."), with the date, the
+  model and a short note that the original import's draft was not kept and the saved recipe was not
+  replaced;
+- a summary of what review changed between that run's draft and its result, computed from the record, each
+  item tagged by who did it: the system by itself, the model, or the review performed while preparing the
+  demonstration;
+- the original text beside "המתכון לאחר הבדיקה", the demonstration's reviewed result, where a line added
+  from a point says "נוסף בעקבות התרעה" and opens its sentence;
+- folded under "הצגת הטיוטה לפני הבדיקה": the draft, its points with the action taken, and what review
+  changed, part by part.
+
+Decisions are text, never buttons: the public copy changes nothing. The other recipes keep the saved
+recipe's comparison.
+
+Recipe 12's demonstration (run on 2026-11-05 08:31 UTC with qwen3:8b) used the preserved caption, pasted
+as text (the path the notebook offers when a post cannot be read), on a copy of the notebook. Its review
+was performed while preparing the demonstration: the strawberries were added from their point with no
+amount, and the dessert type was corrected from "טארטים ופאי" to "עוגות". The new import itself joined
+the oven remark to its baking step.
 
 ## Costs and limitations
 

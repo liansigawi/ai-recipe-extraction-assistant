@@ -23,6 +23,20 @@ describe('RecipeView', () => {
     expect(comesAfter(firstIngredient, screen.getByRole('heading', { name: 'אופן ההכנה' }))).toBe(true)
   })
 
+  it('sets a group without a name apart from the named group before it, with a display heading only', () => {
+    const lines = (...texts: string[]) => texts.map((text) => ({ text, quantity: null }))
+    const { unmount } = render(
+      <RecipeView recipe={{ ...chocolateCake, ingredient_groups: [{ name: 'סירופ לעוגה', ingredients: lines('חצי כוס חלב') }, { name: null, ingredients: lines('תותים') }] }} />,
+    )
+    const heading = screen.getByRole('heading', { name: 'מצרכים נוספים' })
+    expect(comesAfter(screen.getByRole('heading', { name: 'סירופ לעוגה' }), heading)).toBe(true)
+    expect(comesAfter(heading, screen.getByText('תותים'))).toBe(true)
+    unmount()
+    // One list without a name, or one that comes first: nothing to set apart.
+    render(<RecipeView recipe={{ ...chocolateCake, ingredient_groups: [{ name: null, ingredients: lines('קמח') }, { name: 'לרוטב', ingredients: lines('שמנת') }] }} />)
+    expect(screen.queryByRole('heading', { name: 'מצרכים נוספים' })).not.toBeInTheDocument()
+  })
+
   it('keeps ingredient groups and the exact wording, including softened vs melted butter', () => {
     render(<RecipeView recipe={chocolateCake} />)
 

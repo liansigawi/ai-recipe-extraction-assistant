@@ -342,7 +342,7 @@ export default function App() {
       />
     )
   } else if (comparing !== undefined) {
-    content = <SourceComparison recipe={comparing} titleRef={titleRef} onBack={() => openRecipe(comparing.id)} />
+    content = <SourceComparison recipe={comparing} categories={categories} titleRef={titleRef} onBack={() => openRecipe(comparing.id)} />
   } else if (page.kind === 'import') {
     content = (
       <ImportPanel

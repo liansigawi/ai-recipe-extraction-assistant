@@ -110,16 +110,23 @@ export default function RecipeView({ recipe, titleRef, toolbar, cooked, banner, 
 // Their lists use the position (index) as key: fine for read-only lists that never reorder.
 // The editor's lists can change order, so they use stable keys instead (editorForm.ts).
 
-/** markQuantities: each line's quantity, as the backend read it from the line, is highlighted in it. */
-export function IngredientGroups({ groups, markQuantities = false }: { groups: IngredientGroup[]; markQuantities?: boolean }) {
+/** Above a group without a name that follows a named group. */
+export const MORE_INGREDIENTS = 'מצרכים נוספים'
+
+/** markQuantities: each line's quantity, as the backend read it from the line, is highlighted in it.
+ * explainAdded: a line added in review says so, with the step's sentence to open (a demonstration's result). */
+export function IngredientGroups({ groups, markQuantities = false, explainAdded = false }: { groups: IngredientGroup[]; markQuantities?: boolean; explainAdded?: boolean }) {
   return (
     <>
       {groups.map((group, groupIndex) => (
         <div key={groupIndex} className="ingredient-group">
-          {group.name !== null && (
+          {group.name !== null ? (
             <h4 className="group-title" dir="auto">
               {group.name}
             </h4>
+          ) : (
+            // A group without a name after a named one would read as part of it: a display heading only, not its name.
+            groups.slice(0, groupIndex).some((before) => before.name !== null) && <h4 className="group-title group-title-unnamed">{MORE_INGREDIENTS}</h4>
           )}
           <ul className="ingredient-list" dir="auto">
             {group.ingredients.map((ingredient, index) => (
@@ -134,7 +141,12 @@ export function IngredientGroups({ groups, markQuantities = false }: { groups: I
                   </>
                 )}
                 {/* A line added from a step (by the app, or approved in review): labeled, with the step's sentence on hover. */}
-                {ingredient.derived_from != null && (
+                {explainAdded && ingredient.added_in_review && ingredient.derived_from != null ? (
+                  <details className="added-from-point">
+                    <summary>נוסף בעקבות התרעה</summary>
+                    מתוך ההוראות: <q dir="auto">{ingredient.derived_from}</q>
+                  </details>
+                ) : ingredient.derived_from != null && (
                   <>
                     {' '}
                     <span className="derived-label" title={ingredient.derived_from}>

@@ -1,7 +1,7 @@
 // How a recipe went from its source to the saved recipe, for the public copy's comparison page. No React.
-import { categoryLabel, healthyLabel } from './categoryLook'
-import { fromStepsLabel } from './labels'
-import type { CategoryRef, IngredientGroup, KeptDraft, Recipe, StepGroup } from './types'
+import { categoryLabel, HEALTHY_LABEL, healthyLabel } from './categoryLook'
+import { ADDED_IN_REVIEW_LABEL, fromStepsLabel, ISSUE_LABELS } from './labels'
+import type { Category, CategoryRef, Demonstration, IngredientGroup, Issue, KeptDraft, Recipe, ResolvedIssue, StepGroup } from './types'
 
 export interface LineChange {
   kind: 'removed' | 'added'
@@ -62,8 +62,11 @@ function stepLines(groups: StepGroup[]): string[] {
   return groups.flatMap((group) => [...(group.name !== null ? [`${group.name}:`] : []), ...group.steps])
 }
 
-/** What review changed between the import's draft and the saved recipe, part by part. */
-export function reviewChanges(draft: KeptDraft, recipe: Recipe): { changed: PartChange[]; unchanged: string[] } {
+/** The parts of a recipe that review can change: the saved recipe, or a demonstration's reviewed draft. */
+export type Reviewed = Pick<Recipe, 'title' | 'servings' | 'category' | 'subcategory' | 'healthy' | 'ingredient_groups' | 'step_groups' | 'notes'>
+
+/** What review changed between the import's draft and the recipe after review, part by part. */
+export function reviewChanges(draft: KeptDraft, recipe: Reviewed): { changed: PartChange[]; unchanged: string[] } {
   const parts: [string, string[], string[]][] = [
     ['כותרת', [draft.title], [recipe.title]],
     ['כמות מנות', [draft.servings ?? 'לא צוין'], [recipe.servings ?? 'לא צוין']],
@@ -80,6 +83,83 @@ export function reviewChanges(draft: KeptDraft, recipe: Recipe): { changed: Part
     else changed.push({ part, lines })
   }
   return { changed, unchanged }
+}
+
+/** The decision review recorded for one of the draft's points (the same kind, message and quote), or null. */
+export function decisionFor(issue: Issue, resolved: ResolvedIssue[]): ResolvedIssue | null {
+  return resolved.find((entry) => entry.kind === issue.kind && entry.message === issue.message && entry.quote === issue.quote) ?? null
+}
+
+// --- A demonstration, in a few lines ---------------------------------------------------------------------------
+
+/** Who did it: the import by itself (its checks), the model, or the review. */
+export type SummaryTag = 'detected' | 'model' | 'approved' | 'dismissed' | 'handled' | 'corrected'
+
+export const SUMMARY_TAGS: Record<SummaryTag, string> = {
+  detected: 'זוהה אוטומטית',
+  model: 'הצעת המודל',
+  approved: 'אושר בבדיקה',
+  dismissed: 'נדחה בבדיקה',
+  handled: 'טופל בבדיקה',
+  corrected: 'תוקן בבדיקה',
+}
+
+export interface SummaryItem {
+  topic: string
+  tags: SummaryTag[]
+  text: string
+}
+
+/** What review changed in a demonstration, from its record only: each point's decision, what the model chose and
+ * review corrected, any other correction; and the parts review left as the import made them. What the import already
+ * did right (a remark joined to its step) is the same in the draft and the result: not a change, not listed. */
+export function demonstrationSummary(demo: Demonstration, categories: Category[]): { items: SummaryItem[]; unchanged: string[] } {
+  const { draft, reviewed } = demo
+  const items: SummaryItem[] = []
+  for (const decided of reviewed.resolved_issues) {
+    const named = /"([^"]+)"/.exec(decided.message)?.[1]
+    if (decided.kind === 'ingredient_only_in_steps' && named !== undefined) {
+      const found = `המערכת מצאה את "${named}" בהוראות ההכנה ולא ברשימת המצרכים, והציעה להוסיף את המצרך.`
+      if (decided.resolution === 'added' && decided.proposed) {
+        const { text, quantity } = decided.proposed
+        const amount = quantity === null ? 'ללא כמות: לא הומצאה כמות.' : `עם הכמות שכתובה בהוראות, "${quantity}".`
+        items.push({ topic: named, tags: ['detected', 'approved'], text: `${found} בבדיקה ההצעה אושרה, ו"${text}" נוסף למצרכים ${amount}` })
+      } else {
+        const outcome = decided.resolution === 'dismissed' ? 'בבדיקה הוחלט להתעלם מההתרעה, ולא נוסף דבר.' : 'בבדיקה ההתרעה סומנה כטופלה, בלי להוסיף את השורה המוצעת.'
+        items.push({ topic: named, tags: ['detected', decided.resolution === 'dismissed' ? 'dismissed' : 'handled'], text: `${found} ${outcome}` })
+      }
+    } else {
+      const outcome = decided.resolution === 'dismissed' ? 'בבדיקה הוחלט להתעלם ממנה.' : 'בבדיקה היא סומנה כטופלה.'
+      items.push({ topic: ISSUE_LABELS[decided.kind], tags: ['detected', decided.resolution === 'dismissed' ? 'dismissed' : 'handled'], text: `${decided.message} ${outcome}` })
+    }
+  }
+  if (draft.category?.id === reviewed.category?.id && draft.subcategory?.id !== reviewed.subcategory?.id) {
+    const dessert = categories.find((category) => category.id === draft.category?.id)?.healthy_style === true
+    items.push({
+      topic: dessert ? 'סוג הקינוח' : 'תת-קטגוריה',
+      tags: ['model', 'corrected'],
+      text: `המודל הציע "${draft.subcategory?.name ?? 'ללא'}"; בבדיקה זה תוקן ל"${reviewed.subcategory?.name ?? 'ללא'}".`,
+    })
+  } else if (draft.category?.id !== reviewed.category?.id) {
+    items.push({
+      topic: 'קטגוריה',
+      tags: ['model', 'corrected'],
+      text: `המודל הציע "${categoryLabel(draft.category, draft.subcategory)}"; בבדיקה זה תוקן ל"${categoryLabel(reviewed.category, reviewed.subcategory)}".`,
+    })
+  }
+  if ((draft.healthy ?? null) !== reviewed.healthy) {
+    items.push({ topic: HEALTHY_LABEL, tags: ['corrected'], text: `בטיוטה: ${healthyLabel(draft.healthy) ?? 'לא נקבע'}. בבדיקה: ${healthyLabel(reviewed.healthy) ?? 'לא נקבע'}.` })
+  }
+  const { changed, unchanged } = reviewChanges(draft, reviewed)
+  // Parts review changed by hand beyond the above: an ingredient change other than the lines added from points.
+  const other = changed
+    .filter((change) => change.part !== 'קטגוריה')
+    .filter((change) => !(change.part === 'מצרכים' && change.lines.every((line) => line.kind === 'added' && line.text.endsWith(ADDED_IN_REVIEW_LABEL))))
+    .map((change) => change.part)
+  if (other.length > 0) {
+    items.push({ topic: 'תיקונים נוספים', tags: ['corrected'], text: `בבדיקה תוקנו גם: ${other.join(', ')}. הפירוט בטיוטה שלפני הבדיקה.` })
+  }
+  return { items, unchanged }
 }
 
 /** "פחות מדקה", "4 דקות", "שעתיים", "6 ימים": the time from one moment to a later one. */

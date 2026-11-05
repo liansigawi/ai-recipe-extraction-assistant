@@ -2,7 +2,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import type { PublicNotebook, Recipe } from './types'
+import type { Demonstration, PublicNotebook, Recipe } from './types'
 
 // The public, read-only copy: the same App, built with `vite build --mode public`. It reads one exported
 // file (notebook.json) instead of the API, and offers nothing that changes data.
@@ -10,6 +10,48 @@ import type { PublicNotebook, Recipe } from './types'
 const DRINK = 'משקה טרנדי - שייק בננה תמר ואייס קפה'
 const TORTE = 'טורט וניל עם קרם מסקרפונה ותותים'
 const CAKE = 'עוגת קפה ושוקולד'
+
+const DECORATE = 'לקשט בתותים ולהנות מביס מושלם!'
+const BAKING = 'אופים על 150 מעלות (כל תנור עובד אחרת).'
+const STRAWBERRIES = {
+  kind: 'ingredient_only_in_steps' as const,
+  message: 'המצרך "תותים" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.',
+  quote: DECORATE,
+  proposed: { text: 'תותים', quantity: null, group: null },
+}
+// The torte's caption imported again, as recorded: a wrong type in the draft, corrected in review; the strawberries added.
+const demonstration: Demonstration = {
+  run_at: '2026-11-04T17:10:00Z',
+  model: 'qwen3:8b',
+  draft: {
+    title: TORTE,
+    servings: null,
+    category: { id: 1, name: 'קינוחים' },
+    subcategory: { id: 13, name: 'טארטים ופאי' },
+    healthy: null,
+    ingredient_groups: [{ name: 'טורט וניל', ingredients: [{ text: '4 ביצים L', quantity: '4' }] }],
+    step_groups: [{ name: null, steps: [BAKING, DECORATE] }],
+    notes: [],
+    issues: [STRAWBERRIES],
+    saved_at: '2026-11-04T17:10:00Z',
+  },
+  reviewed: {
+    title: TORTE,
+    servings: null,
+    category: { id: 1, name: 'קינוחים' },
+    subcategory: { id: 11, name: 'עוגות' },
+    healthy: false,
+    ingredient_groups: [
+      { name: 'טורט וניל', ingredients: [{ text: '4 ביצים L', quantity: '4' }] },
+      { name: null, ingredients: [{ text: 'תותים', quantity: null, derived_from: DECORATE, added_in_review: true }] },
+    ],
+    step_groups: [{ name: null, steps: [BAKING, DECORATE] }],
+    notes: [],
+    resolved_issues: [{ ...STRAWBERRIES, resolution: 'added' }],
+    issues: [],
+    saved_at: '2026-11-04T17:20:00Z',
+  },
+}
 
 const drinks = { id: 4, name: 'משקאות' }
 const desserts = { id: 1, name: 'קינוחים' }
@@ -64,7 +106,7 @@ const notebook: PublicNotebook = {
         author: { name: 'ריטה קדוש', username: 'ritakadosh_' },
         coauthors: [],
       },
-      processing: { draft: null },
+      processing: { draft: null, demonstration },
     }),
     recipe({
       id: 6,
@@ -194,6 +236,8 @@ describe('the public copy', () => {
   })
 
   it('says so when no copy of the draft was kept, instead of showing one', async () => {
+    const withoutDemonstration = { ...notebook, recipes: notebook.recipes.map((r) => (r.id === 12 ? { ...r, processing: { draft: null } } : r)) }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(withoutDemonstration), { status: 200 })))
     const user = userEvent.setup()
     await renderCopy()
     await openRecipe(user, TORTE)
@@ -202,8 +246,59 @@ describe('the public copy', () => {
     expect(screen.getByRole('link', { name: 'לפוסט המקורי' })).toHaveAttribute('href', 'https://www.instagram.com/p/Cm1mCdCpSzJ/')
     expect(screen.getByText(/נשמר לאחרונה 3 דקות אחרי הייבוא/)).toBeInTheDocument()
     const record = within(screen.getByRole('region', { name: /הטיוטה של הייבוא/ }))
-    expect(record.getByText(/הטיוטה שהייבוא הפיק לא נשמרה בנפרד/)).toBeInTheDocument()
+    expect(record.getByText('הטיוטה של הייבוא המקורי לא נשמרה.')).toBeInTheDocument()
     expect(record.queryByText('מה השתנה בבדיקה')).not.toBeInTheDocument()
+  })
+
+  it('a recorded demonstration is the comparison: the original beside its reviewed result, who did what, the draft folded', async () => {
+    const user = userEvent.setup()
+    await renderCopy()
+    await openRecipe(user, TORTE)
+    await user.click(screen.getByRole('button', { name: 'מהמקור למתכון' }))
+    expect(screen.getByText('הדגמה של ייבוא מחדש באמצעות הגרסה המעודכנת של המערכת.')).toBeInTheDocument()
+    const meta = document.querySelector('.demonstration-meta')
+    expect(meta).toHaveTextContent(/^4 בנובמבר 2026 · qwen3:8b, מודל שרץ על המחשב שלי דרך Ollama/)
+    expect(meta).toHaveTextContent('הטיוטה של הייבוא המקורי, מ-28 באוקטובר 2026, לא נשמרה')
+
+    // One comparison: the original beside the demonstration's reviewed result, never the saved recipe in its place.
+    expect(screen.getByRole('region', { name: 'הטקסט המקורי' })).toHaveTextContent('טורט וניל 🍓')
+    expect(screen.queryByRole('region', { name: 'המתכון השמור' })).not.toBeInTheDocument()
+    const result = screen.getByRole('region', { name: 'המתכון לאחר הבדיקה' })
+    expect(result).toHaveTextContent('עוגות')
+    const strawberries = within(result).getAllByRole('listitem').find((li) => li.textContent?.startsWith('תותים'))!
+    expect(strawberries).toHaveTextContent('נוסף בעקבות התרעה')
+    expect(strawberries.querySelector('details')).not.toHaveAttribute('open')
+    await user.click(within(strawberries).getByText('נוסף בעקבות התרעה'))
+    expect(strawberries.querySelector('details')).toHaveAttribute('open')
+    expect(strawberries).toHaveTextContent(DECORATE)
+    // Their group has no name: a display heading keeps it apart from the named group above it.
+    expect(within(result).getByRole('heading', { name: 'מצרכים נוספים' })).toBeInTheDocument()
+
+    // What review changed, each with who did it: the system by itself, the model, the review. The remark the import
+    // already joined to its step is the same in the draft and the result: not listed.
+    const summary = within(screen.getByRole('region', { name: 'מה קרה בהדגמה הזו' }))
+    const items = summary.getAllByRole('listitem').map((li) => li.textContent)
+    expect(items[0]).toMatch(/^תותיםזוהה אוטומטיתאושר בבדיקה/)
+    expect(items[0]).toContain('נוסף למצרכים ללא כמות: לא הומצאה כמות.')
+    expect(items[1]).toBe('סוג הקינוחהצעת המודלתוקן בבדיקההמודל הציע "טארטים ופאי"; בבדיקה זה תוקן ל"עוגות".')
+    expect(items[2]).toContain('בטיוטה: לא נקבע. בבדיקה: לא קינוח בריא.')
+    expect(items).toHaveLength(3)
+    expect(summary.getByText('בלי תיקון בבדיקה: כותרת, כמות מנות, אופן ההכנה, הערות.')).toBeInTheDocument()
+
+    // The draft as the run saved it, its point with the action taken while preparing the demonstration: folded.
+    const folded = screen.getByText('הצגת הטיוטה לפני הבדיקה').closest('details')!
+    expect(folded).not.toHaveAttribute('open')
+    await user.click(screen.getByText('הצגת הטיוטה לפני הבדיקה'))
+    expect(folded.querySelector('.demonstration-draft')).toHaveTextContent('טארטים ופאי')
+    expect(within(folded).getByText(STRAWBERRIES.message).closest('li')).toHaveTextContent(
+      'בבדיקה שבוצעה בעת הכנת ההדגמה: נוסף למצרכים — תותים, ללא כמות, בלי קבוצה',
+    )
+    expect(within(folded).getByText('קינוחים · טארטים ופאי', { selector: '.diff-lines li' })).toHaveClass('diff-removed')
+
+    // Read-only: nothing to add, ignore or undo; the recipe's own page is one click away.
+    expect(screen.queryByRole('button', { name: /הוספת|התעלמות|טופל|ביטול/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'חזרה למתכון' }))
+    expect(window.location.hash).toBe('#/recipes/12')
   })
 
   it('the page about the project links each comparison and the repository', async () => {

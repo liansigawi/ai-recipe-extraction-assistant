@@ -222,3 +222,72 @@ def test_a_line_derived_from_the_steps_is_public_with_where_it_comes_from(client
     recipe = new_recipe(client, "חביתה", ingredient_groups=[{"name": None, "ingredients": [{"text": "3 ביצים", "quantity": "3"}, oil]}])
     data, _ = export(data_dir, tmp_path / "export", recipes=[recipe["id"]])
     assert data["recipes"][0]["ingredient_groups"][0]["ingredients"][1] == oil
+
+
+def demonstration_of(recipe_id: int, text: str) -> dict:
+    """A recorded demonstration: the draft a new import of `text` made, and the same after its review."""
+    draft = {"title": "לימונדה", "servings": None, "category": None, "subcategory": None, "healthy": None,
+             "ingredient_groups": [{"name": None, "ingredients": [{"text": "2 לימונים", "quantity": "2"}]}],
+             "step_groups": [{"name": None, "steps": ["סוחטים ומערבבים עם סוכר."]}], "notes": [],
+             "issues": [{"kind": "ingredient_only_in_steps", "message": 'המצרך "סוכר" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.',
+                         "quote": "סוחטים ומערבבים עם סוכר.", "proposed": {"text": "סוכר", "quantity": None, "group": None}}],
+             "saved_at": "2026-11-04T17:10:00Z"}
+    reviewed = {**draft, "issues": [], "resolved_issues": [{**draft["issues"][0], "resolution": "dismissed"}], "saved_at": "2026-11-04T17:20:00Z"}
+    return {"recipe_id": recipe_id, "source_sha256": hashlib.sha256(text.encode()).hexdigest(), "run_at": "2026-11-04T17:10:00Z",
+            "model": "qwen3:8b", "draft": draft, "reviewed": reviewed}
+
+
+def test_a_recorded_demonstration_is_public_only_when_made_from_the_recipe_s_own_original(notebook, client, data_dir, tmp_path):
+    lemonade = notebook["lemonade"]["id"]
+    resolved = [{"kind": "other", "message": "בדקו.", "quote": None, "resolution": "handled"}]
+    client.put(f"/api/recipes/{lemonade}", json={**{k: v for k, v in notebook["lemonade"].items() if k in (
+        "title", "servings", "ingredient_groups", "step_groups", "notes", "sources", "healthy", "status")},
+        "category_id": notebook["lemonade"]["category"]["id"], "issues": [], "resolved_issues": resolved}, headers=ORIGIN)
+    out = tmp_path / "public" / "export"
+    (tmp_path / "public" / "demonstrations").mkdir(parents=True)
+    demo = tmp_path / "public" / "demonstrations" / "lemonade.json"
+    demo.write_text(json.dumps(demonstration_of(lemonade, SOURCE), ensure_ascii=False), encoding="utf-8")
+
+    data, report = export(data_dir, out, recipes=[lemonade], show_processing=[lemonade], demonstrations={lemonade: "demonstrations/lemonade.json"})
+    [recipe] = data["recipes"]
+    shown = recipe["processing"]["demonstration"]
+    assert set(shown) == {"run_at", "model", "draft", "reviewed"}  # the checks' data stays out
+    assert shown["draft"]["issues"][0]["proposed"] == {"text": "סוכר", "quantity": None, "group": None}
+    assert shown["reviewed"]["resolved_issues"][0]["resolution"] == "dismissed"
+    assert recipe["resolved_issues"] == []  # the notebook's own review record is not published
+    assert report.demonstrations[lemonade] == "run 2026-11-04 17:10 UTC with qwen3:8b"
+
+    demo.write_text(json.dumps(demonstration_of(lemonade, SOURCE + " ")), encoding="utf-8")  # another text
+    with pytest.raises(ExportError, match="not made from recipe"):
+        export(data_dir, out, recipes=[lemonade], show_processing=[lemonade], demonstrations={lemonade: "demonstrations/lemonade.json"})
+    with pytest.raises(ExportError, match="not in show_processing"):
+        export(data_dir, out, recipes=[lemonade], demonstrations={lemonade: "demonstrations/lemonade.json"})
+    assert json.loads((out / "notebook.json").read_text(encoding="utf-8")) == data  # a refused export leaves the last one
+
+
+TORTE = "טורט\n4 ביצים\nאופים 50 דקות על 150 מעלות\n (כל תנור עובד אחרת).\nמגישים."
+
+
+def test_a_demonstration_s_evidence_of_a_joined_remark_is_checked_but_not_published(client, data_dir, tmp_path):
+    draft = client.post("/api/imports/text", json={"text": TORTE, "use_model": False}, headers=ORIGIN).json()
+    joined = "אופים 50 דקות על 150 מעלות (כל תנור עובד אחרת)."
+    body = {"title": "טורט", "ingredient_groups": [{"name": None, "ingredients": [{"text": "4 ביצים", "quantity": "4"}]}],
+            "step_groups": [{"name": None, "steps": [joined, "מגישים."]}], "notes": [], "sources": draft["sources"],
+            "category_id": category_id(client, "קינוחים"), "status": "saved", "issues": []}
+    torte = client.put(f"/api/recipes/{draft['id']}", json=body, headers=ORIGIN).json()
+    record = demonstration_of(torte["id"], TORTE)
+    for state in ("draft", "reviewed"):
+        record[state]["step_groups"] = body["step_groups"]
+    record["automatic"] = [{"kind": "joined_remark", "step": "אופים 50 דקות על 150 מעלות", "remark": "(כל תנור עובד אחרת)."}]
+    (tmp_path / "public").mkdir()
+    demo = tmp_path / "public" / "torte.json"
+    demo.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    choose = {"recipes": [torte["id"]], "show_processing": [torte["id"]], "demonstrations": {torte["id"]: "torte.json"}}
+
+    data, _ = export(data_dir, tmp_path / "public" / "export", **choose)
+    assert "automatic" not in data["recipes"][0]["processing"]["demonstration"]  # the same in draft and result: not a change
+
+    record["reviewed"]["step_groups"] = [{"name": None, "steps": ["אופים 50 דקות על 150 מעלות", "(כל תנור עובד אחרת).", "מגישים."]}]
+    demo.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")  # review split it again: not what was recorded
+    with pytest.raises(ExportError, match="joined remark"):
+        export(data_dir, tmp_path / "public" / "export", **choose)
