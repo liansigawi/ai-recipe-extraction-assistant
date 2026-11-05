@@ -18,9 +18,9 @@ from app.extraction.prompt import (
     build_classification_request,
     build_request,
 )
-from app.extraction.review import build_draft_from_references, is_recipe, make_draft
+from app.extraction.review import build_draft_from_references, is_recipe, join_closing_remarks, make_draft
 from app.extraction.segments import passage_key, passage_text, render_segments, segment_text
-from app.schemas import Category, ProposedIngredient
+from app.schemas import Category, ProposedIngredient, StepGroup
 
 CATEGORIES = [Category(id=1, name="קינוחים"), Category(id=2, name="בישולים"), Category(id=3, name="ארוחות קלילות")]
 
@@ -974,3 +974,44 @@ def test_the_line_goes_to_a_group_only_when_the_context_names_one():
     roles = ["title", "ingredient_heading", "ingredient", "step_heading", "step", "step"]
     [point] = only_in_steps_points(make_draft(answer(syrup, roles, title="עוגה", title_written_in_text=True), syrup, CATEGORIES))
     assert point.proposed.group is None  # a heading that only resembles a group's name: the list's ungrouped place
+
+
+# --- A remark in brackets that ends a step's sentence on the next line ---------------------------------------
+
+BAKING = "טורט וניל\n4 ביצים\nאופן הכנה:\nמעבירים לתבנית, אופים 50-60 דקות על 150 מעלות\n (כל תנור עובד אחרת, כדאי לשים לב לעוגה בהתאם לתנור שלכם).\nמוציאים מהתנור."
+
+
+@pytest.mark.parametrize("label", ["step", "tip"])
+def test_a_remark_that_ends_the_step_s_sentence_on_the_next_line_is_part_of_that_step(label):
+    draft = draft_for(BAKING, ["title", "ingredient", "step_heading", "step", label, "step"], title="טורט וניל", title_written_in_text=True)
+    assert draft.step_groups[0].steps == [
+        "מעבירים לתבנית, אופים 50-60 דקות על 150 מעלות (כל תנור עובד אחרת, כדאי לשים לב לעוגה בהתאם לתנור שלכם).",
+        "מוציאים מהתנור.",
+    ]
+    assert draft.notes == []
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        "אופים 20 דקות.\n(בינתיים מקציפים את השמנת).",  # the step ended its sentence: the brackets hold an action
+        "אופים 20 דקות\n(בינתיים מקציפים את השמנת)",  # no period after the brackets
+        "אופים 20 דקות\n\n(כל תנור עובד אחרת).",  # a blank line between: not one sentence
+        "אופים 20 דקות\n(מקציפים שמנת) ומוסיפים וניל.",  # more than a remark
+    ],
+)
+def test_other_passages_in_brackets_stay_steps_of_their_own(lines):
+    source = f"עוגה\n2 כוסות קמח\n{lines}"
+    count = len(segment_text(source)) - 2
+    draft = draft_for(source, ["title", "ingredient", *["step"] * count], title="עוגה", title_written_in_text=True)
+    assert len(draft.step_groups[0].steps) == count == 2
+
+
+def test_saved_steps_are_joined_by_the_same_rule_only_where_the_original_has_them_on_consecutive_lines():
+    steps = ["מעבירים לתבנית, אופים 50-60 דקות על 150 מעלות", "(כל תנור עובד אחרת, כדאי לשים לב לעוגה בהתאם לתנור שלכם).", "מוציאים מהתנור."]
+    [group] = join_closing_remarks([StepGroup(name=None, steps=steps)], BAKING)
+    assert group.steps == [f"{steps[0]} {steps[1]}", steps[2]]
+    elsewhere = BAKING.replace("\n (כל", "\nמוציאים.\n(כל")  # not the line after that step in the original
+    assert join_closing_remarks([StepGroup(name=None, steps=steps)], elsewhere)[0].steps == steps
+    ended = [steps[0] + ".", steps[1], steps[2]]  # that step ended its sentence
+    assert join_closing_remarks([StepGroup(name=None, steps=ended)], BAKING.replace("מעלות\n", "מעלות.\n"))[0].steps == ended

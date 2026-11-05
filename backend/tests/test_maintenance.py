@@ -394,3 +394,43 @@ def test_a_page_without_a_complete_recipe_proposes_nothing(client, from_post, da
 
 def changes_of(batch: dict) -> dict[str, dict]:
     return {c["id"]: c for r in batch["recipes"] for c in r["changes"]}
+
+
+TORTE = "טורט וניל\n4 ביצים\nאופן הכנה-\nמעבירים לתבנית, אופים 50-60 דקות על 150 מעלות\n (כל תנור עובד אחרת, כדאי לשים לב לעוגה בהתאם לתנור שלכם).\nלקשט בתותים."
+TORTE_STEPS = ["מעבירים לתבנית, אופים 50-60 דקות על 150 מעלות", "(כל תנור עובד אחרת, כדאי לשים לב לעוגה בהתאם לתנור שלכם).", "לקשט בתותים."]
+
+
+def test_a_saved_remark_that_ends_a_step_is_proposed_joined_and_applied_alone(client, data_dir, tmp_path):
+    from app import crud
+
+    saved = schemas.RecipeInput(
+        title="טורט וניל", category_id=1, subcategory_id=CAKES, healthy=False, status="saved",
+        ingredient_groups=[{"name": None, "ingredients": [{"text": "4 ביצים", "quantity": "4"}]}, {"name": "קישוט", "ingredients": [{"text": "תותים"}]}],
+        step_groups=[{"name": "אופן הכנה", "steps": TORTE_STEPS}],
+        sources=[{"kind": "instagram", "url": "https://www.instagram.com/p/Cm1mCdCpSzJ/", "creators": [{"name": "ריטה קדוש", "username": "ritakadosh_"}]}],
+    )
+    with client.app.state.session_factory() as session:
+        torte = crud.create_import(session, saved, original_text=TORTE, model="qwen3:8b", kind="instagram", url=saved.sources[0].url)
+    attach(client, data_dir, torte.id, kind="image", file=JPEG, origin="instagram", post_url=saved.sources[0].url, is_cover=True)
+    client.put(f"/api/recipes/{torte.id}/cooked", json={"cooked": True}, headers={"Origin": "http://localhost:5173"})
+    folder = tmp_path / "batch"
+    write_batch(audit(data_dir / "recipes.db", None, None, out=lambda _: None), folder)
+
+    found = changes(folder)
+    assert [key for key in found if key.startswith(f"{torte.id}-")] == [f"{torte.id}-steps"]
+    joined = f"{TORTE_STEPS[0]} {TORTE_STEPS[1]}"
+    assert found[f"{torte.id}-steps"]["after"] == [{"name": "אופן הכנה", "steps": [joined, TORTE_STEPS[2]]}]
+    assert "on its next line" in found[f"{torte.id}-steps"]["evidence"][0]
+
+    before = recipe(client, torte.id)
+    sources, imports, media = table(data_dir, "recipe_sources"), table(data_dir, "recipe_imports"), table(data_dir, "recipe_media")
+    log = apply_batch(data_dir / "recipes.db", folder, only=[f"{torte.id}-steps"], out=lambda _: None)
+    assert [item["id"] for item in log["applied"]] == [torte.id]
+    after = recipe(client, torte.id)
+    assert after["step_groups"] == [{"name": "אופן הכנה", "steps": [joined, TORTE_STEPS[2]]}]
+    unchanged = ("id", "title", "category", "subcategory", "healthy", "ingredient_groups", "notes", "sources", "cooked", "original", "media", "cover_id", "created_at")
+    assert {key: after[key] for key in unchanged} == {key: before[key] for key in unchanged}
+    assert (table(data_dir, "recipe_sources"), table(data_dir, "recipe_imports"), table(data_dir, "recipe_media")) == (sources, imports, media)
+
+    undo_batch(data_dir / "recipes.db", folder, out=lambda _: None)
+    assert recipe(client, torte.id)["step_groups"] == before["step_groups"]

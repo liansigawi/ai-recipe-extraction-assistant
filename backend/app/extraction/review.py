@@ -25,6 +25,9 @@ Nothing the model says is taken on trust:
   only on a clear sign: a number whose unit starts the next line, a "+" or an open bracket, a
   remark in brackets, a name cut after "גבינת" or "חמאת", a line ending in "ללא" or "עם". A line
   that only might go on the one before ("מופשר") stays as written and is flagged (_wrapped);
+- a step's sentence that the text ends on the next line with a remark in brackets ("אופים 50-60 דקות על
+  150 מעלות" / "(כל תנור עובד אחרת...).") is one step, whatever the remark's label; any other passage in
+  brackets keeps its label, since it may be an action of its own (_closes_the_step);
 - an ingredient that only the steps name is pointed out, never added: the point offers the step's own
   words for it, for the person to approve or ignore (only_in_step_point, place_additions).
 """
@@ -507,6 +510,17 @@ def build_draft_from_references(
                 groups.append({"heading": None, "items": []})
             previous, last_note = f"{introduces}_heading", None
             continue
+        if (
+            role in ("step", "tip")
+            and previous == "step"
+            and step_groups
+            and step_groups[-1]["items"]
+            and _closes_the_step(source_text, segments, step_groups[-1]["items"][-1], segment)
+        ):
+            # "אופים 50-60 דקות על 150 מעלות" / "(כל תנור עובד אחרת...).": the remark ends that step's sentence
+            step_groups[-1]["items"][-1][1] = segment.id
+            current, previous, last_note = step_groups[-1]["items"][-1], "step", None
+            continue
         if role in ("ingredient_heading", "step_heading") and _is_sentence(source_text, segment):
             # A sentence is never a heading: what it heads says what it is. Before ingredients, an
             # ingredient written as a sentence; otherwise an instruction ("מחממים תנור מראש." is a step).
@@ -854,6 +868,38 @@ _NAME_STARTS = frozenset(
 _JOINING_WORDS = frozenset({"ללא", "בלי", "עם", "של", "או", "וגם", "גם", "כמו", "לפי", "בתוספת", "and", "or", "with", "of", "without", "plus"})
 _LAST_NUMBER = re.compile(r"(?:^|[\s+])\d+(?:[.,/]\d+)?\s*$")
 _REMARK_ONLY = re.compile(r"^\s*\([^()]*\)\s*[.,;]?\s*$")
+# A remark in brackets that ends with the sentence's own period or exclamation mark: "(כל תנור עובד אחרת...)."
+_CLOSING_REMARK = re.compile(r"^\([^()]+\)\s*[.!]$")
+_SENTENCE_END = re.compile(r"[.!?:;…]\W*$")
+
+
+def _closes_the_step(source_text: str, segments: list[Segment], item: list[int], segment: Segment) -> bool:
+    """Is this passage a remark in brackets that ends the sentence of the step just before it? The step's line
+    stops without a sentence's end, and the next line holds only "(...)" with the period after it. Any other
+    passage in brackets (without that period, or after a step that ended its sentence) may be an action of its
+    own, and keeps its label."""
+    last = segments[item[1] - 1]
+    if item[1] != segment.id - 1 or segment.line != last.line + 1:
+        return False
+    step = passage_text(source_text, segments, item[0], item[1])
+    return not _SENTENCE_END.search(step) and bool(_CLOSING_REMARK.match(segment.text(source_text).strip()))
+
+
+def join_closing_remarks(step_groups: list[schemas.StepGroup], source_text: str) -> list[schemas.StepGroup]:
+    """Saved steps as the importer now reads them: a step that is only such a remark joins the step before it,
+    where the original text has the two on consecutive lines (the step's line ending without a sentence's end).
+    Every other step stays as it is; the wording is kept, the line break becoming a space."""
+    joined = []
+    for group in step_groups:
+        steps: list[str] = []
+        for step in group.steps:
+            between = re.escape(steps[-1]) + r"[ \t]*\r?\n\s*" + re.escape(step) if steps else None
+            if between and _CLOSING_REMARK.match(step) and not _SENTENCE_END.search(steps[-1]) and re.search(between, source_text):
+                steps[-1] = f"{steps[-1]} {step}"
+            else:
+                steps.append(step)
+        joined.append(group.model_copy(update={"steps": steps}))
+    return joined
 
 
 def _wrapped(before: str, line: str) -> bool:

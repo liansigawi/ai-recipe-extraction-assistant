@@ -29,6 +29,10 @@ a model draft from an import, and no draft is reconstructed). Each change has it
   (`website.checked_with_page`). The page is read again only for that: the saved data does not hold its lists.
   The report says whether the page's data is still what was saved, and whether the current text is the
   import's own (every line in the saved original) or may hold your edits.
+- **`<id>-steps`** for any imported recipe: a step that is only a remark in brackets ending the step before
+  it, where the original text has the two on consecutive lines ("אופים 50-60 דקות על 150 מעלות" / "(כל תנור
+  עובד אחרת...).") is joined to that step, word for word, as a new import now reads it
+  (`review.join_closing_remarks`). Every other step, and every other passage in brackets, stays as it is.
 - **`<id>-oil`**: the line the oil rule (`app/extraction/derived.py`) adds to a new import with these steps.
 - **`<id>-type`**: for a dessert without a type, the type the local classifier gives in two requests that
   agree; otherwise nothing (listed as unresolved). A title word that points to another type is flagged. The

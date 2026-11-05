@@ -11,6 +11,8 @@ The audit opens the notebook read-only and proposes, per recipe, separate change
   what the importer makes today of the recipe data saved with the import (app/importers/website.py), checked
   against the page's own lists. The page is read again only for that check (the saved data does not hold the
   page's lists), and any difference between the saved data and the page as it is now is reported.
+- "<id>-steps" for any other imported recipe: a step that is only a remark in brackets ending the step before it
+  on the original's next line, joined to that step word for word (app/extraction/review.py, join_closing_remarks).
 - "<id>-oil": the line that the oil rule (app/extraction/derived.py) adds to a new import with these steps.
 - "<id>-type": for a dessert without a type, the type the local classifier chooses in two requests that agree;
   otherwise none (unresolved). The main category and the healthy style are never changed.
@@ -52,7 +54,7 @@ from app.db import make_engine, utc_now
 from app.errors import ApiError
 from app.extraction.derived import add_oil_from_steps
 from app.extraction.output import Classification
-from app.extraction.review import only_in_step_point, resolve_classification
+from app.extraction.review import join_closing_remarks, only_in_step_point, resolve_classification
 from app.extraction.structured import structured_draft
 from app.importers import website
 from app.migrate import backup_database
@@ -142,6 +144,10 @@ def audit(
                     changes += repairs
                     if problem:
                         unresolved.append({"what": "steps and ingredients", "why": problem})
+                if record is not None and not any(c["kind"] == "steps" for c in changes):
+                    remark = _remark_change(recipe, current, record.original_text)
+                    if remark is not None:
+                        changes.append(remark)
                 repaired = apply_changes(current, [c for c in changes if c["kind"] in ("steps", "ingredients")])
                 oil = _oil_change(recipe, repaired)
                 if oil is not None:
@@ -227,6 +233,24 @@ def _website_repairs(recipe: schemas.Recipe, record: models.RecipeImport, curren
             "uncertainty": _edited(original, [i.text for g in current.ingredient_groups for i in g.ingredients]),
         })
     return changes, (page_note if not changes and page_note else None)
+
+
+def _remark_change(recipe: schemas.Recipe, current: schemas.RecipeInput, original: str) -> dict | None:
+    """A saved step that is only a remark in brackets ending the step before it, as a new import now reads it
+    (review.join_closing_remarks): joined to that step, word for word."""
+    joined = join_closing_remarks(current.step_groups, original)
+    if joined == current.step_groups:
+        return None
+    now = {step for group in joined for step in group.steps}
+    pairs = [(step, after) for group in current.step_groups for step, after in zip(group.steps, group.steps[1:]) if f"{step} {after}" in now]
+    return {
+        "id": f"{recipe.id}-steps", "recipe_id": recipe.id, "kind": "steps", "group": "content", "field": "step_groups",
+        "before": [g.model_dump() for g in current.step_groups], "after": [g.model_dump() for g in joined],
+        "evidence": [f'The original text has "{step}" and, on its next line, "{remark}": one sentence, ended by the remark.'
+                     for step, remark in pairs],
+        "why": "A remark in brackets that ends a step's sentence on the next line is part of that step; it was numbered as a step of its own.",
+        "uncertainty": "Only those steps change, joined with a space where the line broke; every word, and every other step, stays as it is.",
+    }
 
 
 def _why_steps(current: schemas.RecipeInput, original: str) -> str:
