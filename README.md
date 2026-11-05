@@ -454,7 +454,10 @@ The model still decides a few things, and the backend checks each:
 - the **category**: only one of your existing categories, chosen by their descriptions (a
   category's name can be a personal label; its description decides), and when unsure the recipe
   stays unclassified, which never prevents saving it. With the local model the category is asked
-  in a second, short request about the finished draft (its copied lines). The starter categories
+  in a second, short request about the finished draft (its copied lines), for the classification
+  alone: asking it first to describe the dish in a few words did worse (measured on 2026-11-05,
+  [docs/extraction-quality.md](docs/extraction-quality.md)); the Claude API is still asked for that
+  description. The starter categories
   are yours: "קינוחים" (sweet desserts, dairy desserts included), "ארוחות בשריות" (meat and poultry
   meals), "ארוחות קלילות" (savory dairy or egg meals; "light" is a personal label, not about
   calories or portions), "משקאות" (drinks, smoothies, coffee drinks, lemonade), and since 2026-11-01

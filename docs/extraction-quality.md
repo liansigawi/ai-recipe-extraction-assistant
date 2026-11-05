@@ -135,6 +135,59 @@ uv run python -m evals.run_extraction --extractor ollama --case 38-chicken-soup-
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
 
+### 2026-11-05 (evening): classification without the dish description, one candidate
+
+Question: does the free-text "dish" description the category request asks for first (sweet or savory, what it
+is, what it is mainly made of) cause wrong categories, or only accompany them? **One candidate**, frozen before
+any run with the cases, the expected answers and the adoption criteria
+(`data/evals/extraction/20261105-no-dish-description/`: `build_cases.py`, `requests.json`, `criteria.md`): the
+production request without that description, its instruction ("First say in a few words what kind of dish it
+is (...), then classify.") and its `dish` field. The same categories, the same rules, the same answer
+otherwise (`fit`, the ids, ambiguous and no fit); the healthy style is left undecided by both. Each case's user
+message was built once by the production code and sent byte for byte by both; both through the production
+request (qwen3:8b, temperature 0, 8,192 tokens), two rounds, alternating; every answer kept, none rerun.
+
+119 cases: the evaluation cases that are recipes (01-61, their drafts from the 2026-11-01 collection), the
+person's 43 saved recipes with an original (12, 14, 15, 17 and 29 as today's production drafts), and the dessert
+inventions of 2026-11-03 and 2026-11-04. **Held out** (no classification work used them): 24 cases, the seven
+saved recipes never in an experiment (36, 37, 39, 49, 51, 53, 56) and the 17 inventions that were each run once
+as a final check. Expected answers: the cases' own, the saved categories checked against the descriptions (five
+read otherwise or not scored: 10, 24, 47, 49, 51), the inventions' frozen ones.
+
+| 119 cases (each run gave the same totals) | Request as it was | Candidate |
+|---|---|---|
+| main category right | 90 | 98 |
+| dessert type right, 55 desserts | 38 | 43 |
+| fully right | 74 | 86 |
+| wrong "clear" answers | 45 | 32 |
+| unresolved (on the 103 straightforward cases) | 1 (0) | 1 (1) |
+| held out, 24: fully right / main category right | 16 / 19 | 17 / 20 |
+| cases whose two runs differ | 1 | 0 |
+| one request: mean (median); output tokens | 1.43 s (1.37); 57 | 1.06 s (1.03); 40 |
+
+- **By case** (recipe N: the notebook's; case N: the evaluation's): 17 better in both runs, 5 worse (a
+  two-sided sign test on these: p = 0.017). Better: the doughnuts (recipe 29) no longer a meat meal; the flavored
+  butters (recipe 26, case 50) and the hummus (case 52) no longer desserts; the tortillas (case 20), the chicken
+  quinoa bowl (case 58), the savory cottage pie (2026-11-03's) and the halloumi pasta (recipe 36, held out) no
+  longer desserts; three sides (cases 43, 44, 57); six dessert types (cases 03 and 18, recipes 13, 35 and 42, the
+  held-out muffins h05). Worse: the harissa chicken (case 29) left unresolved, the cottage fritters (case 19) a
+  dessert instead of unresolved, the egg fried rice (case 49) a side, two cake types (recipe 55, and the held-out
+  crumb-base cheesecake h01).
+- **Unchanged**: the latte (recipe 17) and the sahlab (recipe 50) are still desserts, the savory pancakes
+  (recipe 14) still "מאפים מתוקים", the vanilla torte (recipe 12) still a tart. No dish that fits nothing was left unclassified by either.
+- **The adoption criteria, all met**: fully right +12 (at least +6, and each candidate run above each run of the
+  request as it was), held out not lower (+1), main category not lower (+8; held out +1), at most two more straightforward
+  recipes unresolved (+1).
+
+Limits: one model at temperature 0, whose two runs differed in one case, so the comparison is one paired measure
+on 119 cases rather than two; a small held-out set (24, 17 of them desserts, no drink), where the gain is one case;
+95 cases had shaped the request as it was (which, if anything, favors it); most saved recipes are reviewed
+recipes, cleaner than drafts; the collection is not a sample of future imports. Measured with the local model
+only. **Adopted for the local model** on 2026-11-05, exactly this request (docs/architecture.md,
+2026-11-05 (9)); the Claude API keeps the description, as it was not measured without it. These figures describe
+this collection, measured once: they are not an accuracy to expect of future imports, and the errors above remain.
+
+
 ### 2026-11-04: dessert types, one candidate with definitions from ingredients and preparation
 
 After the person reviewed the types of their desserts, the classifier's mistakes were of three kinds: cakes

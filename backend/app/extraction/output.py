@@ -219,3 +219,18 @@ def classification_schema(categories: list[schemas.Category]) -> dict[str, Any]:
     schema = deepcopy(ClassificationAnswer.model_json_schema())
     _limit_categories(schema, categories)
     return transform_schema(schema)
+
+
+class DirectClassificationAnswer(BaseModel):
+    """The local model's answer to the classification request: the classification alone, with no description
+    of the dish first (prompt.build_classification_request, describe_dish=False)."""
+
+    classification: Classification
+
+
+def direct_classification_schema(categories: list[schemas.Category]) -> dict[str, Any]:
+    """classification_schema without its "dish" field: the answer the local model gives (measured on 2026-11-05)."""
+    schema = classification_schema(categories)
+    del schema["properties"]["dish"]
+    schema["required"] = [name for name in schema["required"] if name != "dish"]
+    return schema

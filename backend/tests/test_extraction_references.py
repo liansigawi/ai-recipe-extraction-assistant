@@ -12,7 +12,8 @@ from app.errors import ApiError
 from app.extraction.ollama import OllamaExtractor
 from app.extraction.output import ReferenceOutput, reference_schema
 from app.extraction.prompt import (
-    CLASSIFY_SYSTEM_PROMPT,
+    CLASSIFY_DIRECT_SYSTEM_PROMPT,
+    DESCRIBE_DISH,
     REFERENCE_LABELING_PROMPT,
     REFERENCE_SYSTEM_PROMPT,
     build_classification_request,
@@ -620,7 +621,7 @@ def local_model(*chat_replies: tuple[int, dict | None]):
 
 def test_the_local_extractor_labels_without_categories_then_asks_for_the_category_separately():
     first = answer().model_dump(exclude={"dish", "classification"})  # labels and recognition only
-    extractor, requests = local_model((200, first), (200, {"dish": "a sweet drink", "classification": DESSERTS}))
+    extractor, requests = local_model((200, first), (200, {"classification": DESSERTS}))
     output = extractor.extract(DRINK, CATEGORIES)
 
     assert isinstance(output, ReferenceOutput)
@@ -636,10 +637,12 @@ def test_the_local_extractor_labels_without_categories_then_asks_for_the_categor
     assert system.startswith(REFERENCE_LABELING_PROMPT) and "CLASSIFICATION" not in system
     assert "[4] חצי תמר מג׳הול" not in system  # the instructions do not repeat the text
     assert extractor.last_raw == json.dumps(first, ensure_ascii=False)
-    # The second request classifies the finished draft: its copied lines, not the numbered text.
-    assert classify["messages"][0]["content"].startswith(CLASSIFY_SYSTEM_PROMPT)
+    # The second request classifies the finished draft: its copied lines, not the numbered text. Its answer is the
+    # classification alone, with no description of the dish first.
+    assert classify["messages"][0]["content"].startswith(CLASSIFY_DIRECT_SYSTEM_PROMPT)
+    assert DESCRIBE_DISH not in classify["messages"][0]["content"] and "dish" not in classify["format"]["properties"]
     assert "חצי תמר מג׳הול" in classify["messages"][1]["content"] and "[4]" not in classify["messages"][1]["content"]
-    assert output.classification.category_id == 1 and output.dish == "a sweet drink"
+    assert output.classification.category_id == 1 and output.dish == ""
     assert extractor.last_usage == {"input_tokens": 3000, "output_tokens": 240}
     assert make_draft(output, DRINK, CATEGORIES).ingredient_groups[0].ingredients[0].text == "חצי תמר מג׳הול"
 
@@ -660,7 +663,7 @@ def timed_model(monkeypatch, *seconds_per_chat: float | Exception):
     monkeypatch.setattr("app.extraction.ollama.time", clock)
     timeouts: list[float] = []
     steps = list(seconds_per_chat)
-    replies = [answer().model_dump(exclude={"dish", "classification"}), {"dish": "a sweet drink", "classification": DESSERTS}]
+    replies = [answer().model_dump(exclude={"dish", "classification"}), {"classification": DESSERTS}]
 
     def handle(request: httpx2.Request) -> httpx2.Response:
         if request.url.path == "/api/show":
@@ -749,7 +752,7 @@ def test_if_the_category_request_fails_the_recipe_is_imported_unclassified():
 
 def test_a_server_error_from_ollama_is_tried_once_more():
     reply = answer().model_dump()
-    extractor, requests = local_model((500, None), (200, reply), (200, {"dish": "drink", "classification": DESSERTS}))
+    extractor, requests = local_model((500, None), (200, reply), (200, {"classification": DESSERTS}))
     assert extractor.extract(DRINK, CATEGORIES).classification.category_id == 1
     assert len(requests) == 3  # the failed request, its retry, the category
 

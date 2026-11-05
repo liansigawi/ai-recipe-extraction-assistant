@@ -22,7 +22,7 @@ from pydantic import ValidationError
 
 from app import schemas
 from app.errors import ApiError
-from app.extraction.output import NO_CATEGORY, Classification, ClassificationAnswer, ExtractionOutput, ReferenceLabels, ReferenceOutput
+from app.extraction.output import NO_CATEGORY, Classification, DirectClassificationAnswer, ExtractionOutput, ReferenceLabels, ReferenceOutput
 from app.extraction.prompt import ModelRequest, build_classification_request, build_request
 from app.extraction.review import is_recipe, make_draft
 
@@ -84,24 +84,25 @@ class OllamaExtractor:
     def _classify(self, output: ReferenceOutput, text: str, categories: list[schemas.Category]) -> ReferenceOutput:
         """Ask for the category from the finished draft alone (a separate, short request). If that
         request fails, the recipe stays unclassified, for the person to classify; but when the import's
-        time is up, the import ends there and nothing is kept (no draft after the limit)."""
-        request = build_classification_request(make_draft(output, text, categories), categories)
+        time is up, the import ends there and nothing is kept (no draft after the limit). The answer is the
+        classification alone, with no description of the dish first (prompt.build_classification_request)."""
+        request = build_classification_request(make_draft(output, text, categories), categories, describe_dish=False)
         try:
-            answer = ClassificationAnswer.model_validate_json(self._chat(request, len(text)))
+            answer = DirectClassificationAnswer.model_validate_json(self._chat(request, len(text)))
         except (ApiError, ValidationError) as error:
             if isinstance(error, ApiError) and error.code == "extraction_timeout":
                 raise
             log.warning("Classification request failed (%s); the recipe stays unclassified.", error)
             return output
-        return output.model_copy(update={"classification": answer.classification, "dish": answer.dish})
+        return output.model_copy(update={"classification": answer.classification})
 
     def classify_draft(self, draft: schemas.RecipeInput, categories: list[schemas.Category]) -> Classification:
         """Only the category of a draft that is complete already (a page's own recipe data): the same
         short request as after labeling. Any failure is the caller's to handle (the draft stays unclassified)."""
         self._deadline = time.monotonic() + self._timeout
-        request = build_classification_request(draft, categories)
+        request = build_classification_request(draft, categories, describe_dish=False)
         try:
-            return ClassificationAnswer.model_validate_json(self._chat(request, len(request.user))).classification
+            return DirectClassificationAnswer.model_validate_json(self._chat(request, len(request.user))).classification
         except ValidationError:
             raise ApiError(502, "extraction_invalid_output", "The local model's classification did not have the expected shape.") from None
 

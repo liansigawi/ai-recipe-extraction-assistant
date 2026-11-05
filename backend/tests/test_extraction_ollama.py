@@ -5,6 +5,7 @@ real Ollama is needed (conftest.py also blocks real connections).
 """
 
 import json
+import re
 
 import httpx2
 import pytest
@@ -12,9 +13,9 @@ import pytest
 from app.config import Settings
 from app.errors import ApiError
 from app.extraction.ollama import SCHEMA_INTRO, OllamaExtractor, ollama_problem
-from app.extraction.output import output_schema
-from app.extraction.prompt import SYSTEM_PROMPT
-from app.schemas import Category
+from app.extraction.output import direct_classification_schema, output_schema
+from app.extraction.prompt import CLASSIFY_DIRECT_SYSTEM_PROMPT, DESCRIBE_DISH, SYSTEM_PROMPT, build_classification_request
+from app.schemas import Category, RecipeInput
 from tests.test_extraction_claude import ANSWER
 
 CATEGORIES = [Category(id=1, name="קינוחים"), Category(id=3, name="ארוחות קלילות")]
@@ -123,6 +124,35 @@ def test_a_text_too_long_for_the_working_memory_is_reported_as_such():
     with pytest.raises(ApiError) as caught:
         extractor(httpx2.Client(transport=httpx2.MockTransport(handle))).extract("חביתה", CATEGORIES)
     assert caught.value.code == "extraction_incomplete" and "too long" in caught.value.message
+
+
+OMELETTE = RecipeInput(
+    title="חביתה", ingredient_groups=[{"ingredients": [{"text": "2 ביצים"}]}], step_groups=[{"steps": ["מטגנים."]}]
+)
+
+
+def test_a_finished_draft_is_classified_without_a_description_of_the_dish_first():
+    answer = {"classification": {"fit": "clear", "category_id": 3, "subcategory_id": None, "candidate_category_ids": []}}
+    client, requests = fake_ollama(chat={"message": {"role": "assistant", "content": json.dumps(answer)}})
+    classification = extractor(client, mode="references").classify_draft(OMELETTE, CATEGORIES)
+
+    assert classification.category_id == 3
+    chat = requests[-1][1]
+    assert chat["format"] == direct_classification_schema(CATEGORIES) and "dish" not in chat["format"]["properties"]
+    system, user = chat["messages"]
+    assert system["content"].startswith(CLASSIFY_DIRECT_SYSTEM_PROMPT + SCHEMA_INTRO) and DESCRIBE_DISH not in system["content"]
+    assert "\nחביתה\n\n2 ביצים\n\nמטגנים.\n</source_text_" in user["content"]
+
+
+def test_the_local_request_is_the_claude_api_s_without_the_description_of_the_dish():
+    # Exactly the candidate measured on 2026-11-05: one sentence and one answer field fewer, nothing else.
+    described = build_classification_request(OMELETTE, CATEGORIES)
+    direct = build_classification_request(OMELETTE, CATEGORIES, describe_dish=False)
+    assert described.system.count(DESCRIBE_DISH) == 1 and direct.system == described.system.replace(DESCRIBE_DISH, "")
+    properties = {name: value for name, value in described.schema["properties"].items() if name != "dish"}
+    assert direct.schema == {**described.schema, "properties": properties, "required": ["classification"]}
+    tag = re.compile(r"source_text_[0-9a-f]+")
+    assert tag.sub("tag", direct.user) == tag.sub("tag", described.user)
 
 
 def tags(*names: str) -> httpx2.Client:

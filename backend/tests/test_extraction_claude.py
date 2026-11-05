@@ -15,8 +15,9 @@ import pytest
 
 from app.errors import ApiError
 from app.extraction.claude import MAX_OUTPUT_TOKENS, ClaudeExtractor
-from app.extraction.prompt import SYSTEM_PROMPT
-from app.schemas import Category
+from app.extraction.output import classification_schema
+from app.extraction.prompt import CLASSIFY_SYSTEM_PROMPT, DESCRIBE_DISH, SYSTEM_PROMPT
+from app.schemas import Category, RecipeInput
 
 CATEGORIES = [Category(id=1, name="קינוחים", description="עוגות ועוגיות"), Category(id=3, name="ארוחות קלילות")]
 FAKE_KEY = "sk-ant-test-key-never-real"
@@ -98,6 +99,17 @@ def test_the_answer_is_parsed():
     extractor, _ = extractor_with(reply())
     output = extractor.extract("חביתה", CATEGORIES)
     assert output.title == "חביתה" and output.classification.category_id == 3
+
+
+def test_a_finished_draft_is_classified_with_a_few_words_about_the_dish_first():
+    # The Claude API keeps the description: only the local model was measured without it (2026-11-05).
+    answer = {"dish": "an egg dish", "classification": {"fit": "clear", "category_id": 3, "subcategory_id": None, "candidate_category_ids": []}}
+    extractor, messages = extractor_with(reply(answer))
+    assert extractor.classify_draft(RecipeInput(title="חביתה"), CATEGORIES).category_id == 3
+    [request] = messages.calls
+    assert request["system"] == CLASSIFY_SYSTEM_PROMPT and DESCRIBE_DISH in request["system"]
+    schema = request["output_config"]["format"]["schema"]
+    assert schema == classification_schema(CATEGORIES) and "dish" in schema["required"]
 
 
 @pytest.mark.parametrize(
