@@ -131,7 +131,8 @@ describe('the public copy', () => {
   it('shows the exported recipes, read from its one file, and nothing that changes them', async () => {
     await renderCopy()
     expect(gallery().getAllByRole('listitem')).toHaveLength(3)
-    expect(screen.getByRole('region', { name: 'על העותק הזה' })).toHaveTextContent('עותק ציבורי לקריאה בלבד')
+    expect(screen.getByRole('region', { name: 'על העותק הזה' })).toHaveTextContent('ברוכים הבאים למחברת המתכונים שלי.')
+    expect(screen.getByRole('button', { name: 'איך זה עובד' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /ייבוא מתכון/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'קטגוריות' })).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: /קישור/ })).not.toBeInTheDocument()

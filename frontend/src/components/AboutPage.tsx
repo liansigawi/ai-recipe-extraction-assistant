@@ -114,13 +114,13 @@ export default function AboutPage({ compared, exportedAt, repositoryUrl, titleRe
   )
 }
 
-/** Above the public gallery, where the notebook has its import strip: what this is, in a sentence. */
+/** Above the public gallery, where the notebook has its import strip: a welcome. How it works is on the "about" page. */
 export function PublicIntro({ onAbout }: { onAbout: () => void }) {
   return (
     <section className="public-intro" aria-label="על העותק הזה">
       <p>
-        <strong>עותק ציבורי לקריאה בלבד של מחברת המתכונים שלי.</strong> מתכונים שיובאו מאינסטגרם, מאתרים ומטקסט, עובדו לטיוטה על ידי מודל
-        שפה שרץ על המחשב שלי, ונבדקו ביד לפני שנשמרו.
+        <strong>ברוכים הבאים למחברת המתכונים שלי.</strong> כאן תמצאו מתכונים שאספתי מאינסטגרם ומהרשת — חלקם כבר הכנתי, ואחרים עוד מחכים
+        לתורם.
       </p>
       <button type="button" className="button" onClick={onAbout}>
         איך זה עובד
