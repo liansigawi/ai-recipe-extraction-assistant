@@ -427,9 +427,10 @@ def test_0012_adds_salads_soups_and_sides_and_changes_no_recipe(tmp_path):
         added = db.execute("SELECT id, name, description FROM categories WHERE id > 6 AND parent_id IS NULL ORDER BY id").fetchall()
     assert added == [(7 + i, name, description) for i, (name, description) in enumerate(ADDED_CATEGORIES)]
     assert categories_of(path)[:4] == before
-    # Nothing moved into them, nothing else changed (0014 adds "healthy" last: not decided, as neither is a dessert).
-    assert [row[:-1] for row in rows(path, "recipes")] == recipes
-    assert [row[-1] for row in rows(path, "recipes")] == [None, None]
+    # Nothing moved into them, nothing else changed (0014 adds "healthy": not decided, as neither is a dessert;
+    # 0015 then adds the review record, empty).
+    assert [row[:-2] for row in rows(path, "recipes")] == recipes
+    assert [row[-2:] for row in rows(path, "recipes")] == [(None, "[]"), (None, "[]")]
     assert len(list(tmp_path.glob(f"recipes.backup-*-before-{head_revision()}.db"))) == 1
 
 
@@ -621,17 +622,18 @@ def test_0014_keeps_each_healthy_or_regular_choice_as_the_attribute_and_guesses_
     upgrade_database(path)
 
     after = {row[0]: row for row in rows(path, "recipes")}
-    # healthy: 1, 0, not decided (a dessert without a style), not decided (not a dessert); no type is guessed.
-    assert [after[id_][-1] for id_ in (1, 2, 3, 4)] == [1, 0, None, None]
+    # healthy (before 0015's review record): 1, 0, not decided (a dessert without a style), not decided (not a
+    # dessert); no type is guessed.
+    assert [after[id_][-2] for id_ in (1, 2, 3, 4)] == [1, 0, None, None]
     assert [after[id_][3] for id_ in (1, 2, 3, 4)] == [None, None, None, None]
     # Everything else, the cooked mark included, as it was.
-    assert [row[:3] + row[4:-1] for row in rows(path, "recipes")] == [row[:3] + row[4:] for row in recipes]
+    assert [row[:3] + row[4:-2] for row in rows(path, "recipes")] == [row[:3] + row[4:] for row in recipes]
     from app.sample_data import STARTER_SUBCATEGORIES
     types = [(11 + i, name) for i, (name, _) in enumerate(STARTER_SUBCATEGORIES["קינוחים"])]
     assert [(id_, name) for id_, _, name, _ in subcategories_of(path)] == types
     with closing(sqlite3.connect(path)) as db:
         assert db.execute("SELECT name FROM categories WHERE healthy_style = 1").fetchall() == [("קינוחים",)]
-    assert len(list(tmp_path.glob("recipes.backup-*-before-0014.db"))) == 1
+    assert len(list(tmp_path.glob(f"recipes.backup-*-before-{head_revision()}.db"))) == 1
 
 
 def test_0014_keeps_a_type_you_already_have_and_leaves_desserts_you_renamed_as_they_are(tmp_path):

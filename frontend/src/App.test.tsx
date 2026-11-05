@@ -202,6 +202,7 @@ describe('creating a recipe', () => {
           sources: [],
           status: 'saved',
           issues: [],
+          resolved_issues: [],
         },
       },
     ])
@@ -324,7 +325,8 @@ describe('editing a recipe', () => {
       notes: cake.notes,
       sources: cake.sources,
       status: 'saved',
-      issues: [], // and never the cooked mark: only its own control changes it
+      issues: [],
+      resolved_issues: cake.resolved_issues, // and never the cooked mark: only its own control changes it
     })
     expect(recipeHeading('עוגת שוקולד מריר')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'כל המתכונים' }))

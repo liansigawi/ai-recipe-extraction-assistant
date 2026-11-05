@@ -162,6 +162,7 @@ def _public_recipe(
     """The recipe as the public page reads it: the API's shape, holding only what the page shows."""
     data = recipe.model_dump(mode="json")
     data["issues"] = []  # review points belong to drafts; a saved recipe has none to show
+    data["resolved_issues"] = []  # the notebook's own review record stays in the notebook
     shows_processing = recipe.id in selection.show_processing
     if not shows_processing:
         data["original"] = None

@@ -9,7 +9,7 @@ import {
   type IngredientGroupForm,
   type IngredientRow,
 } from '../editorForm'
-import { DERIVED_LABEL } from '../labels'
+import { ADDED_IN_REVIEW_LABEL, DERIVED_LABEL } from '../labels'
 import FieldError from './FieldError'
 import RowButtons from './RowButtons'
 
@@ -117,10 +117,10 @@ export default function IngredientsEditor({ groups, errors, onChange }: Ingredie
                         onRemove={() => changeGroup(g, { ...group, ingredients: removeAt(group.ingredients, i) })}
                       />
                     </div>
-                    {/* Added by the app from a step, not a line of the source's own list: said, never hidden. */}
+                    {/* Added from a step (by the app's rule, or by you in review), not a line of the source's own list: said, never hidden. */}
                     {row.derivedFrom !== null && (
                       <p id={`${id}-${path}.derived`} className="derived-note">
-                        <span className="derived-label">{DERIVED_LABEL}</span>{' '}
+                        <span className="derived-label">{row.addedInReview ? ADDED_IN_REVIEW_LABEL : DERIVED_LABEL}</span>{' '}
                         <q dir="auto">{row.derivedFrom}</q>
                       </p>
                     )}

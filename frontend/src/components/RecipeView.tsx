@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode, type Ref } from 'react'
 import { creditedSource, postLink, profileUrl, shownName } from '../credit'
-import { DERIVED_LABEL, SOURCE_LABELS } from '../labels'
+import { fromStepsLabel, SOURCE_LABELS } from '../labels'
 import { coverOf, pictureUrl } from '../media'
 import type { Creator, IngredientGroup, Recipe, Source, StepGroup } from '../types'
 import { HEALTHY_LABEL } from '../categoryLook'
@@ -133,12 +133,12 @@ export function IngredientGroups({ groups, markQuantities = false }: { groups: I
                     <span className="no-quantity">ללא כמות</span>
                   </>
                 )}
-                {/* A line the app added from a step: labeled, with the step's sentence on hover. */}
+                {/* A line added from a step (by the app, or approved in review): labeled, with the step's sentence on hover. */}
                 {ingredient.derived_from != null && (
                   <>
                     {' '}
                     <span className="derived-label" title={ingredient.derived_from}>
-                      {DERIVED_LABEL}
+                      {fromStepsLabel(ingredient)}
                     </span>
                   </>
                 )}

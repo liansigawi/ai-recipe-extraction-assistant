@@ -3,7 +3,8 @@
     categories        id, name, description, parent_id (NULL = top level)
     recipes           id, title, category_id, subcategory_id, servings,
                       ingredient_groups (JSON), step_groups (JSON), notes (JSON),
-                      is_sample, created_at, updated_at, status, issues (JSON)
+                      is_sample, created_at, updated_at, status, issues (JSON),
+                      cooked, healthy, resolved_issues (JSON)
     recipe_sources    id, recipe_id, position, kind, url, creators (JSON)
     recipe_imports    id, recipe_id, kind, original_text, model, imported_at
 
@@ -73,6 +74,8 @@ class Recipe(Base):
     # A dessert in your healthy style: True, False, or None (not decided). Only in a category with
     # healthy_style (app/crud.py checks), separate from its subcategory, the dessert's type.
     healthy: Mapped[bool | None] = mapped_column(default=None)
+    # The review points you resolved, each with what you did: added, dismissed or handled (migration 0015).
+    resolved_issues: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default="[]")
 
     # Read-only shortcuts to the category rows (the ids above are what we write).
     category: Mapped[Category | None] = relationship(

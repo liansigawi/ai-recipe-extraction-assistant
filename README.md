@@ -206,11 +206,21 @@ save the text as a draft and fill it in yourself.
 2. The draft opens for **review**. At the top is the original text exactly as you pasted it (it
    stays in view while you scroll), then the points to check, then the editable form:
    - lines that Claude could not copy exactly from the text, quantities that are not written in
-     their line (left empty), an ingredient that only the steps mention (not added), missing or
-     unclear information;
+     their line (left empty), an ingredient that only the steps mention, missing or unclear
+     information;
    - the category: Claude may only pick one of your existing categories. When it is not clear, the
      recipe stays "לא מסווג" (not classified), with an explanation. Nothing ever creates a category.
-3. Fix what needs fixing and mark each point **"טופל"** (handled). Then:
+3. Fix what needs fixing and decide each point. An ingredient that only the steps mention ("תותים
+   מופיעים בהוראות ההכנה") quotes its sentence and shows the line it would add: the step's own words,
+   with an amount only when the step writes one right before them, in a group only when the context
+   names one. **"הוספת תותים למצרכים"** adds that line, labeled **"נוסף מהוראות ההכנה"** with its
+   sentence (an ordinary line: edit, move or remove it); **"התעלמות"** dismisses the point for this
+   recipe only, adding nothing. If the list already has it, the point offers **"טופל"** instead; every
+   other point is marked **"טופל"** (handled). Each decision is listed under **"הוחלט בבדיקה"** with
+   **"ביטול"** (undo), marked "לא נשמר עדיין" until a save keeps it, and is saved with the recipe,
+   together with the line it added: a failed save records nothing. Nothing is ever added without your
+   click (the oil rule's frying and greasing lines are the one exception, labeled "מופיע בהוראות ההכנה").
+   Then:
    - **"שמירה כמתכון"** (save as recipe) saves it as a recipe. Only this button does that; Enter
      in a field never does.
    - **"שמירת טיוטה"** (save draft) keeps it as a draft, with the points still open, to continue

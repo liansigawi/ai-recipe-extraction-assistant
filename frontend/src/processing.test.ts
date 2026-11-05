@@ -38,6 +38,7 @@ function saved(fields: Partial<Recipe>): Recipe {
     is_sample: false,
     status: 'saved',
     issues: [],
+    resolved_issues: [],
     cooked: true,
     original: null,
     media: [],

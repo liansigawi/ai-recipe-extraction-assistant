@@ -20,6 +20,7 @@ const input: RecipeInput = {
   sources: [],
   status: 'saved',
   issues: [],
+  resolved_issues: [],
 }
 
 describe('api', () => {

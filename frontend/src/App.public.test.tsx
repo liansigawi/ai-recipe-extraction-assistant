@@ -27,6 +27,7 @@ function recipe(fields: Partial<Recipe> & Pick<Recipe, 'id' | 'title'>): Recipe 
     is_sample: false,
     status: 'saved',
     issues: [],
+    resolved_issues: [],
     cooked: false,
     original: null,
     media: [],

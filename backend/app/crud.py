@@ -32,6 +32,7 @@ def to_schema(row: models.Recipe) -> schemas.Recipe:
         is_sample=row.is_sample,
         status=row.status,
         issues=row.issues,
+        resolved_issues=row.resolved_issues,
         cooked=row.cooked,
         original=(
             schemas.ImportedOriginal(
@@ -255,6 +256,7 @@ def _apply(row: models.Recipe, data: schemas.RecipeInput) -> None:
     ]
     row.status = data.status
     row.issues = [issue.model_dump() for issue in data.issues]
+    row.resolved_issues = [issue.model_dump() for issue in data.resolved_issues]
     # row.original is deliberately not touched: the imported text never changes after import.
 
 

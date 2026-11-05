@@ -20,7 +20,7 @@ from app.extraction.prompt import (
 )
 from app.extraction.review import build_draft_from_references, is_recipe, make_draft
 from app.extraction.segments import passage_key, passage_text, render_segments, segment_text
-from app.schemas import Category
+from app.schemas import Category, ProposedIngredient
 
 CATEGORIES = [Category(id=1, name="קינוחים"), Category(id=2, name="בישולים"), Category(id=3, name="ארוחות קלילות")]
 
@@ -926,3 +926,51 @@ def test_a_plain_tip_label_keeps_its_line_out_of_the_ingredients_and_one_note_pe
     draft = draft_for(source, roles, title="עוגה", title_written_in_text=True)
     assert ingredient_texts(draft) == ["2 כוסות קמח"]
     assert draft.notes == ["50 גרם אגוזים.", "מגישים קר."]
+
+
+# --- What a point about an ingredient only the steps name offers to add, and where -------------------------
+
+
+def test_the_point_quotes_the_sentence_that_names_the_ingredient_and_offers_it_without_an_amount():
+    source = "טורט וניל\n4 ביצים\nמקציפים את הביצים, אופים ומקררים.\nפורסים את העוגה ומרטיבים בסירופ. לקשט בתותים ולהנות מביס מושלם!"
+    draft = draft_for(source, ["title", "ingredient", "step", "step", "continues"], title="טורט וניל", title_written_in_text=True)
+    [point] = only_in_steps_points(draft)
+    assert point.message == 'המצרך "תותים" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.'
+    assert point.quote == "לקשט בתותים ולהנות מביס מושלם!"  # the sentence, not the whole step
+    assert point.proposed == ProposedIngredient(text="תותים", quantity=None, group=None)  # no amount is written for them
+    assert ingredient_texts(draft) == ["4 ביצים"]  # nothing is added until the person approves
+
+
+@pytest.mark.parametrize(
+    ("step", "text", "quantity"),
+    [
+        ("ממיסים 200 גרם שוקולד ומערבבים.", "200 גרם שוקולד", "200 גרם"),  # the amount written right before it
+        ("מוסיפים כוס של חלב.", "כוס של חלב", "כוס"),
+        ("מערבבים ומוסיפים וחצי כוס חלב.", "חצי כוס חלב", "חצי כוס"),
+        ("מקשטים ב-5 תותים.", "תותים", None),  # "ב-5": the number is not written as the line's amount
+        ("אופים 20 דקות ומפזרים שוקולד.", "שוקולד", None),  # an amount of something else
+        ("מוסיפים את 2 התותים.", "תותים", None),  # "התותים": a word with a letter before it
+    ],
+)
+def test_an_amount_is_offered_only_when_the_step_writes_it_right_before_the_ingredient(step, text, quantity):
+    source = f"עוגה\n2 כוסות קמח\n{step}"
+    draft = draft_for(source, ["title", "ingredient", "step"], title="עוגה", title_written_in_text=True)
+    [point] = only_in_steps_points(draft)
+    assert (point.proposed.text, point.proposed.quantity) == (text, quantity)
+
+
+def test_the_line_goes_to_a_group_only_when_the_context_names_one():
+    decorate = "עוגה\nלבצק:\n2 כוסות קמח\nלקישוט:\nסוכריות צבעוניות\nאופים ומקשטים בתותים."
+    roles = ["title", "ingredient_heading", "ingredient", "ingredient_heading", "ingredient", "step"]
+    [point] = only_in_steps_points(make_draft(answer(decorate, roles, title="עוגה", title_written_in_text=True), decorate, CATEGORIES))
+    assert point.proposed.group == "לקישוט"  # the sentence decorates, and a group is for decorating
+
+    cream = "עוגה\nלבצק:\n2 כוסות קמח\nלקרם:\n200 מ\"ל שמנת\nהכנה:\nלבצק:\nמערבבים ואופים.\nלקרם:\nמקציפים את השמנת עם וניל."
+    roles = ["title", "ingredient_heading", "ingredient", "ingredient_heading", "ingredient", "step_heading", "step_heading", "step", "step_heading", "step"]
+    [point] = only_in_steps_points(make_draft(answer(cream, roles, title="עוגה", title_written_in_text=True), cream, CATEGORIES))
+    assert point.proposed.group == "לקרם"  # the step's own group has that ingredient group's name
+
+    syrup = "עוגה\nסירופ לעוגה:\nחצי כוס חלב\nמכינים סירופ לעוגה:\nמבשלים את החלב.\nלקשט בתותים."
+    roles = ["title", "ingredient_heading", "ingredient", "step_heading", "step", "step"]
+    [point] = only_in_steps_points(make_draft(answer(syrup, roles, title="עוגה", title_written_in_text=True), syrup, CATEGORIES))
+    assert point.proposed.group is None  # a heading that only resembles a group's name: the list's ungrouped place

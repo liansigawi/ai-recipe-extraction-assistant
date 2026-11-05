@@ -10,7 +10,7 @@ import pytest
 
 from app import media, models
 from app.db import utc_now
-from app.migrate import backup_database, upgrade_database
+from app.migrate import backup_database, head_revision, upgrade_database
 from scripts.export_public import ExportError, Selection, export_notebook, find_kept_draft, main
 from tests.test_media import JPEG, MP4, PNG
 
@@ -213,7 +213,7 @@ def test_a_draft_kept_from_before_the_healthy_attribute_is_shown_as_saved_recipe
         db.execute("UPDATE recipes SET status = 'saved', updated_at = '2026-11-02 10:00:00' WHERE id = 2")
 
     kept, backup = find_kept_draft(notebook, 2)
-    assert backup.endswith("-before-0014.db")
+    assert backup.endswith(f"-before-{head_revision()}.db")
     assert (kept.category.name, kept.subcategory, kept.healthy) == ("קינוחים", None, False)
 
 

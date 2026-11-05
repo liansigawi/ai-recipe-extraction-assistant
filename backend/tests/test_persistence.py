@@ -4,6 +4,8 @@ Each test gets its own empty data folder (see conftest.py). A "restart" is a sec
 `with TestClient(app)` on the same folder: the app starts again and opens the same file.
 """
 
+import copy
+import json
 import sqlite3
 
 import pytest
@@ -238,3 +240,75 @@ def test_a_line_derived_from_the_steps_keeps_where_it_comes_from_through_saves_a
         lines = again.get(f"/api/recipes/{created['id']}").json()["ingredient_groups"][0]["ingredients"]
     assert lines[1] == {"text": "מעט שמן זית לטיגון", "quantity": "מעט", "derived_from": "מחממים מעט שמן במחבת."}
     assert lines[0]["derived_from"] is None
+
+
+# --- What review resolved: kept with the recipe, saved together with what it changed ------------------------
+
+DECORATE = "לקשט בתותים ולהנות מביס מושלם!"
+STRAWBERRIES = {
+    "kind": "ingredient_only_in_steps", "message": 'המצרך "תותים" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.',
+    "quote": DECORATE, "proposed": {"text": "תותים", "quantity": None, "group": None},
+}
+YOGURT = {
+    "kind": "ingredient_only_in_steps", "message": 'המצרך "יוגורט" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.',
+    "quote": "מקציפים למרקם של יוגורט.", "proposed": {"text": "יוגורט", "quantity": None, "group": None},
+}
+ADDED = {"text": "תותים", "quantity": None, "derived_from": DECORATE, "added_in_review": True}
+
+
+def reviewed(issues: list[dict], resolved: list[dict], status: str = "draft") -> dict:
+    groups = [*copy.deepcopy(NEW_RECIPE["ingredient_groups"]), {"name": None, "ingredients": [ADDED]}]
+    return {**NEW_RECIPE, "ingredient_groups": groups, "status": status, "issues": issues, "resolved_issues": resolved}
+
+
+def test_what_review_resolved_is_kept_with_the_recipe_and_an_untouched_point_stays_open(client):
+    created = client.post("/api/recipes", json={**NEW_RECIPE, "status": "draft", "issues": [STRAWBERRIES, YOGURT]}).json()
+    assert created["resolved_issues"] == []
+
+    # Strawberries added from the warning; the yogurt point left alone: saved as a draft, then a restart.
+    client.put(f"/api/recipes/{created['id']}", json=reviewed([YOGURT], [{**STRAWBERRIES, "resolution": "added"}]))
+    with restarted() as again:
+        draft = again.get(f"/api/recipes/{created['id']}").json()
+    assert draft["issues"] == [YOGURT]
+    assert draft["resolved_issues"] == [{**STRAWBERRIES, "resolution": "added"}]
+    assert draft["ingredient_groups"][-1]["ingredients"] == [ADDED]
+
+    # The yogurt was a texture, not an ingredient: dismissed, and saved as a recipe. The record stays.
+    resolved = [{**STRAWBERRIES, "resolution": "added"}, {**YOGURT, "resolution": "dismissed"}]
+    client.put(f"/api/recipes/{created['id']}", json=reviewed([], resolved, status="saved"))
+    with restarted() as again:
+        saved = again.get(f"/api/recipes/{created['id']}").json()
+    assert (saved["status"], saved["issues"], saved["resolved_issues"]) == ("saved", [], resolved)
+
+
+def test_a_refused_save_records_no_decision(client):
+    created = client.post("/api/recipes", json={**NEW_RECIPE, "status": "draft", "issues": [STRAWBERRIES]}).json()
+    body = reviewed([], [{**STRAWBERRIES, "resolution": "added"}])
+    body["ingredient_groups"][0]["ingredients"][0]["quantity"] = "300 גרם"  # not in its line: the whole save is refused
+    assert client.put(f"/api/recipes/{created['id']}", json=body).status_code == 422
+    stored = client.get(f"/api/recipes/{created['id']}").json()
+    assert (stored["issues"], stored["resolved_issues"]) == ([STRAWBERRIES], [])
+    assert all(not item.get("added_in_review") for g in stored["ingredient_groups"] for item in g["ingredients"])
+
+
+def test_lines_and_points_without_the_review_fields_are_stored_exactly_as_before(client, data_dir):
+    plain = {**STRAWBERRIES}
+    del plain["proposed"]
+    created = client.post("/api/recipes", json={**NEW_RECIPE, "status": "draft", "issues": [plain]}).json()
+    with sqlite3.connect(data_dir / "recipes.db") as db:
+        groups, issues = db.execute("SELECT ingredient_groups, issues FROM recipes WHERE id = ?", (created["id"],)).fetchone()
+    assert "added_in_review" not in groups and "proposed" not in issues  # no new key on what has no such value
+
+
+@pytest.mark.parametrize(
+    ("change", "why"),
+    [
+        ({"ingredient_groups": [{"name": None, "ingredients": [{**ADDED, "derived_from": None}]}]}, "derived_from"),
+        ({"resolved_issues": [{**STRAWBERRIES, "proposed": None, "resolution": "added"}]}, "proposed"),
+        ({"resolved_issues": [{**STRAWBERRIES, "resolution": "approved"}]}, "resolution"),
+        ({"issues": [{**STRAWBERRIES, "proposed": {"text": "תותים", "quantity": "200 גרם"}}]}, "quantity"),
+    ],
+)
+def test_review_records_are_checked_like_the_rest_of_the_recipe(client, change, why):
+    response = client.post("/api/recipes", json={**NEW_RECIPE, "status": "draft", **change})
+    assert response.status_code == 422 and why in json.dumps(response.json(), ensure_ascii=False)

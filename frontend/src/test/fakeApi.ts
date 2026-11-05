@@ -115,6 +115,7 @@ export function fakeApi(initial: {
       is_sample: existing?.is_sample ?? false,
       status: input.status,
       issues: input.issues,
+      resolved_issues: input.resolved_issues ?? [],
       cooked: existing?.cooked ?? false, // like the real API: a save never changes the mark...
       original: existing?.original ?? null, // ...or the original
       media: existing?.media ?? [], // ...nor the media
@@ -250,6 +251,7 @@ export function fakeApi(initial: {
         is_sample: false,
         status: 'draft',
         issues: [],
+        resolved_issues: [],
         cooked: false,
         original: {
           kind: 'text',
@@ -287,6 +289,7 @@ export function fakeApi(initial: {
         is_sample: false,
         status: 'draft',
         issues: [],
+        resolved_issues: [],
         cooked: false,
         original: {
           kind: 'website',
@@ -325,6 +328,7 @@ export function fakeApi(initial: {
         is_sample: false,
         status: 'draft',
         issues: [],
+        resolved_issues: [],
         cooked: false,
         original: {
           kind: 'instagram',

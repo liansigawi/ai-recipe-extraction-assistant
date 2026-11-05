@@ -6,7 +6,7 @@ from app import schemas
 from app.extraction.output import Classification
 from app.extraction.quantity import find_quantity
 from app.extraction.derived import add_oil_from_steps
-from app.extraction.review import content_points, only_in_step_point, resolve_classification
+from app.extraction.review import content_points, only_in_step_point, place_additions, resolve_classification
 from app.importers.website import StructuredRecipe
 
 
@@ -57,4 +57,4 @@ def structured_draft(
         status="draft",
         issues=issues,
     )
-    return add_oil_from_steps(draft, only_in_step_point)
+    return place_additions(add_oil_from_steps(draft, only_in_step_point))

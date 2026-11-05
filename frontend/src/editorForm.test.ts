@@ -29,6 +29,7 @@ describe('recipeToForm and formToInput', () => {
         sources: recipe.sources,
         status: 'saved',
         issues: [],
+        resolved_issues: recipe.resolved_issues,
       })
     }
   })
@@ -115,7 +116,7 @@ describe('validateForm', () => {
   it('refuses a quantity without its line, and a named group without ingredients', () => {
     const form = filled()
     form.ingredient_groups = [
-      { key: 'a', name: '', ingredients: [{ key: 'b', text: '', quantity: '2', derivedFrom: null }] },
+      { key: 'a', name: '', ingredients: [{ key: 'b', text: '', quantity: '2', derivedFrom: null, addedInReview: false }] },
       { key: 'c', name: 'לבצק', ingredients: [emptyIngredient()] },
     ]
     expect(Object.keys(validateForm(form))).toEqual(['ingredient_groups.0.ingredients.0.text', 'ingredient_groups.1'])

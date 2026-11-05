@@ -24,7 +24,9 @@ Nothing the model says is taken on trust:
 - an ingredient that the text (or a screenshot's line wrapping) breaks over two lines is joined
   only on a clear sign: a number whose unit starts the next line, a "+" or an open bracket, a
   remark in brackets, a name cut after "גבינת" or "חמאת", a line ending in "ללא" or "עם". A line
-  that only might go on the one before ("מופשר") stays as written and is flagged (_wrapped).
+  that only might go on the one before ("מופשר") stays as written and is flagged (_wrapped);
+- an ingredient that only the steps name is pointed out, never added: the point offers the step's own
+  words for it, for the person to approve or ignore (only_in_step_point, place_additions).
 """
 
 import re
@@ -391,13 +393,14 @@ def is_recipe(output: ExtractionOutput | ReferenceLabels) -> bool:
 def make_draft(
     output: ExtractionOutput | ReferenceOutput, source_text: str, categories: list[schemas.Category]
 ) -> schemas.RecipeInput:
-    """The draft for either kind of answer, with the oil its steps clearly fry or grease with (derived.py)."""
+    """The draft for either kind of answer, with the oil its steps clearly fry or grease with (derived.py), and
+    where each ingredient that only the steps name would go if the person adds it."""
     if isinstance(output, ReferenceOutput):
         # The same text always gives the same passages, so these are the numbers the model saw.
         draft = build_draft_from_references(output, source_text, segment_text(source_text), categories)
     else:
         draft = build_draft(output, source_text, categories)
-    return add_oil_from_steps(draft, only_in_step_point)
+    return place_additions(add_oil_from_steps(draft, only_in_step_point))
 
 
 def build_draft_from_references(
@@ -984,13 +987,85 @@ def _referenced_issues(
     return issues
 
 
+_STEP_SENTENCE = re.compile(r"[^.;!?\n]+[.;!?]?")  # a step's sentences, as derived.py reads them
+_OF = {"של", "of"}  # between an amount and its ingredient: "חצי כוס של חלב"
+# What a sentence does with an ingredient, and the group name that says the same: "לקשט בתותים" and "לקישוט".
+_PURPOSE_GROUPS = {
+    "קישוט": re.compile(r"(?<!\w)[ול]?(?:לקשט|מקשטים|מקשטות|מקשט|מקשטת|קשטו|נקשט|קישוט)(?!\w)|(?<!\w)(?:garnish|decorate)", re.IGNORECASE),
+    "הגשה": re.compile(r"(?<!\w)[ול]?(?:להגיש|מגישים|מגישות|הגישו|נגיש|הגשה)(?!\w)|(?<!\w)(?:to serve|for serving)(?!\w)", re.IGNORECASE),
+    "ציפוי": re.compile(r"(?<!\w)[ול]?(?:לצפות|מצפים|מצפות|נצפה|ציפוי)(?!\w)|(?<!\w)(?:to coat|coating)(?!\w)", re.IGNORECASE),
+}
+
+
 def only_in_step_point(words: str, step: str) -> schemas.Issue:
+    """The point about an ingredient that a step uses and the list does not name. It quotes the step's sentence
+    that names it, and offers the step's own words for it as the line to add if the person approves; where that
+    line would go is decided with the whole draft (place_additions)."""
+    sentence = next((s.strip() for s in _STEP_SENTENCE.findall(step) if _written(words, s) is not None), step)
     return schemas.Issue(
         kind="ingredient_only_in_steps",
-        message=f'המצרך "{words}" מופיע באופן ההכנה אבל לא ברשימת המצרכים. ייתכן שהמתכון המקורי לא מפרט אותו; '
-        "הוא לא נוסף לרשימה ולא נקבעה לו כמות. הוסיפו אותו אם צריך.",
-        quote=_short(step, 300),
+        message=f'המצרך "{words}" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.',
+        quote=_short(sentence, 300),
+        proposed=_proposed_line(words, sentence),
     )
+
+
+def _written(words: str, sentence: str) -> re.Match | None:
+    """Where the sentence writes the words, with the Hebrew letters that attach before them ("בתותים")."""
+    pattern = r"\s+".join(re.escape(word) for word in words.split())
+    return re.search(rf"(?<!\w)(?P<prefix>[ומבלכשה]{{0,3}}){pattern}(?!\w)", sentence, re.IGNORECASE)
+
+
+def _proposed_line(words: str, sentence: str) -> schemas.ProposedIngredient:
+    """The words as the step writes them, with the amount the step writes right before them when nothing comes
+    between ("ממיסים 200 גרם שוקולד" -> "200 גרם שוקולד", "200 גרם"; "של" may). An amount anywhere else, or
+    before words that carry a letter such as "ב" ("מקשטים ב-5 תותים"), is not taken: no amount is guessed."""
+    match = _written(words, sentence)
+    if match is not None and not match.group("prefix"):
+        before = sentence[: match.start()].split()
+        of = before.pop() if before and before[-1].lower() in _OF else None
+        for count in (3, 2, 1):
+            if len(before) < count:
+                continue
+            amount = " ".join(before[-count:])
+            for written in (amount, amount[1:]) if amount.startswith("ו") else (amount,):  # "וחצי כוס חלב"
+                line = " ".join(part for part in (written, of, match.group(0)) if part)
+                if find_quantity(line) == written:
+                    return schemas.ProposedIngredient(text=line, quantity=written)
+    return schemas.ProposedIngredient(text=words)
+
+
+def place_additions(draft: schemas.RecipeInput) -> schemas.RecipeInput:
+    """The draft with the group each proposed line would go to, only where the context says which: the
+    sentence decorates, serves or coats and one group is named for that ("לקשט בתותים" and "לקישוט"), or the
+    step's own group has the name of one ingredient group ("לקרם" and "קרם"). Otherwise the line goes where
+    the list keeps lines without a group (None). Nothing is added to the list here."""
+    names = [(group.name, _purpose_name(group.name)) for group in draft.ingredient_groups if group.name]
+    issues = []
+    for issue in draft.issues:
+        if issue.kind == "ingredient_only_in_steps" and issue.proposed is not None and issue.proposed.group is None:
+            group = _context_group(issue.quote or "", draft.step_groups, names)
+            if group is not None:
+                issue = issue.model_copy(update={"proposed": issue.proposed.model_copy(update={"group": group})})
+        issues.append(issue)
+    return draft.model_copy(update={"issues": issues})
+
+
+def _purpose_name(name: str) -> str:
+    """A group's name as compared: without heading marks or a leading "ל" ("לקישוט:" -> "קישוט")."""
+    plain = _clean(name).strip(_HEADING_EDGES)
+    return re.sub(r"^ל(?=\w{3})", "", plain).lower()
+
+
+def _context_group(sentence: str, step_groups: list[schemas.StepGroup], names: list[tuple[str, str]]) -> str | None:
+    """The one ingredient group the sentence's context names (a purpose group's first word: "קישוט (לא חובה)"),
+    or None when no group, or more than one, fits."""
+    found = {name for name, plain in names for purpose, said in _PURPOSE_GROUPS.items() if said.search(sentence) and plain.split()[:1] == [purpose]}
+    if not found:
+        quote = sentence.rstrip("…")
+        own = next((group.name for group in step_groups if group.name and any(quote in step for step in group.steps)), None)
+        found = {name for name, plain in names if own is not None and plain == _purpose_name(own)}
+    return found.pop() if len(found) == 1 else None
 
 
 def _only_in_steps(

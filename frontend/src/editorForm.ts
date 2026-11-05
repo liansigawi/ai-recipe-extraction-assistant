@@ -2,7 +2,7 @@
 // form fields -> what the API expects, validation, and small list helpers.
 // No React here, so all of it is easy to test (editorForm.test.ts).
 import { creatorsFromText, creatorToText } from './credit'
-import type { Issue, Recipe, RecipeInput, RecipeStatus, SourceKind } from './types'
+import type { Issue, Recipe, RecipeInput, RecipeStatus, ResolvedIssue, SourceKind } from './types'
 
 // --- Form state --------------------------------------------------------------------------
 
@@ -23,6 +23,8 @@ export interface IngredientRow {
   quantity: string
   /** A line the app added from the preparation: the sentence it comes from (kept while the row stays). */
   derivedFrom: string | null
+  /** Added because the person approved a review point (with derivedFrom), not by the app's rule. */
+  addedInReview: boolean
 }
 export interface IngredientGroupForm {
   key: string
@@ -49,9 +51,14 @@ export interface SourceRow {
   /** Names separated by commas. */
   creators: string
 }
-/** A review issue of an imported draft; the person can mark it as handled (it is then removed). */
+/** A review issue of an imported draft, still open (reviewPoints.ts resolves it). */
 export interface IssueRow extends Issue {
   key: string
+}
+/** A point resolved in review. `saved`: the notebook has it so (false until the next save succeeds). */
+export interface ResolvedRow extends ResolvedIssue {
+  key: string
+  saved: boolean
 }
 
 /** Every field is a string while editing, because that is what inputs hold. */
@@ -69,12 +76,14 @@ export interface RecipeForm {
   sources: SourceRow[]
   /** Still open review issues (imported drafts only). */
   issues: IssueRow[]
+  /** The points resolved in review, and how: kept, and saved with the recipe, also once it is saved as a recipe. */
+  resolved: ResolvedRow[]
 }
 
 /** Error messages by field path, e.g. "ingredient_groups.0.ingredients.2.quantity". */
 export type FieldErrors = Record<string, string>
 
-export const emptyIngredient = (): IngredientRow => ({ key: newKey(), text: '', quantity: '', derivedFrom: null })
+export const emptyIngredient = (): IngredientRow => ({ key: newKey(), text: '', quantity: '', derivedFrom: null, addedInReview: false })
 export const emptyIngredientGroup = (): IngredientGroupForm => ({ key: newKey(), name: '', ingredients: [emptyIngredient()] })
 export const emptyStep = (): StepRow => ({ key: newKey(), text: '' })
 export const emptyStepGroup = (): StepGroupForm => ({ key: newKey(), name: '', steps: [emptyStep()] })
@@ -95,6 +104,7 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
       notes: [],
       sources: [],
       issues: [],
+      resolved: [],
     }
   }
   return {
@@ -116,6 +126,7 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
               text: ingredient.text,
               quantity: ingredient.quantity ?? '',
               derivedFrom: ingredient.derived_from ?? null,
+              addedInReview: ingredient.added_in_review === true,
             })),
           })),
     step_groups:
@@ -134,6 +145,7 @@ export function recipeToForm(recipe?: Recipe): RecipeForm {
       creators: source.creators.map(creatorToText).join(', '),
     })),
     issues: recipe.issues.map((issue) => ({ ...issue, key: newKey() })),
+    resolved: recipe.resolved_issues.map((issue) => ({ ...issue, key: newKey(), saved: true })),
   }
 }
 
@@ -149,7 +161,8 @@ const orNull = (text: string) => (blank(text) ? null : text.trim())
  * next to the right input, even if an empty row above it was skipped.
  *
  * `status` comes from the button pressed: 'saved' saves a recipe (open issues are dropped:
- * the person has reviewed it); 'draft' keeps a draft with its open issues for later.
+ * the person has reviewed it); 'draft' keeps a draft with its open issues for later. The points
+ * resolved in review are sent either way, in the same save as the lines they added.
  */
 export function formToInput(
   form: RecipeForm,
@@ -174,6 +187,7 @@ export function formToInput(
         text: row.text.trim(),
         quantity: orNull(row.quantity),
         ...(row.derivedFrom !== null && { derived_from: row.derivedFrom }),
+        ...(row.derivedFrom !== null && row.addedInReview && { added_in_review: true }),
       })),
     })
   })
@@ -216,7 +230,8 @@ export function formToInput(
     notes,
     sources,
     status,
-    issues: status === 'draft' ? form.issues.map(({ kind, message, quote }) => ({ kind, message, quote })) : [],
+    issues: status === 'draft' ? form.issues.map(({ key: _key, ...issue }) => issue) : [],
+    resolved_issues: form.resolved.map(({ key: _key, saved: _saved, ...issue }) => issue),
   }
   return { input, pathMap }
 }

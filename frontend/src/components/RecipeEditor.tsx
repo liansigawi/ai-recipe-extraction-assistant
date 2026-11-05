@@ -153,7 +153,7 @@ export default function RecipeEditor({ recipe, categories, onSaved, onCancel, on
         </p>
       )}
       {recipe?.original != null && <OriginalText original={recipe.original} open={isDraft} sticky={isDraft} />}
-      {isDraft && <ReviewIssues issues={form.issues} onChange={(issues) => update({ ...form, issues })} />}
+      {isDraft && <ReviewIssues form={form} onChange={update} />}
       {/* What was saved from the post, to look at while reviewing; the cover and removal are in the recipe view. */}
       {isDraft && recipe !== undefined && recipe.media.length > 0 && <MediaGallery recipe={recipe} />}
 

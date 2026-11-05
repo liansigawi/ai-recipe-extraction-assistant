@@ -78,11 +78,17 @@ class Ingredient(ContractModel):
     # A line the app added from the preparation (app/extraction/derived.py, e.g. "מעט שמן לטיגון"): the
     # sentence of the steps it comes from. None: a line of the recipe's own list, or one typed in.
     derived_from: Annotated[NonEmptyStr, Field(max_length=500)] | None = None
+    # True: added because the person approved a review point about an ingredient only the steps name, not by
+    # the app's rule; derived_from holds the step's sentence. Left out when false, so a line saved before
+    # it existed is stored and compared exactly as before.
+    added_in_review: bool = Field(default=False, exclude_if=lambda value: not value)
 
     @model_validator(mode="after")
     def _quantity_is_quoted_from_text(self) -> "Ingredient":
         if self.quantity is not None and not quoted_from(self.quantity, self.text):
             raise ValueError(f"quantity {self.quantity!r} must be quoted exactly as written in {self.text!r}")
+        if self.added_in_review and self.derived_from is None:
+            raise ValueError("a line added in review keeps the sentence of the steps it comes from (derived_from)")
         return self
 
 
@@ -168,7 +174,7 @@ RecipeStatus = Literal["draft", "saved"]
 # What an import can flag for review. The model may report the first group; the backend adds
 # the second group from its own checks of the model's answer (app/extraction/review.py).
 ModelIssueKind = Literal[
-    "ingredient_only_in_steps",  # the steps use an ingredient the list does not name; it is NOT added
+    "ingredient_only_in_steps",  # the steps use an ingredient the list does not name; added only if the person approves
     "unclear_text",  # cut off, garbled, or wording that can be read two ways
     "missing_information",  # something a cook needs that the text does not give
     "ambiguous_alternative",  # an "or ..." whose scope is unclear
@@ -189,12 +195,47 @@ BackendIssueKind = Literal[
 IssueKind = ModelIssueKind | BackendIssueKind
 
 
+class ProposedIngredient(ContractModel):
+    """The line that approving a point about an ingredient only the steps name adds to the list: the step's
+    own words for it, with an amount only when the step writes one right before them (never guessed)."""
+
+    text: Annotated[NonEmptyStr, Field(max_length=200)]  # "תותים"; "200 גרם שוקולד" from "ממיסים 200 גרם שוקולד"
+    quantity: NonEmptyStr | None = None  # quoted from text, as in any ingredient line
+    group: NonEmptyStr | None = None  # the existing ingredient group it goes to; None: the list's ungrouped place
+
+    @model_validator(mode="after")
+    def _quantity_is_quoted_from_text(self) -> "ProposedIngredient":
+        if self.quantity is not None and not quoted_from(self.quantity, self.text):
+            raise ValueError(f"quantity {self.quantity!r} must be quoted exactly as written in {self.text!r}")
+        return self
+
+
 class Issue(ContractModel):
     """Something the person should check before saving an imported draft."""
 
     kind: IssueKind
     message: NonEmptyStr  # for the person, in Hebrew
     quote: NonEmptyStr | None = None  # the exact words of the original text it is about, if any
+    # On an "ingredient_only_in_steps" point: the line the review screen offers to add (app/extraction/review.py,
+    # propose_additions). Left out when there is none, so a point stored before it existed stays as it was.
+    proposed: ProposedIngredient | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class ResolvedIssue(Issue):
+    """A review point the person resolved, kept with the recipe as the record of its review.
+
+    "added": they approved adding the line it proposes (`proposed`: the line as it was added, and its group);
+    "dismissed": they chose to ignore it, for this point of this recipe only; "handled": they marked it done
+    after checking it, or correcting the form themselves.
+    """
+
+    resolution: Literal["added", "dismissed", "handled"]
+
+    @model_validator(mode="after")
+    def _added_has_its_line(self) -> "ResolvedIssue":
+        if self.resolution == "added" and self.proposed is None:
+            raise ValueError("an added point keeps the line that was added (proposed)")
+        return self
 
 
 ImportKind = Literal["text", "instagram", "website"]  # screenshots come later
@@ -269,6 +310,7 @@ class Recipe(RecipeContent):
     is_sample: bool = False  # True for the built-in examples, which were invented for the project
     status: RecipeStatus = "saved"
     issues: list[Issue] = []  # what to check before saving a draft
+    resolved_issues: list[ResolvedIssue] = []  # the points resolved in review, and how; kept after saving
     # Whether you have cooked it. Changed only with PUT /api/recipes/{id}/cooked, never by saving.
     cooked: bool = False
     original: ImportedOriginal | None = None  # None: typed in by hand
@@ -301,6 +343,8 @@ class RecipeInput(RecipeContent):
     healthy: bool | None = None  # only with a category whose healthy_style is true (the desserts)
     status: RecipeStatus = "saved"  # the review screen sends "draft" to keep reviewing later
     issues: list[Issue] = []  # the issues still open, when saving a draft
+    # The points resolved in review, with the same save as the content they changed: a failed save records nothing.
+    resolved_issues: list[ResolvedIssue] = []
 
     @model_validator(mode="after")
     def _subcategory_needs_category(self) -> "RecipeInput":

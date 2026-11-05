@@ -15,6 +15,9 @@ export interface Ingredient {
   /** A line the app added from the preparation (e.g. "מעט שמן לטיגון"): the sentence of the steps it comes
    * from, shown with DERIVED_LABEL. null or absent: a line of the recipe's own list, or one typed in. */
   derived_from?: string | null
+  /** true: added because you approved a review point about an ingredient only the steps name (shown with
+   * ADDED_IN_REVIEW_LABEL, derived_from holding the step's sentence). Absent: false. */
+  added_in_review?: boolean
 }
 
 export interface IngredientGroup {
@@ -83,6 +86,27 @@ export interface Issue {
   message: string
   /** The exact words of the original text it is about, or null. */
   quote: string | null
+  /** On an 'ingredient_only_in_steps' point: the line that approving it adds. Absent on points saved before
+   * 2026-11-04 (proposalOf reads the ingredient from their message). */
+  proposed?: ProposedIngredient | null
+}
+
+/** The step's own words for an ingredient it names, with an amount only when the step writes one right before them. */
+export interface ProposedIngredient {
+  text: string
+  quantity: string | null
+  /** The existing ingredient group it goes to; null: where the list keeps lines without a group. */
+  group: string | null
+}
+
+/** 'added': you approved adding its line; 'dismissed': you chose to ignore it (this point, this recipe);
+ * 'handled': you marked it done after checking it or correcting the form. */
+export type Resolution = 'added' | 'dismissed' | 'handled'
+
+/** A review point you resolved, kept with the recipe as the record of its review. For 'added', `proposed`
+ * is the line as it was added, with its group. */
+export interface ResolvedIssue extends Issue {
+  resolution: Resolution
 }
 
 /** The text a recipe was imported from, exactly as pasted. Read-only. */
@@ -152,6 +176,8 @@ export interface Recipe extends RecipeContent {
   status: RecipeStatus
   /** What to check before saving a draft. */
   issues: Issue[]
+  /** The points resolved in review, and how (kept after it is saved as a recipe). */
+  resolved_issues: ResolvedIssue[]
   /** Whether you have cooked it. Changed only with setCooked, never by saving the recipe. */
   cooked: boolean
   /** null: typed in by hand. */
@@ -207,6 +233,8 @@ export interface RecipeInput extends RecipeContent {
   status: RecipeStatus
   /** The issues still open, when saving a draft. */
   issues: Issue[]
+  /** The points resolved in review: saved with the content they changed, never apart from it. */
+  resolved_issues: ResolvedIssue[]
 }
 
 /** GET /api/extraction: can imports use a model right now, and which one? */
