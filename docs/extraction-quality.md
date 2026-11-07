@@ -135,6 +135,25 @@ uv run python -m evals.run_extraction --extractor ollama --case 38-chicken-soup-
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
 
+### 2026-11-07 (later): two replacements for the featured examples
+
+The latte (17) and the savory pancakes (14), both filed as desserts above, were replaced on the comparison pages
+by two savory recipes the classifier had right in both runs of the measurement of 2026-11-05, whose saved recipes
+match their originals line for line. No website recipe qualified (51 and 55 were classified wrongly in that
+measurement). Each was imported once through the Instagram import, its caption reader replaying what the original
+import read and every download refused (16:51-16:52 UTC, qwen3:8b, temperature 0, code 8ab50fb), the first
+completed run of each (`data/evals/extraction/20261107-replacements/`). Two curated recipes: not an accuracy
+estimate.
+
+| Recipe | The model's category · type | Expected | Points raised | Review changed |
+|---|---|---|---|---|
+| 36 חלומי קריספי פסטה | ארוחות קלילות | the same | 1 (no pictures found, the system's) | nothing |
+| 38 סלט ענבים וירוקים | סלטים | the same | 1 (no pictures found, the system's) | nothing |
+
+- **The point on pictures** came from the replay, which gave the import no media; it was marked done.
+- **Extraction**: every ingredient line, quantity, step and note as the original has it; the group "למרינדה"
+  (36) and the two remarks marked "*" (38) kept; the sponsor line, introductions, credit and hashtags left out.
+
 ### 2026-11-07: the five featured examples imported again, with the adopted classifier
 
 The recipes of the five comparison pages, each imported once more from its preserved original on its own

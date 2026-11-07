@@ -155,7 +155,9 @@ The page then has:
   rule did, or a wrong category the model chose, is never shown as a review change;
 - "סיווג", the classification before and after review (above);
 - the review points, each with who raised it (the model or the system), the passage it quotes and what
-  review decided, or "הייבוא לא סימן נקודות לבדיקה.";
+  review decided, or "הייבוא לא סימן נקודות לבדיקה."; under a point that the post's pictures were not found,
+  that the demonstration did not read the post again (its caption came from the original import, without
+  pictures or videos);
 - the original text beside "המתכון לאחר הבדיקה", the demonstration's reviewed result, where a line added
   from a point says "נוסף בעקבות התרעה" and opens its sentence;
 - folded under "הצגת הטיוטה לפני הבדיקה": the draft as the import saved it, with the model's category.
@@ -163,31 +165,39 @@ The page then has:
 Decisions are text, never buttons: the public copy changes nothing. The other recipes keep the saved
 recipe's comparison.
 
-The five comparison pages show demonstrations run on 2026-11-07, 11:51-11:53 UTC, with qwen3:8b
-(temperature 0, labeling mode, 8,192 tokens) at code 75bfd06: the first completed run of each, none retried,
-each on its own copy of the notebook. Each read its recipe's preserved original through the text import,
-which hands it to the same function as the Instagram or website import did, without fetching the post or
-the page again (so without its pictures). Inputs, raw answers, drafts, copies and the review script are in
-`data/evals/extraction/20261107-five-demonstrations/`. The reviews were performed while preparing them:
+The five comparison pages show demonstrations run on 2026-11-07 with qwen3:8b (temperature 0, labeling
+mode, 8,192 tokens): the first completed run of each, none retried, each on its own copy of the notebook.
+- 12, 15 and 29 ran at 11:51-11:53 UTC at code 75bfd06, each from its recipe's preserved original through
+  the text import, which hands it to the same function as the Instagram or website import did, without
+  fetching the post or the page again. Evidence: `data/evals/extraction/20261107-five-demonstrations/`.
+- 36 and 38 ran at 16:51-16:52 UTC at code 8ab50fb through the Instagram import itself, its caption reader
+  replaying what the original import read (the caption, the page it came from, the author and co-authors) and
+  every download refused: nothing was fetched again. Without the post's pictures, each draft raised the point
+  that none were found, marked done in review. Evidence: `data/evals/extraction/20261107-replacements/`.
+
+The reviews were performed while preparing them:
 - 12: the model chose "קינוחים · טארטים ופאי"; the system raised one point (strawberries only in the
   steps) and joined the oven remark to its step. Review added the strawberries, with no amount, and
   corrected the type to "עוגות".
 - 15: the model chose "קינוחים · עוגות"; no point. Review put the remark in brackets about a tall cake's
   baking time back into its baking step (the original writes it on that step's line; the draft made it a
   note).
-- 17: the model chose "קינוחים · גלידות וקינוחים קפואים"; no point. Review corrected the category to
-  "משקאות".
-- 14: the model chose "קינוחים · מאפים מתוקים"; the system raised one point (a remark on the cheese kept as
-  a note), marked done. Review corrected the category to "ארוחות קלילות" and restored the yield line the
-  model left out, "מהתערובת הכנתי 4 פנקייקים, הערכים ליחידה-", before the nutrition values it introduces.
-  The saved recipe lacks that line too; it was not changed.
 - 29: the model chose "קינוחים · מאפים מתוקים", right; the system kept both lines that refer to the
   separate dough recipe, left out the model's five "unclear or" points (no "או" in those passages) and
   raised two points (the title chosen from the opening line, the separate recipe), both marked done. Review
   changed nothing.
+- 36 (halloumi wrapped in spaghetti): the model chose "ארוחות קלילות", right; the draft kept the group
+  "למרינדה", the servings "10 יחידות" and the six steps, and left out the sponsor line, the introduction
+  and the hashtags. Review changed nothing.
+- 38 (grape and herb salad): the model chose "סלטים", right; the draft kept the 13 ingredient lines, the
+  four steps and both remarks marked "*" as notes, and left out the introduction and its credit. Review
+  changed nothing.
 
-The demonstrations of 2026-11-05 (12, 17 and 29) are kept beside them in `demonstrations/`, unpublished,
-and recipe 15's classification check in `classifications/15.json`.
+36 and 38 replaced 17 and 14 on 2026-11-07, chosen for clean extraction and a right classification (in
+both runs of the measurement of 2026-11-05, and in these runs); 17 and 14 stay in the gallery. Their
+demonstrations of that morning are kept in `demonstrations/20261107/`, unpublished, beside the
+demonstrations of 2026-11-05 (12, 17 and 29) and recipe 15's classification check
+(`classifications/15.json`).
 
 ## Costs and limitations
 
