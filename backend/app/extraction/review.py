@@ -478,8 +478,18 @@ def build_draft_from_references(
     previous: str | None = None  # the role of the passage before
     # Lines that hold the recipe's own ingredient list, for telling a list inside an introduction apart.
     ingredient_lines = {s.line for s in segments if labels.get(s.id) in ("ingredient", "ingredient_heading")}
+    references = _references(source_text, segments, labels)  # first passage -> last, of each line kept as written
+    referred: list[list[int]] = []
     for segment in segments:
         if segment.id == joined or segment.id <= skip_through:
+            continue
+        if segment.id in references:
+            # A part of the recipe made by a separate recipe of the source: among the steps, an instruction (a step);
+            # in the ingredient list, what that part is (a note). As written; the other recipe is not in the text.
+            item = [segment.id, references[segment.id]]
+            (step_groups[-1]["items"] if step_groups else notes).append(item)
+            referred.append(item)
+            skip_through, current, last_note, previous = item[1], item, None, "step" if step_groups else "tip"
             continue
         role = labels.get(segment.id)
         if role == "continues":
@@ -664,6 +674,8 @@ def build_draft_from_references(
     note_list: list[str] = []
     for first, last in notes:
         text = _line(text_of(first, last, keep_labels=first in info_starts or first in labeled_notes))
+        if [first, last] in referred:
+            text = _heading(text) or ""  # "|בצק הסופגניות הקלאסי שלי - ...": the list's heading mark is not part of the note
         if text and normalize(text) not in {normalize(kept) for kept in note_list}:
             note_list.append(text)
             _flag_promo(text, "ההערה", issues)
@@ -684,6 +696,8 @@ def build_draft_from_references(
     lines = [item["text"] for group in ingredient_list for item in group["ingredients"]]
     issues.extend(_only_in_steps(output, source_text, segments, steps, lines))
     issues.extend(_missing_information(source_text, steps))
+    if referred:
+        issues.append(_separate_recipe(_heading(passage_text(source_text, segments, *referred[0])) or ""))
     if not ingredient_list and not step_list:
         issues.append(schemas.Issue(kind="missing_information", message="לא נמצאו בטקסט מצרכים או שלבי הכנה."))
     return _draft(title, servings, ingredient_list, step_list, note_list, category_id, subcategory_id, issues)
@@ -908,6 +922,91 @@ def join_closing_remarks(step_groups: list[schemas.StepGroup], source_text: str)
                 steps.append(step)
         joined.append(group.model_copy(update={"steps": steps}))
     return joined
+
+
+# A sentence that sends the cook to a separate recipe of the source for a part of this one ("מכינים בצק סופגניות לפי
+# המתכון לבצק סופגניות קלאסי שלי מהבלוג", "בצק הסופגניות הקלאסי שלי - נמצא בבלוג ובפיד"): it says where the other
+# recipe is, that it is where to look or what to follow, and which part or recipe it is about. All three, so a call
+# to action ("הלינק בביו") or a shop's line is not one.
+_ELSEWHERE = re.compile(
+    r"(?<!\w)[ובלמהש]{0,3}(?:בלוג|פיד|היילייט\w*|הייליט\w*|הילייט\w*|פוסט|לינק|ביו|אתר|ערוץ)(?!\w)"
+    r"|(?<!\w)(?:blog|feed|highlights?|bio|website|channel|link)(?!\w)",
+    re.IGNORECASE,
+)
+_REFERS = re.compile(
+    r"(?<!\w)ו?(?:לפי|נמצא|נמצאת|נמצאים|תמצאו|מופיע|מופיעה|מופיעים)(?!\w)|(?<!\w)(?:according to|follow|following|see|found)(?!\w)",
+    re.IGNORECASE,
+)
+_PART = re.compile(
+    r"(?<!\w)[ובלמהש]{0,3}(?:מתכון|מתכונים|בצק|בלילה|עיסה|עיסת|רוטב|מרינדה|קרם|מילוי|ציפוי|ממרח)(?!\w)"
+    r"|(?<!\w)(?:recipe|dough|batter|sauce|filling|frosting|crust)(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def refers_elsewhere(text: str) -> bool:
+    """Does the text send the cook to a separate recipe of the source for a part of this one?"""
+    return bool(_ELSEWHERE.search(text) and _REFERS.search(text) and _PART.search(text))
+
+
+def _references(source_text: str, segments: list[Segment], labels: dict[int, str]) -> dict[int, int]:
+    """Lines of the recipe's body (after its first ingredient or heading, before its last step) that the answer
+    left out as not part of the recipe, but that send the cook to a separate recipe for a part of this one:
+    first passage -> last passage of the run it starts on its line (a wish or hashtags after it stay out). The
+    model labels such a line as a link to elsewhere; it is the recipe's own instruction, or what one part is."""
+    content = [s.id for s in segments if labels.get(s.id) in ("ingredient", "ingredient_heading", "step", "step_heading")]
+    steps = [s.id for s in segments if labels.get(s.id) == "step"]
+    found: dict[int, int] = {}
+    if not content or not steps:
+        return found
+    taken: set[int] = set()
+    for segment in segments:
+        text = segment.text(source_text)
+        if segment.id in taken or not content[0] < segment.id < steps[-1] or labels.get(segment.id) != "not_recipe" or not refers_elsewhere(text):
+            continue
+        line = [s for s in segments if s.line == segment.line]
+        start = next(i for i, s in enumerate(line) if s.id == segment.id)
+        while start > 0 and labels.get(line[start - 1].id) == "not_recipe" and not _left_out_of_a_reference(source_text, line[start - 1]):
+            start -= 1
+        end = start
+        while end + 1 < len(line) and labels.get(line[end + 1].id) == "not_recipe" and not _left_out_of_a_reference(source_text, line[end + 1]):
+            end += 1
+        found[line[start].id] = line[end].id
+        taken |= {s.id for s in line[start : end + 1]}
+    return found
+
+
+def reference_lines(source_text: str) -> list[tuple[int, str]]:
+    """Every line of a text that sends the cook to a separate recipe for a part of the recipe: (its line number, its
+    words as a new import keeps them, without a heading mark, or a wish or hashtags beside them). For bringing a saved
+    recipe up to the rule (scripts/maintain_recipes.py); whether a line is inside the recipe is the caller's to judge."""
+    segments = segment_text(source_text)
+    found = []
+    for line in sorted({s.line for s in segments}):
+        run = [s for s in segments if s.line == line]
+        if not any(refers_elsewhere(s.text(source_text)) for s in run):
+            continue
+        while run and _left_out_of_a_reference(source_text, run[0]):
+            run = run[1:]
+        while run and _left_out_of_a_reference(source_text, run[-1]):
+            run = run[:-1]
+        if run:
+            found.append((line, _line(_heading(passage_text(source_text, segments, run[0].id, run[-1].id)) or "", numbered=True)))
+    return found
+
+
+def _left_out_of_a_reference(source_text: str, segment: Segment) -> bool:
+    """A wish, a call to followers, or only hashtags and symbols: not part of the reference beside it."""
+    text = segment.text(source_text)
+    return bool(_PROMO_ONLY.fullmatch(text) or _SOCIAL.search(text) or _PROMO.search(text))
+
+
+def _separate_recipe(text: str) -> schemas.Issue:
+    return schemas.Issue(
+        kind="missing_information",
+        message="הטקסט מפנה למתכון נפרד לחלק מהמתכון. ההפניה נשמרה כמו שהיא כתובה; המתכון הנפרד עצמו לא כלול בטקסט, ולכן לא יובא.",
+        quote=_short(text, 300),
+    )
 
 
 def _wrapped(before: str, line: str) -> bool:

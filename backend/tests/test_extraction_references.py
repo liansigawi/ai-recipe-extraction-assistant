@@ -1037,9 +1037,54 @@ def test_an_unclear_or_is_shown_only_in_a_passage_that_has_one(step, shown):
                       issues=[{"kind": "ambiguous_alternative", "passage": 3}])
     assert [(i.kind, i.quote) for i in draft.issues if i.kind == "ambiguous_alternative"] == ([("ambiguous_alternative", step)] if shown else [])
 
+
 def test_a_title_chosen_from_the_opening_line_says_so_and_quotes_it():
     source = "איזה שם מתאים יותר: סופגניות סנט הונורה או סופגניות קרם ברולה?\n2 כוסות קמח\nמערבבים."
     draft = draft_for(source, ["not_recipe", "not_recipe", "ingredient", "step"], title="סופגניות קרם ברולה", title_written_in_text=False)
     [point] = [i for i in draft.issues if i.kind == "missing_title"]
     assert point.message == 'אין בטקסט שורת כותרת. הכותרת "סופגניות קרם ברולה" נבחרה מתוך השורה הפותחת; אשרו אותה או שנו.'
     assert point.quote == "איזה שם מתאים יותר: סופגניות סנט הונורה או סופגניות קרם ברולה?"
+
+
+# --- A part of the recipe made by a separate recipe of the source ---------------------------------------------
+
+DOUGH = (
+    "סופגניות קרם\n|קרם:\n500 גר׳ חלב\n|בצק הסופגניות הקלאסי שלי - נמצא בבלוג ובפיד, לעשות בדיוק לפי ההוראות.\n|אופן ההכנה:\n"
+    "מבשלים את החלב לקרם.\nמכינים בצק סופגניות לפי המתכון לבצק סופגניות קלאסי שלי מהבלוג. עושים הכל לפי ההוראות כולל הטיגון.\n"
+    "ממלאים כל סופגניה בקרם.\nבתיאבון 💕"
+)
+DOUGH_ROLES = ["title", "ingredient_heading", "ingredient", "not_recipe", "step_heading", "step", "not_recipe", "not_recipe", "step", "not_recipe"]
+
+
+def test_a_reference_to_a_separate_recipe_for_a_part_is_kept_as_written_and_pointed_out():
+    draft = draft_for(DOUGH, DOUGH_ROLES, title="סופגניות קרם", title_written_in_text=True)
+    assert draft.step_groups[0].steps == [
+        "מבשלים את החלב לקרם.",
+        "מכינים בצק סופגניות לפי המתכון לבצק סופגניות קלאסי שלי מהבלוג. עושים הכל לפי ההוראות כולל הטיגון.",  # an instruction
+        "ממלאים כל סופגניה בקרם.",
+    ]
+    assert draft.notes == ["בצק הסופגניות הקלאסי שלי - נמצא בבלוג ובפיד, לעשות בדיוק לפי ההוראות."]  # what that part is
+    assert ingredient_texts(draft) == ["500 גר׳ חלב"]  # nothing of the other recipe is invented
+    [point] = [i for i in draft.issues if i.kind == "missing_information"]
+    assert "מתכון נפרד" in point.message and point.quote == draft.notes[0]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "קנו את הספר שלי בלינק בביו.",  # a call to action: no part of the recipe, nothing to follow
+        "עקבו אחרי בבלוג לעוד מתכונים.",
+    ],
+)
+def test_other_lines_left_out_stay_out(line):
+    source = DOUGH.replace("מכינים בצק סופגניות לפי המתכון לבצק סופגניות קלאסי שלי מהבלוג. עושים הכל לפי ההוראות כולל הטיגון.", line)
+    count = len(segment_text(source))
+    roles = DOUGH_ROLES[:6] + ["not_recipe"] * (count - 8) + DOUGH_ROLES[-2:]
+    draft = draft_for(source, roles, title="סופגניות קרם", title_written_in_text=True)
+    assert draft.step_groups[0].steps == ["מבשלים את החלב לקרם.", "ממלאים כל סופגניה בקרם."]
+
+
+def test_a_reference_after_the_last_step_is_not_taken_into_the_recipe():
+    source = "עוגה\n2 כוסות קמח\nאופים.\nאת הקרם מכינים לפי המתכון שלי בבלוג."
+    draft = draft_for(source, ["title", "ingredient", "step", "not_recipe"], title="עוגה", title_written_in_text=True)
+    assert draft.step_groups[0].steps == ["אופים."] and draft.notes == []
