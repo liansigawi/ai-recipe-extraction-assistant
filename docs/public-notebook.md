@@ -130,8 +130,8 @@ The page then has:
   demonstration;
 - the original text beside "המתכון לאחר הבדיקה", the demonstration's reviewed result, where a line added
   from a point says "נוסף בעקבות התרעה" and opens its sentence;
-- folded under "הצגת הטיוטה לפני הבדיקה": the draft, its points with the action taken, and what review
-  changed, part by part.
+- folded under "הצגת הטיוטה לפני הבדיקה": the draft, its points with the action taken (or "הייבוא לא סימן
+  נקודות לבדיקה." when it had none), and what review changed, part by part.
 
 Decisions are text, never buttons: the public copy changes nothing. The other recipes keep the saved
 recipe's comparison.

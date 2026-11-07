@@ -301,6 +301,42 @@ describe('the public copy', () => {
     expect(window.location.hash).toBe('#/recipes/12')
   })
 
+  it('a demonstration of a recipe whose own draft a backup kept says that draft is kept apart, not that it is lost', async () => {
+    const both = { ...notebook, recipes: notebook.recipes.map((r) => (r.id === 6 ? { ...r, processing: { ...r.processing!, demonstration } } : r)) }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(both), { status: 200 })))
+    const user = userEvent.setup()
+    await renderCopy()
+    await openRecipe(user, DRINK)
+    await user.click(screen.getByRole('button', { name: 'מהמקור למתכון' }))
+    expect(document.querySelector('.demonstration-meta')).toHaveTextContent('הטיוטה של הייבוא המקורי, מ-20 באוקטובר 2026, שמורה בנפרד ואינה מוצגת כאן')
+  })
+
+  it('a demonstration whose draft had no points says so; only the corrected category is listed as a review change', async () => {
+    const recipe = notebook.recipes.find((r) => r.id === 6)!
+    const state = { title: DRINK, servings: null, healthy: null, ingredient_groups: recipe.ingredient_groups, step_groups: recipe.step_groups, notes: [] }
+    const drink: Demonstration = {
+      run_at: '2026-11-05T13:18:17Z',
+      model: 'qwen3:8b',
+      draft: { ...state, category: desserts, subcategory: { id: 14, name: 'קינוחי כוסות ומוסים' }, issues: [], saved_at: '2026-11-05T13:18:17Z' },
+      reviewed: { ...state, category: drinks, subcategory: null, issues: [], resolved_issues: [], saved_at: '2026-11-05T13:19:54Z' },
+    }
+    const shown = { ...notebook, recipes: notebook.recipes.map((r) => (r.id === 6 ? { ...r, processing: { draft: null, demonstration: drink } } : r)) }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(shown), { status: 200 })))
+    const user = userEvent.setup()
+    await renderCopy()
+    await openRecipe(user, DRINK)
+    await user.click(screen.getByRole('button', { name: 'מהמקור למתכון' }))
+    const summary = within(screen.getByRole('region', { name: 'מה קרה בהדגמה הזו' }))
+    expect(summary.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'קטגוריההצעת המודלתוקן בבדיקההמודל הציע "קינוחים · קינוחי כוסות ומוסים"; בבדיקה זה תוקן ל"משקאות".',
+    ])
+    expect(summary.getByText('בלי תיקון בבדיקה: כותרת, כמות מנות, מצרכים, אופן ההכנה, הערות.')).toBeInTheDocument()
+    await user.click(screen.getByText('הצגת הטיוטה לפני הבדיקה'))
+    const folded = screen.getByText('הצגת הטיוטה לפני הבדיקה').closest('details')!
+    expect(within(folded).getByText('הייבוא לא סימן נקודות לבדיקה.')).toBeInTheDocument()
+    expect(folded.querySelectorAll('.review-issue')).toHaveLength(0)
+  })
+
   it('the page about the project links each comparison and the repository', async () => {
     const user = userEvent.setup()
     await renderCopy()

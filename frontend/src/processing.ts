@@ -128,8 +128,17 @@ export function demonstrationSummary(demo: Demonstration, categories: Category[]
         const outcome = decided.resolution === 'dismissed' ? 'בבדיקה הוחלט להתעלם מההתרעה, ולא נוסף דבר.' : 'בבדיקה ההתרעה סומנה כטופלה, בלי להוסיף את השורה המוצעת.'
         items.push({ topic: named, tags: ['detected', decided.resolution === 'dismissed' ? 'dismissed' : 'handled'], text: `${found} ${outcome}` })
       }
+    } else if (decided.kind === 'missing_title') {
+      // The model composed the title; review confirmed it or changed it (the title part says which).
+      const from = decided.quote === null ? 'מתוך הטקסט' : `מתוך השורה "${decided.quote}"`
+      const kept = draft.title === reviewed.title
+      items.push({
+        topic: ISSUE_LABELS[decided.kind],
+        tags: ['model', kept ? 'approved' : 'corrected'],
+        text: `לכיתוב אין שורת כותרת, והמודל הציע את "${draft.title}" ${from}. ${kept ? 'בבדיקה הכותרת אושרה כמו שהיא.' : `בבדיקה היא שונתה ל"${reviewed.title}".`}`,
+      })
     } else {
-      const outcome = decided.resolution === 'dismissed' ? 'בבדיקה הוחלט להתעלם ממנה.' : 'בבדיקה היא סומנה כטופלה.'
+      const outcome = decided.resolution === 'dismissed' ? 'בבדיקה הוחלט להתעלם ממנה.' : 'בבדיקה היא נבדקה וסומנה כטופלה.'
       items.push({ topic: ISSUE_LABELS[decided.kind], tags: ['detected', decided.resolution === 'dismissed' ? 'dismissed' : 'handled'], text: `${decided.message} ${outcome}` })
     }
   }

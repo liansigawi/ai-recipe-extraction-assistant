@@ -162,3 +162,28 @@ describe('what happened in a demonstration, from its record only', () => {
     expect(unchanged).toEqual(['כותרת', 'כמות מנות', 'קטגוריה', 'מצרכים', 'אופן ההכנה', 'הערות'])
   })
 })
+
+describe('a composed title in a demonstration', () => {
+  const titlePoint: Issue = {
+    kind: 'missing_title',
+    message: 'אין בטקסט שורת כותרת. הכותרת "סופגניות קרם ברולה" נבחרה מתוך השורה הפותחת; אשרו אותה או שנו.',
+    quote: 'איזה שם מתאים יותר: סופגניות סנט הונורה או סופגניות קרם ברולה?',
+  }
+  const run = (title: string): Demonstration => ({
+    run_at: '2026-11-05T11:22:51Z',
+    model: 'qwen3:8b',
+    draft: { ...draft, title: 'סופגניות קרם ברולה', issues: [titlePoint] },
+    reviewed: { ...draft, title, healthy: null, issues: [], resolved_issues: [{ ...titlePoint, resolution: 'handled' }] },
+  })
+
+  it('is credited to the model, with the line it came from, and approved or changed in review', () => {
+    const [confirmed] = demonstrationSummary(run('סופגניות קרם ברולה'), []).items
+    expect(confirmed.tags).toEqual(['model', 'approved'])
+    expect(confirmed.text).toBe(
+      'לכיתוב אין שורת כותרת, והמודל הציע את "סופגניות קרם ברולה" מתוך השורה "איזה שם מתאים יותר: סופגניות סנט הונורה או סופגניות קרם ברולה?". בבדיקה הכותרת אושרה כמו שהיא.',
+    )
+    const [changed] = demonstrationSummary(run('סופגניות סנט הונורה'), []).items
+    expect(changed.tags).toEqual(['model', 'corrected'])
+    expect(changed.text).toMatch(/בבדיקה היא שונתה ל"סופגניות סנט הונורה"\.$/)
+  })
+})

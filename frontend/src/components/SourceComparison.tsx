@@ -38,7 +38,12 @@ export default function SourceComparison({ recipe, categories, titleRef, onBack 
         {recipe.title}
       </h2>
       {recipe.processing.demonstration ? (
-        <DemonstrationView demonstration={recipe.processing.demonstration} original={original} categories={categories} />
+        <DemonstrationView
+          demonstration={recipe.processing.demonstration}
+          original={original}
+          historicalKept={recipe.processing.draft !== null}
+          categories={categories}
+        />
       ) : (
         <SavedComparison recipe={recipe} original={original} draft={recipe.processing.draft} />
       )}
@@ -316,7 +321,18 @@ function RecipeBody({ recipe, explainAdded = false }: { recipe: Omit<Reviewed, '
 /** The recipe's original imported again with the current system, on a separate copy of the notebook, as recorded:
  * what happened (who did what), the original beside the reviewed result, and the draft from before the review, folded.
  * Never presented as the first import, and never in place of the saved recipe. */
-function DemonstrationView({ demonstration, original, categories }: { demonstration: Demonstration; original: ImportedOriginal; categories: Category[] }) {
+function DemonstrationView({
+  demonstration,
+  original,
+  historicalKept,
+  categories,
+}: {
+  demonstration: Demonstration
+  original: ImportedOriginal
+  /** A backup kept the original import's own draft: it is not this one, and is not shown here. */
+  historicalKept: boolean
+  categories: Category[]
+}) {
   const id = useId()
   const { draft, reviewed } = demonstration
   const { items, unchanged } = demonstrationSummary(demonstration, categories)
@@ -325,7 +341,8 @@ function DemonstrationView({ demonstration, original, categories }: { demonstrat
       <p className="demonstration-lead">הדגמה של ייבוא מחדש באמצעות הגרסה המעודכנת של המערכת.</p>
       <p className="demonstration-meta">
         {formatDate(demonstration.run_at)} · <bdi>{demonstration.model}</bdi>, {whereModelRuns(demonstration.model)} · בעותק נפרד של
-        המחברת. הטיוטה של הייבוא המקורי, מ-{formatDate(original.imported_at)}, לא נשמרה; המתכון השמור לא הוחלף בתוצאת ההדגמה.
+        המחברת. הטיוטה של הייבוא המקורי, מ-{formatDate(original.imported_at)}, {historicalKept ? 'שמורה בנפרד ואינה מוצגת כאן' : 'לא נשמרה'}; המתכון
+        השמור לא הוחלף בתוצאת ההדגמה.
       </p>
 
       <section className="recipe-section" aria-labelledby={`${id}-summary`}>
@@ -382,7 +399,11 @@ function DemonstrationView({ demonstration, original, categories }: { demonstrat
         <div className="demonstration-draft">
           <RecipeBody recipe={draft} />
         </div>
-        <PointList issues={draft.issues} resolved={reviewed.resolved_issues} />
+        {draft.issues.length === 0 ? (
+          <p className="field-hint">הייבוא לא סימן נקודות לבדיקה.</p>
+        ) : (
+          <PointList issues={draft.issues} resolved={reviewed.resolved_issues} />
+        )}
         <ChangeList draft={draft} after={reviewed} title="מה שונה בבדיקה" same="בלי תיקון" />
       </details>
     </>
