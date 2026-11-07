@@ -222,6 +222,10 @@ describe('the public copy', () => {
     expect(original).toHaveTextContent('הגירסה שלי:')
     const saved = within(screen.getByRole('region', { name: 'המתכון השמור' }))
     expect(saved.getByText('חצי', { selector: 'mark' })).toBeInTheDocument()
+    // The model's suggestion from the kept draft, beside the saved category.
+    const [before, after] = within(screen.getByRole('region', { name: 'סיווג' })).getAllByRole('definition')
+    expect(before).toHaveTextContent('קטגוריה ראשית: לא מסווגבטיוטה של הייבוא המקורי, מ-20 באוקטובר 2026.')
+    expect(after).toHaveTextContent('קטגוריה ראשית: משקאותבמתכון השמור.')
 
     const record = within(screen.getByRole('region', { name: /הטיוטה של הייבוא/ }))
     expect(record.getByText(/לא מופיעה כך בטקסט המקורי/)).toBeInTheDocument()
@@ -248,6 +252,40 @@ describe('the public copy', () => {
     const record = within(screen.getByRole('region', { name: /הטיוטה של הייבוא/ }))
     expect(record.getByText('הטיוטה של הייבוא המקורי לא נשמרה.')).toBeInTheDocument()
     expect(record.queryByText('מה השתנה בבדיקה')).not.toBeInTheDocument()
+    const classification = within(screen.getByRole('region', { name: 'סיווג' }))
+    expect(classification.getByText('ההצעה של הייבוא המקורי לא נשמרה.')).toBeInTheDocument()
+    expect(classification.getAllByRole('definition')[1]).toHaveTextContent('קטגוריה ראשית: קינוחיםסוג הקינוח: לא צויןבמתכון השמור.')
+  })
+
+  it('a recorded classification check is the suggestion of a fresh run, never of the original import', async () => {
+    const answer = { category: desserts, subcategory: { id: 13, name: 'טארטים ופאי' }, at: '2026-11-05T14:58:48Z' }
+    const check = { run_at: '2026-11-05T14:58:21Z', model: 'qwen3:8b', answers: [answer, { ...answer, at: '2026-11-05T14:59:22Z' }] }
+    const shown = { ...notebook, recipes: notebook.recipes.map((r) => (r.id === 12 ? { ...r, processing: { draft: null, classification_check: check } } : r)) }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(shown), { status: 200 })))
+    const user = userEvent.setup()
+    await renderCopy()
+    await openRecipe(user, TORTE)
+    await user.click(screen.getByRole('button', { name: 'מהמקור למתכון' }))
+    const [before, after] = within(screen.getByRole('region', { name: 'סיווג' })).getAllByRole('definition')
+    expect(before).toHaveTextContent(
+      'קטגוריה ראשית: קינוחיםסוג הקינוח: טארטים ופאיבהרצה חדשה של הטקסט המקורי עם qwen3:8b, ב-5 בנובמבר 2026, ולא בייבוא המקורי, שהצעתו לא נשמרה. אותה בקשה נשלחה פעמיים, והתשובה זהה.',
+    )
+    expect(after).toHaveTextContent('סוג הקינוח: לא צויןבמתכון השמור.')
+  })
+
+  it('a classification check whose answers differ shows each of them', async () => {
+    const cakes = { category: desserts, subcategory: { id: 11, name: 'עוגות' }, at: '2026-11-05T14:58:48Z' }
+    const check = { run_at: '2026-11-05T14:58:21Z', model: 'qwen3:8b', answers: [cakes, { category: drinks, subcategory: null, at: '2026-11-05T14:59:22Z' }] }
+    const shown = { ...notebook, recipes: notebook.recipes.map((r) => (r.id === 12 ? { ...r, processing: { draft: null, classification_check: check } } : r)) }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(shown), { status: 200 })))
+    const user = userEvent.setup()
+    await renderCopy()
+    await openRecipe(user, TORTE)
+    await user.click(screen.getByRole('button', { name: 'מהמקור למתכון' }))
+    const sides = within(screen.getByRole('region', { name: 'סיווג' })).getAllByRole('definition')
+    expect(sides).toHaveLength(3)
+    expect(sides[0]).toHaveTextContent(/סוג הקינוח: עוגות.*תשובה 1 מתוך 2\.$/)
+    expect(sides[1]).toHaveTextContent(/^קטגוריה ראשית: משקאות.*תשובה 2 מתוך 2\.$/)
   })
 
   it('a recorded demonstration is the comparison: the original beside its reviewed result, who did what, the draft folded', async () => {
@@ -284,6 +322,11 @@ describe('the public copy', () => {
     expect(items[2]).toContain('בטיוטה: לא נקבע. בבדיקה: לא קינוח בריא.')
     expect(items).toHaveLength(3)
     expect(summary.getByText('בלי תיקון בבדיקה: כותרת, כמות מנות, אופן ההכנה, הערות.')).toBeInTheDocument()
+    // The classification on its own: the demonstration draft's beside the reviewed one; the healthy style is not a type.
+    const [before, after] = within(screen.getByRole('region', { name: 'סיווג' })).getAllByRole('definition')
+    expect(before).toHaveTextContent('קטגוריה ראשית: קינוחיםסוג הקינוח: טארטים ופאיבטיוטה של ההדגמה, מ-4 בנובמבר 2026.')
+    expect(after).toHaveTextContent('קטגוריה ראשית: קינוחיםסוג הקינוח: עוגותבבדיקה שבוצעה בעת הכנת ההדגמה.')
+    expect(after).not.toHaveTextContent('קינוח בריא')
 
     // The draft as the run saved it, its point with the action taken while preparing the demonstration: folded.
     const folded = screen.getByText('הצגת הטיוטה לפני הבדיקה').closest('details')!

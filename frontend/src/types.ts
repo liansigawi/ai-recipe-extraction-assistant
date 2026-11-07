@@ -199,6 +199,18 @@ export interface Processing {
   draft: KeptDraft | null
   /** A later import of the same original text, recorded with its review. Absent or null: none was made. */
   demonstration?: Demonstration | null
+  /** Only where neither the import's draft nor a demonstration holds the model's suggestion: the category the current
+   * model suggests for the same original imported again. Absent or null: none was recorded. */
+  classification_check?: ClassificationCheck | null
+}
+
+/** The original text imported again on a separate copy of the notebook, and its draft's classification request
+ * answered, then sent again unchanged: each answer as it came. No review; never the first import's suggestion. */
+export interface ClassificationCheck {
+  /** When the import ran, and the model that answered. */
+  run_at: string
+  model: string
+  answers: { category: CategoryRef | null; subcategory: CategoryRef | null; at: string }[]
 }
 
 /** The original text imported again, on a separate copy of the notebook: the draft as the import made it,

@@ -139,6 +139,10 @@ def main(argv: list[str] | None = None) -> int:
             page.wait_for_load_state("networkidle")
             original = page.get_by_role("region", name="הטקסט המקורי").inner_text()
             first_line = recipe["original"]["text"].strip().splitlines()[0].strip()
+            classification = page.get_by_role("region", name="סיווג")
+            check(classification.count() == 1 and classification.get_by_text("הצעת המודל לפני הבדיקה").count() == 1
+                  and classification.get_by_text("הסיווג לאחר הבדיקה").count() == 1,
+                  f"the comparison page of {recipe['id']} shows the model's classification before review and the one after it")
             if recipe["processing"].get("demonstration"):
                 # Its demonstration is the comparison: the reviewed result beside the original, the draft folded, no controls.
                 result = page.get_by_role("region", name="המתכון לאחר הבדיקה")

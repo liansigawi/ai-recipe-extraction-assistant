@@ -268,6 +268,47 @@ def test_a_recorded_demonstration_is_public_only_when_made_from_the_recipe_s_own
 TORTE = "טורט\n4 ביצים\nאופים 50 דקות על 150 מעלות\n (כל תנור עובד אחרת).\nמגישים."
 
 
+def check_of(recipe_id: int, text: str) -> dict:
+    """A recorded classification check of the given text: the same request answered twice, the same way."""
+    answer = {"category": {"id": 1, "name": "קינוחים"}, "subcategory": None, "at": "2026-11-05T14:58:15Z"}
+    return {"recipe_id": recipe_id, "source_sha256": hashlib.sha256(text.encode()).hexdigest(), "run_at": "2026-11-05T14:57:40Z",
+            "model": "qwen3:8b", "answers": [answer, {**answer, "at": "2026-11-05T14:59:18Z"}]}
+
+
+def test_a_classification_check_is_public_only_for_a_recipe_whose_import_left_no_suggestion(notebook, client, data_dir, tmp_path):
+    # Imported and saved after every backup: no draft of its import is kept.
+    draft = client.post("/api/imports/text", json={"text": TORTE, "use_model": False}, headers=ORIGIN).json()
+    body = {"title": "טורט", "ingredient_groups": [{"name": None, "ingredients": [{"text": "4 ביצים", "quantity": "4"}]}],
+            "step_groups": [{"name": None, "steps": ["מגישים."]}], "notes": [], "sources": draft["sources"],
+            "category_id": category_id(client, "קינוחים"), "status": "saved", "issues": []}
+    torte = client.put(f"/api/recipes/{draft['id']}", json=body, headers=ORIGIN).json()["id"]
+    lemonade = notebook["lemonade"]["id"]  # a backup kept its import's draft
+    folder = tmp_path / "public"
+    (folder / "classifications").mkdir(parents=True)
+    for recipe_id, text in ((torte, TORTE), (lemonade, SOURCE)):
+        (folder / "classifications" / f"{recipe_id}.json").write_text(json.dumps(check_of(recipe_id, text), ensure_ascii=False), encoding="utf-8")
+    checks = {torte: f"classifications/{torte}.json"}
+
+    data, report = export(data_dir, folder / "export", recipes=[torte], show_processing=[torte], classification_checks=checks)
+    shown = data["recipes"][0]["processing"]
+    assert shown["draft"] is None
+    assert set(shown["classification_check"]) == {"run_at", "model", "answers"}  # the checks' data stays out
+    assert [answer["category"]["name"] for answer in shown["classification_check"]["answers"]] == ["קינוחים", "קינוחים"]
+    assert report.checks[torte] == "run 2026-11-05 14:57 UTC with qwen3:8b, 2 answer(s)"
+
+    # The import's own draft, or a demonstration's, already holds the model's suggestion.
+    with pytest.raises(ExportError, match="own import draft is kept"):
+        export(data_dir, folder / "export", recipes=[lemonade], show_processing=[lemonade], classification_checks={lemonade: f"classifications/{lemonade}.json"})
+    with pytest.raises(ExportError, match="have a demonstration"):
+        export(data_dir, folder / "export", recipes=[torte], show_processing=[torte], classification_checks=checks, demonstrations={torte: "torte.json"})
+    with pytest.raises(ExportError, match="not in show_processing"):
+        export(data_dir, folder / "export", recipes=[torte], classification_checks=checks)
+    (folder / "classifications" / f"{torte}.json").write_text(json.dumps(check_of(torte, TORTE + " ")), encoding="utf-8")  # another text
+    with pytest.raises(ExportError, match="not made from recipe"):
+        export(data_dir, folder / "export", recipes=[torte], show_processing=[torte], classification_checks=checks)
+    assert json.loads((folder / "export" / "notebook.json").read_text(encoding="utf-8")) == data  # a refused export leaves the last one
+
+
 def test_a_demonstration_s_evidence_of_a_joined_remark_is_checked_but_not_published(client, data_dir, tmp_path):
     draft = client.post("/api/imports/text", json={"text": TORTE, "use_model": False}, headers=ORIGIN).json()
     joined = "אופים 50 דקות על 150 מעלות (כל תנור עובד אחרת)."

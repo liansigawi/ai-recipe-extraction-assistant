@@ -2317,6 +2317,33 @@ h4.category-name {
   font-size: 0.85rem;
 }
 
+/* The model's category before review beside the one after it; one above the other on a narrow screen. */
+.classification-record {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0.5rem 0 0;
+}
+
+.classification-record > div {
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.classification-record dt {
+  font-weight: 700;
+}
+
+.classification-record dd {
+  margin: 0.25rem 0 0;
+}
+
+.classification-record p {
+  margin: 0;
+}
+
 /* What happened, item by item, each with who did it (the system by itself, the model, the review). */
 .summary-list {
   display: grid;
@@ -2444,7 +2471,8 @@ h4.category-name {
 
 /* ---- Narrow screens ---- */
 @media (max-width: 900px) {
-  .comparison {
+  .comparison,
+  .classification-record {
     grid-template-columns: minmax(0, 1fr);
   }
 

@@ -72,6 +72,9 @@ To give it a "מהמקור למתכון" page as well, add its number to `show_p
 - `repository_url`: the project's code, linked from the "about" page; `null` shows no link.
 - `demonstrations` (optional): recipe number -> a recorded demonstration (a JSON file, its path from this
   folder), shown on that recipe's "מהמקור למתכון" page (below). Only for recipes in `show_processing`.
+- `classification_checks` (optional): recipe number -> a recorded classification check (a JSON file, its path
+  from this folder), for a recipe in `show_processing` whose import draft was not kept and that has no
+  demonstration (below).
 
 ## What becomes public, and what never does
 
@@ -105,6 +108,20 @@ the recipe was still an untouched draft. The export looks through `data/recipes.
 same recipe (same number and creation time), still a draft, never saved since the import. Without one, the
 page says, in one sentence, that the original import's draft was not kept. Nothing is reconstructed or
 re-run for it.
+
+Every comparison page has a "סיווג" block: "הצעת המודל לפני הבדיקה" beside "הסיווג לאחר הבדיקה", each as
+a main category and, for a dessert, its type (the healthy style is not part of it: the model does not set
+it), and each with the record it comes from:
+- a demonstration: its draft's category, and the category after the review performed while preparing it;
+- a kept import draft: its category, and the saved recipe's;
+- a classification check, for a recipe with neither: the recipe's original imported again on a separate copy
+  of the notebook, and that draft's classification request answered, then sent again unchanged. The file
+  (`data/public-notebook/classifications/<id>.json`, git-ignored) records the run's time and model, a
+  fingerprint of the text it imported, and each answer as the import mapped it. The page says it is a fresh
+  run, not the original import's suggestion, and whether the answers agreed. After review is the saved
+  recipe's category. The export refuses a check not made from the recipe's own original text, and a check
+  for a recipe whose import draft is kept or that has a demonstration;
+- none of these: the block says the original import's suggestion was not kept.
 
 A recipe with a **demonstration** shows that instead, as what it is: the recipe's original text imported
 again with the current system, on a separate copy of the notebook, and reviewed there. Its file

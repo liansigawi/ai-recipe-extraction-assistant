@@ -1,7 +1,7 @@
-import { Fragment, useId, type Ref } from 'react'
+import { Fragment, useId, type ReactNode, type Ref } from 'react'
 import { ISSUE_LABELS, RESOLUTION_LABELS } from '../labels'
 import { decisionFor, demonstrationSummary, elapsedText, reviewChanges, SUMMARY_TAGS, type Reviewed } from '../processing'
-import type { Category, Demonstration, ImportedOriginal, Issue, KeptDraft, Recipe, ResolvedIssue } from '../types'
+import type { Category, CategoryRef, ClassificationCheck, Demonstration, ImportedOriginal, Issue, KeptDraft, Recipe, ResolvedIssue } from '../types'
 import CategoryChip from './CategoryChip'
 import Icon from './Icon'
 import { CreatorName, IngredientGroups, StepGroups } from './RecipeView'
@@ -45,7 +45,13 @@ export default function SourceComparison({ recipe, categories, titleRef, onBack 
           categories={categories}
         />
       ) : (
-        <SavedComparison recipe={recipe} original={original} draft={recipe.processing.draft} />
+        <SavedComparison
+          recipe={recipe}
+          original={original}
+          draft={recipe.processing.draft}
+          check={recipe.processing.classification_check ?? null}
+          categories={categories}
+        />
       )}
     </article>
   )
@@ -233,9 +239,95 @@ function ChangeList({ draft, after, title, same }: { draft: KeptDraft; after: Re
   )
 }
 
-/** The saved recipe beside its original, the steps between them, and the import's draft if a backup kept it. */
-function SavedComparison({ recipe, original, draft }: { recipe: Recipe; original: ImportedOriginal; draft: KeptDraft | null }) {
+/** One side of a classification as a record holds it, and where that record is. */
+interface ClassificationSide {
+  category: CategoryRef | null
+  subcategory: CategoryRef | null
+  source: ReactNode
+}
+
+/** The model's category before review beside the category after it, each with where it is recorded. The healthy
+ * style is not part of it: the model does not set it, and it is not a dessert's type. */
+function ClassificationRecord({ before, after, categories }: { before: ClassificationSide[]; after: ClassificationSide; categories: Category[] }) {
   const id = useId()
+  return (
+    <section className="recipe-section" aria-labelledby={`${id}-classification`}>
+      <h3 id={`${id}-classification`} className="section-title">
+        סיווג
+      </h3>
+      <dl className="classification-record">
+        <div>
+          <dt>הצעת המודל לפני הבדיקה</dt>
+          {before.length === 0 ? (
+            <dd className="field-hint">ההצעה של הייבוא המקורי לא נשמרה.</dd>
+          ) : (
+            before.map((side, index) => <ClassificationValue key={index} side={side} categories={categories} />)
+          )}
+        </div>
+        <div>
+          <dt>הסיווג לאחר הבדיקה</dt>
+          <ClassificationValue side={after} categories={categories} />
+        </div>
+      </dl>
+    </section>
+  )
+}
+
+/** The main category, then a dessert's type (or another category's subcategory, when it has one), then the source. */
+function ClassificationValue({ side, categories }: { side: ClassificationSide; categories: Category[] }) {
+  const dessert = categories.find((category) => category.id === side.category?.id)?.healthy_style === true
+  return (
+    <dd>
+      <p>קטגוריה ראשית: {side.category?.name ?? 'לא מסווג'}</p>
+      {(dessert || side.subcategory !== null) && (
+        <p>
+          {dessert ? 'סוג הקינוח' : 'תת-קטגוריה'}: {side.subcategory?.name ?? 'לא צוין'}
+        </p>
+      )}
+      <p className="field-hint">{side.source}</p>
+    </dd>
+  )
+}
+
+/** A classification check's answers: one side when they all agree, else one side for each. */
+function checkedSides(check: ClassificationCheck): ClassificationSide[] {
+  const run = (
+    <>
+      בהרצה חדשה של הטקסט המקורי עם <bdi>{check.model}</bdi>, ב-{formatDate(check.run_at)}, ולא בייבוא המקורי, שהצעתו לא נשמרה.
+    </>
+  )
+  const [first] = check.answers
+  const count = check.answers.length
+  const agree = check.answers.every((answer) => answer.category?.id === first.category?.id && answer.subcategory?.id === first.subcategory?.id)
+  if (agree) {
+    const times = count === 1 ? '' : count === 2 ? ' אותה בקשה נשלחה פעמיים, והתשובה זהה.' : ` אותה בקשה נשלחה ${count} פעמים, והתשובה זהה בכולן.`
+    return [{ ...first, source: <>{run}{times}</> }]
+  }
+  return check.answers.map((answer, index) => ({ ...answer, source: <>{run} תשובה {index + 1} מתוך {count}.</> }))
+}
+
+/** The saved recipe beside its original, the steps between them, and the import's draft if a backup kept it. */
+function SavedComparison({
+  recipe,
+  original,
+  draft,
+  check,
+  categories,
+}: {
+  recipe: Recipe
+  original: ImportedOriginal
+  draft: KeptDraft | null
+  /** Recorded only for a recipe whose import's draft was not kept. */
+  check: ClassificationCheck | null
+  categories: Category[]
+}) {
+  const id = useId()
+  const before: ClassificationSide[] =
+    draft !== null
+      ? [{ category: draft.category, subcategory: draft.subcategory, source: `בטיוטה של הייבוא המקורי, מ-${formatDate(draft.saved_at)}.` }]
+      : check !== null
+        ? checkedSides(check)
+        : []
   return (
     <>
       <ol className="process-steps">
@@ -253,6 +345,12 @@ function SavedComparison({ recipe, original, draft }: { recipe: Recipe; original
           {formatDate(recipe.updated_at)}.
         </li>
       </ol>
+
+      <ClassificationRecord
+        before={before}
+        after={{ category: recipe.category, subcategory: recipe.subcategory, source: 'במתכון השמור.' }}
+        categories={categories}
+      />
 
       <div className="comparison">
         <section className="comparison-pane" aria-labelledby={`${id}-original`}>
@@ -369,6 +467,12 @@ function DemonstrationView({
         </ul>
         {unchanged.length > 0 && <p className="field-hint">בלי תיקון בבדיקה: {unchanged.join(', ')}.</p>}
       </section>
+
+      <ClassificationRecord
+        before={[{ category: draft.category, subcategory: draft.subcategory, source: `בטיוטה של ההדגמה, מ-${formatDate(demonstration.run_at)}.` }]}
+        after={{ category: reviewed.category, subcategory: reviewed.subcategory, source: 'בבדיקה שבוצעה בעת הכנת ההדגמה.' }}
+        categories={categories}
+      />
 
       <div className="comparison">
         <section className="comparison-pane" aria-labelledby={`${id}-original`}>

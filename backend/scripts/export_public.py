@@ -19,7 +19,9 @@ review points, uploaded pictures (a phone photo can carry its location) and any 
 For the recipes in "show_processing" it adds the imported original text and, when a backup of the
 database still holds the import's own draft from before any review, that draft: found, not rebuilt.
 A recipe in "demonstrations" also gets its recorded demonstration (the same original imported again on a
-separate copy of the notebook, and its review), only if it was made from that recipe's original text.
+separate copy of the notebook, and its review), only if it was made from that recipe's original text. A recipe in
+"classification_checks", one whose import left no draft and that has no demonstration, gets the category the current
+model suggests for its original imported again (a recorded check, made from that recipe's original text).
 Review decisions of the notebook's own recipes stay out.
 
 Writes <folder>/export/notebook.json and <folder>/export/media/, replacing the previous export.
@@ -57,6 +59,8 @@ class Selection(ContractModel):
     repository_url: Annotated[str, Field(pattern=r"^https://\S+$")] | None = None
     # Of those, recipe id -> its recorded demonstration (a JSON file, its path from the selection's folder).
     demonstrations: dict[int, str] = {}
+    # Of those, recipe id -> a recorded classification check (a JSON file, its path from the selection's folder).
+    classification_checks: dict[int, str] = {}
 
 
 class KeptDraft(ContractModel):
@@ -108,6 +112,27 @@ class Demonstration(ContractModel):
     automatic: list[JoinedRemark] = []
 
 
+class CheckedAnswer(ContractModel):
+    """One answer of a classification check, as the import maps it: a category only for a clear, valid choice."""
+
+    category: schemas.CategoryRef | None
+    subcategory: schemas.CategoryRef | None
+    at: AwareDatetime  # when the model answered
+
+
+class ClassificationCheck(ContractModel):
+    """The category the current model suggests for a recipe whose own import kept no record of it: the recipe's
+    original imported again on a separate copy of the notebook, and that draft's classification request answered,
+    then sent again unchanged (each answer as it came). Never the first import's suggestion, and no review: the
+    recipe's category after review is the saved one (docs/public-notebook.md)."""
+
+    recipe_id: int
+    source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]  # of the text it imported: the recipe's own original
+    run_at: AwareDatetime  # when the import ran
+    model: NonEmptyStr
+    answers: list[CheckedAnswer] = Field(min_length=1)
+
+
 class ExportError(Exception):
     """Why the selection cannot be exported, for the person running the script."""
 
@@ -119,6 +144,7 @@ class Report:
     bytes: int = 0
     drafts: dict[int, str | None] = field(default_factory=dict)  # recipe id -> the backup its draft came from
     demonstrations: dict[int, str] = field(default_factory=dict)  # recipe id -> when and with which model it ran
+    checks: dict[int, str] = field(default_factory=dict)  # recipe id -> its classification check: when, which model
     left_out: list[str] = field(default_factory=list)
 
 
@@ -157,6 +183,12 @@ def export_notebook(database_path: Path, media_root: Path, selection: Selection,
         raise ExportError(f"show_processing names recipes that are not in the selection: {sorted(unknown)}")
     if set(selection.demonstrations) - set(selection.show_processing):
         raise ExportError(f"demonstrations names recipes not in show_processing: {sorted(set(selection.demonstrations) - set(selection.show_processing))}")
+    if set(selection.classification_checks) - set(selection.show_processing):
+        outside = sorted(set(selection.classification_checks) - set(selection.show_processing))
+        raise ExportError(f"classification_checks names recipes not in show_processing: {outside}")
+    if set(selection.classification_checks) & set(selection.demonstrations):
+        both = sorted(set(selection.classification_checks) & set(selection.demonstrations))
+        raise ExportError(f"Recipes {both} have a demonstration: its draft holds the model's suggestion, so no classification check.")
     engine = open_read_only(database_path)
     report = Report()
     staging = out.with_name(out.name + ".partial")  # written in full first, so a failed export leaves the last one
@@ -178,6 +210,7 @@ def export_notebook(database_path: Path, media_root: Path, selection: Selection,
                     raise ExportError(f"Recipe {recipe.id} was typed in by hand: it has no original text to compare with.")
             public = [_public_recipe(session, media_root, recipe, selection, staging / "media", report) for recipe in chosen]
             demonstrations = {rid: read_demonstration(folder / path, by_id[rid]) for rid, path in selection.demonstrations.items()}
+            checks = {rid: read_classification_check(folder / path, by_id[rid]) for rid, path in selection.classification_checks.items()}
             categories = _used_categories(crud.list_categories(session), chosen)
         for recipe in public:
             if recipe["processing"] is not None:
@@ -190,6 +223,12 @@ def export_notebook(database_path: Path, media_root: Path, selection: Selection,
                     # (the same in its draft and its result, so not a change the page shows).
                     recipe["processing"]["demonstration"] = demo.model_dump(mode="json", exclude={"recipe_id", "source_sha256", "automatic"})
                     report.demonstrations[recipe["id"]] = f"run {demo.run_at:%Y-%m-%d %H:%M} UTC with {demo.model}"
+                if recipe["id"] in checks:
+                    if draft is not None:
+                        raise ExportError(f"Recipe {recipe['id']}'s own import draft is kept ({backup}): it holds the model's suggestion, so no classification check.")
+                    check = checks[recipe["id"]]
+                    recipe["processing"]["classification_check"] = check.model_dump(mode="json", exclude={"recipe_id", "source_sha256"})
+                    report.checks[recipe["id"]] = f"run {check.run_at:%Y-%m-%d %H:%M} UTC with {check.model}, {len(check.answers)} answer(s)"
         notebook = {
             "exported_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "repository_url": selection.repository_url,
@@ -255,6 +294,21 @@ def read_demonstration(path: Path, recipe: schemas.Recipe) -> Demonstration:
         if not (by_rule and whole in steps["draft"] and whole in steps["reviewed"]):
             raise ExportError(f"{path}: the joined remark {joined.remark!r} is not what the import and its review show.")
     return demonstration
+
+
+def read_classification_check(path: Path, recipe: schemas.Recipe) -> ClassificationCheck:
+    """The recorded classification check, checked: valid, about this recipe, and made from exactly its original text."""
+    try:
+        check = ClassificationCheck.model_validate_json(path.read_bytes())
+    except FileNotFoundError:
+        raise ExportError(f"The classification check {path} does not exist.") from None
+    except ValidationError as error:
+        raise ExportError(f"{path} is not a valid classification check: {error}") from None
+    if check.recipe_id != recipe.id:
+        raise ExportError(f"{path} is a classification check of recipe {check.recipe_id}, not {recipe.id}.")
+    if recipe.original is None or hashlib.sha256(recipe.original.text.encode()).hexdigest() != check.source_sha256:
+        raise ExportError(f"{path} was not made from recipe {recipe.id}'s original text.")
+    return check
 
 
 def _public_media(session: Session, media_root: Path, item: schemas.RecipeMediaItem, media_out: Path, report: Report) -> dict:
@@ -389,7 +443,8 @@ def main(argv: list[str] | None = None) -> int:
     for recipe_id, backup in report.drafts.items():
         kept = f"the import's draft, from {backup}" if backup else "no copy of the import's draft was kept"
         demo = f"; a demonstration, {report.demonstrations[recipe_id]}" if recipe_id in report.demonstrations else ""
-        print(f"  source comparison for {recipe_id}: original text; {kept}{demo}")
+        check = f"; a classification check, {report.checks[recipe_id]}" if recipe_id in report.checks else ""
+        print(f"  source comparison for {recipe_id}: original text; {kept}{demo}{check}")
     if report.left_out:
         print("Left out:")
         print("\n".join(f"  {line}" for line in report.left_out))
