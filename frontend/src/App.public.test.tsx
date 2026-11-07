@@ -356,6 +356,24 @@ describe('the public copy', () => {
     expect(window.location.hash).toBe('#/recipes/12')
   })
 
+  it("a demonstration's point about missing pictures says the post was not read again", async () => {
+    const noMedia = { kind: 'media_incomplete' as const, message: 'בנתוני הפוסט לא נמצאו תמונות או סרטונים לשמירה.', quote: null }
+    const run: Demonstration = {
+      ...demonstration,
+      draft: { ...demonstration.draft, issues: [noMedia] },
+      reviewed: { ...demonstration.reviewed, resolved_issues: [{ ...noMedia, resolution: 'handled' }] },
+    }
+    const shown = { ...notebook, recipes: notebook.recipes.map((r) => (r.id === 12 ? { ...r, processing: { draft: null, demonstration: run } } : r)) }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(shown), { status: 200 })))
+    const user = userEvent.setup()
+    await renderCopy()
+    await openRecipe(user, TORTE)
+    await user.click(screen.getByRole('button', { name: 'מהמקור למתכון' }))
+    const points = screen.getByRole('region', { name: 'נקודות לבדיקה (1)' })
+    expect(points).toHaveTextContent('בבדיקה שבוצעה בעת הכנת ההדגמה: טופל')
+    expect(points).toHaveTextContent('בהדגמה הפוסט לא נקרא שוב מאינסטגרם: הכיתוב נלקח מהייבוא המקורי, בלי התמונות והסרטונים')
+  })
+
   it('a demonstration of a recipe whose own draft a backup kept says that draft is kept apart, not that it is lost', async () => {
     const both = { ...notebook, recipes: notebook.recipes.map((r) => (r.id === 6 ? { ...r, processing: { ...r.processing!, demonstration } } : r)) }
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(both), { status: 200 })))

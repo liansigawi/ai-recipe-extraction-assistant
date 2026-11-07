@@ -520,6 +520,11 @@ function DemonstrationView({
         ) : (
           <PointList issues={draft.issues} resolved={reviewed.resolved_issues} origin={(issue) => pointOrigin(issue, demonstration)} heading={false} />
         )}
+        {draft.issues.some((issue) => issue.kind === 'media_incomplete') && (
+          <p className="field-hint">
+            בהדגמה הפוסט לא נקרא שוב מאינסטגרם: הכיתוב נלקח מהייבוא המקורי, בלי התמונות והסרטונים, ולכן המערכת לא מצאה כאלה.
+          </p>
+        )}
       </section>
 
       <div className="comparison">
