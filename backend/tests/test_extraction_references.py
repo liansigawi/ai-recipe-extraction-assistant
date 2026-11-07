@@ -1020,7 +1020,7 @@ def test_saved_steps_are_joined_by_the_same_rule_only_where_the_original_has_the
     assert join_closing_remarks([StepGroup(name=None, steps=ended)], BAKING.replace("מעלות\n", "מעלות.\n"))[0].steps == ended
 
 
-# --- An unclear "or" needs an "or" ---------------------------------------------------------------------------
+# --- An unclear "or" needs an "or"; a composed title says where it was chosen from ----------------------------
 
 
 @pytest.mark.parametrize(
@@ -1037,3 +1037,9 @@ def test_an_unclear_or_is_shown_only_in_a_passage_that_has_one(step, shown):
                       issues=[{"kind": "ambiguous_alternative", "passage": 3}])
     assert [(i.kind, i.quote) for i in draft.issues if i.kind == "ambiguous_alternative"] == ([("ambiguous_alternative", step)] if shown else [])
 
+def test_a_title_chosen_from_the_opening_line_says_so_and_quotes_it():
+    source = "איזה שם מתאים יותר: סופגניות סנט הונורה או סופגניות קרם ברולה?\n2 כוסות קמח\nמערבבים."
+    draft = draft_for(source, ["not_recipe", "not_recipe", "ingredient", "step"], title="סופגניות קרם ברולה", title_written_in_text=False)
+    [point] = [i for i in draft.issues if i.kind == "missing_title"]
+    assert point.message == 'אין בטקסט שורת כותרת. הכותרת "סופגניות קרם ברולה" נבחרה מתוך השורה הפותחת; אשרו אותה או שנו.'
+    assert point.quote == "איזה שם מתאים יותר: סופגניות סנט הונורה או סופגניות קרם ברולה?"

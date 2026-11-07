@@ -317,11 +317,17 @@ def first_line(text: str) -> str:
     return "מתכון ללא כותרת"
 
 
-def _missing_title(title: str, from_text: bool = True) -> schemas.Issue:
-    """A composed title: from the text's own words, or (as the model sometimes does) with words that
-    are not in the text, which the message then says."""
+def _missing_title(title: str, from_text: bool = True, line: str | None = None, opening: bool = False) -> schemas.Issue:
+    """A composed title, the text having no title line: from one line of the text (quoted, and named when it is the
+    opening line), from words spread over the text, or (as the model sometimes does) with words that are not in the
+    text, which the message then says. It asks for a confirmation, not a name: the dish is not in question."""
+    if line is not None:
+        where = "השורה הפותחת" if opening else "שורה בטקסט"
+        return schemas.Issue(
+            kind="missing_title", message=f'אין בטקסט שורת כותרת. הכותרת "{title}" נבחרה מתוך {where}; אשרו אותה או שנו.', quote=_short(line, 300)
+        )
     where = "נלקחה ממילים בטקסט" if from_text else "הוצעה על ידי המודל, ולא כל המילים בה מופיעות בטקסט"
-    return schemas.Issue(kind="missing_title", message=f'בטקסט אין כותרת ברורה. הכותרת "{title}" {where}; שנו אותה אם צריך.')
+    return schemas.Issue(kind="missing_title", message=f'אין בטקסט שורת כותרת. הכותרת "{title}" {where}; שנו אותה אם צריך.')
 
 
 def _model_issues(output: ExtractionOutput, original: _Original) -> list[schemas.Issue]:
@@ -988,9 +994,22 @@ def _title(
     if not title:
         title = first_line(source_text)
     # No title line holds it, so it is composed, whatever the answer says ("written" composed titles
-    # were measured): the point says whether its words come from the text.
-    issues.append(_missing_title(title, from_text=_words_in_text(title, source_text)))
+    # were measured): the point says where its words come from.
+    line = _line_with(title, source_text)
+    opening = next((cleaned for cleaned in map(_clean, source_text.splitlines()) if cleaned), None)
+    issues.append(_missing_title(title, from_text=_words_in_text(title, source_text), line=line, opening=line is not None and line == opening))
     return title
+
+
+def _line_with(title: str, source_text: str) -> str | None:
+    """The first line of the text that holds every word of a composed title ("איזה שם מתאים יותר: סופגניות סנט הונורה
+    או סופגניות קרם ברולה?" for "סופגניות קרם ברולה"), or None when its words are spread or not in the text."""
+    words = [w for w in re.findall(r"\w+", normalize(title).lower()) if len(w) > 1]
+    for line in source_text.splitlines():
+        text = normalize(line).lower()
+        if words and all(w in text for w in words):
+            return _clean(line)
+    return None
 
 
 def _words_in_text(title: str, source_text: str) -> bool:
