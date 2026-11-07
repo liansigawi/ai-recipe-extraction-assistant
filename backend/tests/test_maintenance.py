@@ -434,3 +434,45 @@ def test_a_saved_remark_that_ends_a_step_is_proposed_joined_and_applied_alone(cl
 
     undo_batch(data_dir / "recipes.db", folder, out=lambda _: None)
     assert recipe(client, torte.id)["step_groups"] == before["step_groups"]
+
+
+DONUTS = (
+    "איזה שם מתאים יותר?\n|קרם:\n500 גר׳ חלב\n|בצק הסופגניות הקלאסי שלי - נמצא בבלוג ובפיד, לעשות בדיוק לפי ההוראות.\n|קרמל:\n500 גר׳ סוכר\n"
+    "|אופן ההכנה:\nמבשלים את החלב לקרם. מעבירים לשקית זילוף.\n"
+    "מכינים בצק סופגניות לפי המתכון לבצק סופגניות קלאסי שלי מהבלוג. עושים הכל לפי ההוראות כולל הטיגון.\n"
+    "ממלאים כל סופגניה בקרם.\nמכינים קרמל. יש להיזהר לא לשרוף את הקרמל.\nבתיאבון 💕\n#סופגניות"
+)
+
+
+def test_a_saved_recipe_gets_back_its_reference_to_a_separate_recipe_where_the_original_has_it(client, data_dir, tmp_path):
+    from app import crud
+
+    saved = schemas.RecipeInput(
+        title="סופגניות", category_id=1, subcategory_id=16, healthy=False, status="saved",
+        ingredient_groups=[{"name": "קרם", "ingredients": [{"text": "500 גר׳ חלב"}]}, {"name": "קרמל", "ingredients": [{"text": "500 גר׳ סוכר"}]}],
+        step_groups=[{"name": None, "steps": ["מבשלים את החלב לקרם.", "מעבירים לשקית זילוף.", "ממלאים כל סופגניה בקרם.", "מכינים קרמל."]}],
+        notes=["יש להיזהר לא לשרוף את הקרמל."],
+        sources=[{"kind": "instagram", "url": "https://www.instagram.com/p/DDTyJa_oNZm/", "creators": []}],
+    )
+    with client.app.state.session_factory() as session:
+        donuts = crud.create_import(session, saved, original_text=DONUTS, model="qwen3:8b", kind="instagram", url=saved.sources[0].url)
+    folder = tmp_path / "batch"
+    write_batch(audit(data_dir / "recipes.db", None, None, out=lambda _: None), folder)
+
+    found = changes(folder)
+    assert sorted(key for key in found if key.startswith(f"{donuts.id}-")) == [f"{donuts.id}-notes", f"{donuts.id}-steps"]
+    dough = "מכינים בצק סופגניות לפי המתכון לבצק סופגניות קלאסי שלי מהבלוג. עושים הכל לפי ההוראות כולל הטיגון."
+    assert found[f"{donuts.id}-steps"]["after"] == [{"name": None, "steps": [
+        "מבשלים את החלב לקרם.", "מעבירים לשקית זילוף.", dough, "ממלאים כל סופגניה בקרם.", "מכינים קרמל."]}]
+    assert found[f"{donuts.id}-notes"]["after"] == ["בצק הסופגניות הקלאסי שלי - נמצא בבלוג ובפיד, לעשות בדיוק לפי ההוראות.", "יש להיזהר לא לשרוף את הקרמל."]
+    assert "no ingredient, amount, instruction or link" in found[f"{donuts.id}-notes"]["uncertainty"]
+
+    before = recipe(client, donuts.id)
+    apply_batch(data_dir / "recipes.db", folder, only=[f"{donuts.id}-steps", f"{donuts.id}-notes"], out=lambda _: None)
+    after = recipe(client, donuts.id)
+    assert after["step_groups"][0]["steps"][2] == dough and after["notes"][0].startswith("בצק הסופגניות")
+    kept = ("title", "category", "subcategory", "healthy", "ingredient_groups", "sources", "cooked", "original", "media")
+    assert {key: after[key] for key in kept} == {key: before[key] for key in kept}
+
+    write_batch(audit(data_dir / "recipes.db", None, None, out=lambda _: None), tmp_path / "again")
+    assert not [key for key in changes(tmp_path / "again") if key.startswith(f"{donuts.id}-")]  # nothing twice

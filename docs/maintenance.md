@@ -33,6 +33,12 @@ a model draft from an import, and no draft is reconstructed). Each change has it
   it, where the original text has the two on consecutive lines ("אופים 50-60 דקות על 150 מעלות" / "(כל תנור
   עובד אחרת...).") is joined to that step, word for word, as a new import now reads it
   (`review.join_closing_remarks`). Every other step, and every other passage in brackets, stays as it is.
+- **`<id>-steps`, `<id>-notes`** for any imported recipe: a line inside the recipe that sends the cook to a
+  separate recipe of the source for a part of it ("מכינים בצק סופגניות לפי המתכון ... שלי מהבלוג"), and
+  that the saved recipe lacks, is added word for word where the original has it, as a new import now keeps
+  it (`review.reference_lines`). Among the steps it is a step, after the step before it in the original; in
+  the ingredient list it is a note. Nothing of the separate recipe (an ingredient, an amount, a link) is
+  added.
 - **`<id>-oil`**: the line the oil rule (`app/extraction/derived.py`) adds to a new import with these steps.
 - **`<id>-type`**: for a dessert without a type, the type the local classifier gives in two requests that
   agree; otherwise nothing (listed as unresolved). A title word that points to another type is flagged. The

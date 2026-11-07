@@ -54,7 +54,7 @@ from app.db import make_engine, utc_now
 from app.errors import ApiError
 from app.extraction.derived import add_oil_from_steps
 from app.extraction.output import Classification
-from app.extraction.review import join_closing_remarks, only_in_step_point, resolve_classification
+from app.extraction.review import join_closing_remarks, normalize, only_in_step_point, reference_lines, resolve_classification
 from app.extraction.structured import structured_draft
 from app.importers import website
 from app.migrate import backup_database
@@ -145,9 +145,7 @@ def audit(
                     if problem:
                         unresolved.append({"what": "steps and ingredients", "why": problem})
                 if record is not None and not any(c["kind"] == "steps" for c in changes):
-                    remark = _remark_change(recipe, current, record.original_text)
-                    if remark is not None:
-                        changes.append(remark)
+                    changes += _caption_changes(recipe, current, record.original_text)
                 repaired = apply_changes(current, [c for c in changes if c["kind"] in ("steps", "ingredients")])
                 oil = _oil_change(recipe, repaired)
                 if oil is not None:
@@ -235,22 +233,57 @@ def _website_repairs(recipe: schemas.Recipe, record: models.RecipeImport, curren
     return changes, (page_note if not changes and page_note else None)
 
 
-def _remark_change(recipe: schemas.Recipe, current: schemas.RecipeInput, original: str) -> dict | None:
-    """A saved step that is only a remark in brackets ending the step before it, as a new import now reads it
-    (review.join_closing_remarks): joined to that step, word for word."""
-    joined = join_closing_remarks(current.step_groups, original)
-    if joined == current.step_groups:
-        return None
-    now = {step for group in joined for step in group.steps}
+def _caption_changes(recipe: schemas.Recipe, current: schemas.RecipeInput, original: str) -> list[dict]:
+    """What a new import now makes of the original that the saved steps and notes lack, word for word: a remark in
+    brackets joined to the step it ends (review.join_closing_remarks), and a line inside the recipe that sends the
+    cook to a separate recipe for a part of it (review.reference_lines), where the original has it: among the steps
+    a step, in the ingredient list a note. Nothing of the separate recipe is added."""
+    groups = [g.model_copy(update={"steps": list(g.steps)}) for g in join_closing_remarks(current.step_groups, original)]
+    now = {step for group in groups for step in group.steps}
     pairs = [(step, after) for group in current.step_groups for step, after in zip(group.steps, group.steps[1:]) if f"{step} {after}" in now]
-    return {
-        "id": f"{recipe.id}-steps", "recipe_id": recipe.id, "kind": "steps", "group": "content", "field": "step_groups",
-        "before": [g.model_dump() for g in current.step_groups], "after": [g.model_dump() for g in joined],
-        "evidence": [f'The original text has "{step}" and, on its next line, "{remark}": one sentence, ended by the remark.'
-                     for step, remark in pairs],
-        "why": "A remark in brackets that ends a step's sentence on the next line is part of that step; it was numbered as a step of its own.",
-        "uncertainty": "Only those steps change, joined with a space where the line broke; every word, and every other step, stays as it is.",
-    }
+    step_evidence = [f'The original text has "{step}" and, on its next line, "{remark}": one sentence, ended by the remark.' for step, remark in pairs]
+    notes, note_evidence = list(current.notes), []
+    lines = [normalize(line).lower() for line in original.splitlines()]
+
+    def line_of(text: str) -> int | None:
+        start = normalize(text).lower()[:40]
+        return next((n for n, line in enumerate(lines) if start and start in line), None)
+
+    saved = [normalize(t).lower() for t in [*now, *current.notes, *(i.text for g in current.ingredient_groups for i in g.ingredients)]]
+    ingredient_at = [n for g in current.ingredient_groups for i in g.ingredients if (n := line_of(i.text)) is not None]
+    step_at = [n for g in groups for s in g.steps if (n := line_of(s)) is not None]
+    for line, text in reference_lines(original) if step_at else []:
+        if not (min(ingredient_at or step_at) < line < max(step_at)) or any(normalize(text).lower() in kept for kept in saved):
+            continue
+        if line > min(step_at):  # among the steps: after the last saved step the original has before it
+            g, s = max(((g, s) for g, group in enumerate(groups) for s, step in enumerate(group.steps) if (line_of(step) or 0) < line),
+                       key=lambda found: (line_of(groups[found[0]].steps[found[1]]) or 0, found))  # the last of steps on one line
+            step_evidence.append(f'The original has, among the steps, "{text}": an instruction to make a part by a separate recipe; '
+                                 f'kept as a step after "{groups[g].steps[s]}".')
+            groups[g].steps.insert(s + 1, text)
+        else:  # in the ingredient list: what that part is, before the notes the original has after it
+            at = next((n for n, note in enumerate(notes) if (line_of(note) or 0) > line), len(notes))
+            notes.insert(at, text)
+            note_evidence.append(f'The original has, in its ingredient list, "{text}": what that part is; the separate recipe is not in the text.')
+    changes = []
+    if groups != current.step_groups:
+        changes.append({
+            "id": f"{recipe.id}-steps", "recipe_id": recipe.id, "kind": "steps", "group": "content", "field": "step_groups",
+            "before": [g.model_dump() for g in current.step_groups], "after": [g.model_dump() for g in groups], "evidence": step_evidence,
+            "why": " ".join(why for why, found in (
+                ("A remark in brackets that ends a step's sentence on the next line is part of that step; it was numbered as a step of its own.", pairs),
+                ("A step that sends the cook to a separate recipe for a part of this one was left out as not part of the recipe.", len(step_evidence) > len(pairs)),
+            ) if found),
+            "uncertainty": "Only those steps change, word for word as the original has them; every other step stays as it is.",
+        })
+    if notes != current.notes:
+        changes.append({
+            "id": f"{recipe.id}-notes", "recipe_id": recipe.id, "kind": "notes", "group": "content", "field": "notes",
+            "before": list(current.notes), "after": notes, "evidence": note_evidence,
+            "why": "The ingredient list names a part made by a separate recipe; it was left out as not part of the recipe, so the recipe looked complete.",
+            "uncertainty": "Only this note is added, word for word; no ingredient, amount, instruction or link of the separate recipe is invented.",
+        })
+    return changes
 
 
 def _why_steps(current: schemas.RecipeInput, original: str) -> str:
