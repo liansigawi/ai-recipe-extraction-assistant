@@ -2344,18 +2344,14 @@ h4.category-name {
   margin: 0;
 }
 
-/* What happened, item by item, each with who did it (the system by itself, the model, the review). */
-.summary-list {
+/* Who did what in a demonstration: the model, the fixed rules, the review; each a heading over its own list. */
+.account {
   display: grid;
   gap: 0.6rem;
   margin: 0.5rem 0 0;
-  padding: 0;
-  list-style: none;
 }
 
-.summary-item {
-  display: grid;
-  gap: 0.2rem;
+.account > div {
   padding: 0.6rem 0.85rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
@@ -2363,18 +2359,24 @@ h4.category-name {
   overflow-wrap: anywhere;
 }
 
-.summary-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 0.5rem;
-  align-items: center;
-}
-
-.summary-topic {
+.account dt {
   font-weight: 700;
 }
 
-.summary-tag {
+.account dd {
+  margin: 0.25rem 0 0;
+}
+
+.account ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-inline-start: 1.2rem;
+}
+
+/* Who raised a review point: the model, or the system's own checks. */
+.point-origin {
+  margin-inline-start: 0.5rem;
   padding: 0 0.5rem;
   border-radius: 999px;
   background: var(--color-sunken);
@@ -2382,19 +2384,6 @@ h4.category-name {
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
-}
-
-.summary-tag-model {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-
-.summary-tag-approved,
-.summary-tag-corrected,
-.summary-tag-handled,
-.summary-tag-dismissed {
-  background: var(--color-success-soft);
-  color: var(--color-success);
 }
 
 /* The draft from before the review, folded under the comparison. */

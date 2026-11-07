@@ -220,9 +220,26 @@ export interface Demonstration {
   /** When the import ran, and the model that read the text. */
   run_at: string
   model: string
+  /** The code that ran (a commit) and its settings; absent in a record made before they were kept. */
+  revision?: string | null
+  settings?: { mode: string; context_tokens: number; temperature: number } | null
+  /** What the model itself answered, beside what the import made of it; absent in an older record. */
+  answer?: ModelAnswer | null
   draft: KeptDraft
   reviewed: ReviewedDemonstration
+  /** What the import did by fixed rules, not the model, as checked against the original and both states. */
+  automatic?: RuleAction[]
 }
+
+/** The model's answer: its classification as given, and the review points it raised, each with the rule that left it
+ * out (null: the import showed it). */
+export interface ModelAnswer {
+  classification: { fit: 'clear' | 'ambiguous' | 'no_fit'; category_id: number | null; subcategory_id: number | null; candidate_category_ids: number[] }
+  points: { kind: IssueKind; passage: string | null; left_out: 'no_alternative' | 'outside_recipe' | 'no_passage' | 'other_check' | null }[]
+}
+
+/** A remark in brackets joined to the step whose sentence it ends; a line that refers to a separate recipe, kept. */
+export type RuleAction = { kind: 'joined_remark'; step: string; remark: string } | { kind: 'kept_reference'; text: string; kept_as: 'step' | 'note' }
 
 /** The demonstration's draft after its review: what was saved, and each point's decision. */
 export interface ReviewedDemonstration {

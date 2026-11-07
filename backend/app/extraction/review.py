@@ -1151,10 +1151,15 @@ def _referenced_issues(
             passage = passage_text(source_text, segments, issue.passage, issue.passage) or None
         if passage is None and issue.kind != "multiple_recipes":
             continue
-        if issue.kind == "ambiguous_alternative" and not _ALTERNATIVE.search(passage or ""):
+        if issue.kind == "ambiguous_alternative" and not names_an_alternative(passage or ""):
             continue
         issues.append(schemas.Issue(kind=kind, message=message, quote=_short(passage, 300) if passage else None))
     return issues
+
+
+def names_an_alternative(text: str) -> bool:
+    """Does a passage hold what the "unclear or" point says it has: an "או" (also "ואו") or an "or"?"""
+    return bool(_ALTERNATIVE.search(text))
 
 
 _STEP_SENTENCE = re.compile(r"[^.;!?\n]+[.;!?]?")  # a step's sentences, as derived.py reads them

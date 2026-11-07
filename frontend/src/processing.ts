@@ -1,7 +1,7 @@
 // How a recipe went from its source to the saved recipe, for the public copy's comparison page. No React.
-import { categoryLabel, HEALTHY_LABEL, healthyLabel } from './categoryLook'
-import { ADDED_IN_REVIEW_LABEL, fromStepsLabel, ISSUE_LABELS } from './labels'
-import type { Category, CategoryRef, Demonstration, IngredientGroup, Issue, KeptDraft, Recipe, ResolvedIssue, StepGroup } from './types'
+import { categoryLabel, healthyLabel } from './categoryLook'
+import { fromStepsLabel } from './labels'
+import type { CategoryRef, Demonstration, IngredientGroup, Issue, KeptDraft, Recipe, ResolvedIssue, StepGroup } from './types'
 
 export interface LineChange {
   kind: 'removed' | 'added'
@@ -90,85 +90,80 @@ export function decisionFor(issue: Issue, resolved: ResolvedIssue[]): ResolvedIs
   return resolved.find((entry) => entry.kind === issue.kind && entry.message === issue.message && entry.quote === issue.quote) ?? null
 }
 
-// --- A demonstration, in a few lines ---------------------------------------------------------------------------
+// --- A demonstration: who did what ---------------------------------------------------------------------------
 
-/** Who did it: the import by itself (its checks), the model, or the review. */
-export type SummaryTag = 'detected' | 'model' | 'approved' | 'dismissed' | 'handled' | 'corrected'
-
-export const SUMMARY_TAGS: Record<SummaryTag, string> = {
-  detected: 'זוהה אוטומטית',
-  model: 'הצעת המודל',
-  approved: 'אושר בבדיקה',
-  dismissed: 'נדחה בבדיקה',
-  handled: 'טופל בבדיקה',
-  corrected: 'תוקן בבדיקה',
+/** A Hebrew list: "א", "א ו-ב", "א, ב ו-ג" ("ו-" before a number, "ו" joined to a word). */
+function joined(items: string[]): string {
+  if (items.length <= 1) return items.join('')
+  const last = items[items.length - 1]
+  return `${items.slice(0, -1).join(', ')} ${/^\d/.test(last) ? 'ו-' : 'ו'}${last}`
 }
 
-export interface SummaryItem {
-  topic: string
-  tags: SummaryTag[]
-  text: string
+function counted(count: number, one: string, many: string): string {
+  return count === 1 ? one : `${count} ${many}`
 }
 
-/** What review changed in a demonstration, from its record only: each point's decision, what the model chose and
- * review corrected, any other correction; and the parts review left as the import made them. What the import already
- * did right (a remark joined to its step) is the same in the draft and the result: not a change, not listed. */
-export function demonstrationSummary(demo: Demonstration, categories: Category[]): { items: SummaryItem[]; unchanged: string[] } {
-  const { draft, reviewed } = demo
-  const items: SummaryItem[] = []
-  for (const decided of reviewed.resolved_issues) {
-    const named = /"([^"]+)"/.exec(decided.message)?.[1]
-    if (decided.kind === 'ingredient_only_in_steps' && named !== undefined) {
-      const found = `המערכת מצאה את "${named}" בהוראות ההכנה ולא ברשימת המצרכים, והציעה להוסיף את המצרך.`
-      if (decided.resolution === 'added' && decided.proposed) {
-        const { text, quantity } = decided.proposed
-        const amount = quantity === null ? 'ללא כמות: לא הומצאה כמות.' : `עם הכמות שכתובה בהוראות, "${quantity}".`
-        items.push({ topic: named, tags: ['detected', 'approved'], text: `${found} בבדיקה ההצעה אושרה, ו"${text}" נוסף למצרכים ${amount}` })
-      } else {
-        const outcome = decided.resolution === 'dismissed' ? 'בבדיקה הוחלט להתעלם מההתרעה, ולא נוסף דבר.' : 'בבדיקה ההתרעה סומנה כטופלה, בלי להוסיף את השורה המוצעת.'
-        items.push({ topic: named, tags: ['detected', decided.resolution === 'dismissed' ? 'dismissed' : 'handled'], text: `${found} ${outcome}` })
-      }
-    } else if (decided.kind === 'missing_title') {
-      // The model composed the title; review confirmed it or changed it (the title part says which).
-      const from = decided.quote === null ? 'מתוך הטקסט' : `מתוך השורה "${decided.quote}"`
-      const kept = draft.title === reviewed.title
-      items.push({
-        topic: ISSUE_LABELS[decided.kind],
-        tags: ['model', kept ? 'approved' : 'corrected'],
-        text: `לכיתוב אין שורת כותרת, והמודל הציע את "${draft.title}" ${from}. ${kept ? 'בבדיקה הכותרת אושרה כמו שהיא.' : `בבדיקה היא שונתה ל"${reviewed.title}".`}`,
-      })
-    } else {
-      const outcome = decided.resolution === 'dismissed' ? 'בבדיקה הוחלט להתעלם ממנה.' : 'בבדיקה היא נבדקה וסומנה כטופלה.'
-      items.push({ topic: ISSUE_LABELS[decided.kind], tags: ['detected', decided.resolution === 'dismissed' ? 'dismissed' : 'handled'], text: `${decided.message} ${outcome}` })
-    }
+const LEFT_OUT: Record<string, (count: number) => string> = {
+  no_alternative: (count) =>
+    `לא הציגה ${counted(count, 'נקודה אחת', 'נקודות')} של המודל על "או" לא ברור: בקטעים שהמודל הצביע עליהם אין "או".`,
+  outside_recipe: (count) => `לא הציגה ${counted(count, 'נקודה אחת', 'נקודות')} של המודל על קטעים שהוא עצמו סימן כלא חלק מהמתכון.`,
+  no_passage: (count) => `לא הציגה ${counted(count, 'נקודה אחת', 'נקודות')} של המודל שלא הצביעו על קטע בטקסט.`,
+  other_check: (count) => `לא הציגה ${counted(count, 'נקודה אחת', 'נקודות')} של המודל שלא עמדו בבדיקות שלה.`,
+}
+
+/** Who raised a review point: the model (one of the points its answer raised, as the import showed it) or the
+ * system's own checks. null: the record does not say (made before the model's answer was kept). */
+export function pointOrigin(issue: Issue, demo: Demonstration): 'model' | 'system' | null {
+  if (!demo.answer) return null
+  const quoted = (passage: string | null) =>
+    passage !== null && issue.quote !== null && (issue.quote === passage || (issue.quote.endsWith('…') && passage.startsWith(issue.quote.slice(0, -1))))
+  const raised = demo.answer.points.some(
+    (point) => point.left_out === null && point.kind === issue.kind && (point.kind === 'multiple_recipes' || quoted(point.passage)),
+  )
+  return raised ? 'model' : 'system'
+}
+
+/** What the model produced and what fixed rules did on their own, in a demonstration, from its record only. What
+ * review changed is not here: it is the difference between the draft and the reviewed result (reviewChanges). */
+export function demonstrationAccount(demo: Demonstration): { model: string[]; rules: string[] } {
+  const { draft, answer } = demo
+  const automatic = demo.automatic ?? []
+  const keptAs = (as: 'step' | 'note') => automatic.filter((item) => item.kind === 'kept_reference' && item.kept_as === as).length
+  const ingredients = draft.ingredient_groups.reduce((count, group) => count + group.ingredients.length, 0)
+  const steps = draft.step_groups.reduce((count, group) => count + group.steps.length, 0) - keptAs('step')
+  const notes = draft.notes.length - keptAs('note')
+  const copied = [counted(ingredients, 'שורת מצרך אחת', 'שורות מצרכים'), counted(steps, 'שלב אחד', 'שלבים'), ...(notes > 0 ? [counted(notes, 'הערה אחת', 'הערות')] : [])]
+  const model = [
+    `סימן לכל קטע בטקסט את תפקידו: כותרת, מצרך, שלב, הערה, או לא חלק מהמתכון. לפי הסימון הועתקו מהטקסט, מילה במילה, ${joined(copied)}.`,
+    draft.issues.some((issue) => issue.kind === 'missing_title')
+      ? `בטקסט אין שורת כותרת, והמודל בחר בכותרת "${draft.title}".`
+      : `סימן את שורת הכותרת: "${draft.title}".`,
+    draft.category === null ? 'לא בחר קטגוריה אחת בבירור.' : `בחר בקטגוריה "${categoryLabel(draft.category, draft.subcategory)}".`,
+  ]
+  if (answer) {
+    const shown = answer.points.filter((point) => point.left_out === null).length
+    const all = answer.points.length
+    model.push(
+      all === 0
+        ? 'לא סימן נקודות לבדיקה.'
+        : `סימן ${counted(all, 'נקודה אחת', 'נקודות')} לבדיקה; ${shown === all ? (all === 1 ? 'היא הוצגה' : 'כולן הוצגו') : shown === 0 ? (all === 1 ? 'היא לא הוצגה' : 'אף אחת מהן לא הוצגה') : `${shown} מהן הוצגו`}.`,
+    )
   }
-  if (draft.category?.id === reviewed.category?.id && draft.subcategory?.id !== reviewed.subcategory?.id) {
-    const dessert = categories.find((category) => category.id === draft.category?.id)?.healthy_style === true
-    items.push({
-      topic: dessert ? 'סוג הקינוח' : 'תת-קטגוריה',
-      tags: ['model', 'corrected'],
-      text: `המודל הציע "${draft.subcategory?.name ?? 'ללא'}"; בבדיקה זה תוקן ל"${reviewed.subcategory?.name ?? 'ללא'}".`,
-    })
-  } else if (draft.category?.id !== reviewed.category?.id) {
-    items.push({
-      topic: 'קטגוריה',
-      tags: ['model', 'corrected'],
-      text: `המודל הציע "${categoryLabel(draft.category, draft.subcategory)}"; בבדיקה זה תוקן ל"${categoryLabel(reviewed.category, reviewed.subcategory)}".`,
-    })
+  const rules = ['קראה את הכמות בכל שורת מצרך מתוך השורה עצמה, לפי כללים קבועים: היא מסומנת בתוצאה.']
+  for (const item of automatic) {
+    rules.push(
+      item.kind === 'joined_remark'
+        ? `צירפה את ההערה "${item.remark}" לשלב שלפניה: במקור היא חותמת את המשפט שלו, בשורה הבאה.`
+        : `שמרה ${item.kept_as === 'step' ? 'כשלב' : 'כהערה'}, מילה במילה, את הקטע "${item.text}", אף שהמודל סימן אותו כלא חלק מהמתכון: הקטע מפנה למתכון נפרד, שלא כלול בטקסט ולא יובא.`,
+    )
   }
-  if ((draft.healthy ?? null) !== reviewed.healthy) {
-    items.push({ topic: HEALTHY_LABEL, tags: ['corrected'], text: `בטיוטה: ${healthyLabel(draft.healthy) ?? 'לא נקבע'}. בבדיקה: ${healthyLabel(reviewed.healthy) ?? 'לא נקבע'}.` })
+  for (const [reason, sentence] of Object.entries(LEFT_OUT)) {
+    const count = answer?.points.filter((point) => point.left_out === reason).length ?? 0
+    if (count > 0) rules.push(sentence(count))
   }
-  const { changed, unchanged } = reviewChanges(draft, reviewed)
-  // Parts review changed by hand beyond the above: an ingredient change other than the lines added from points.
-  const other = changed
-    .filter((change) => change.part !== 'קטגוריה')
-    .filter((change) => !(change.part === 'מצרכים' && change.lines.every((line) => line.kind === 'added' && line.text.endsWith(ADDED_IN_REVIEW_LABEL))))
-    .map((change) => change.part)
-  if (other.length > 0) {
-    items.push({ topic: 'תיקונים נוספים', tags: ['corrected'], text: `בבדיקה תוקנו גם: ${other.join(', ')}. הפירוט בטיוטה שלפני הבדיקה.` })
-  }
-  return { items, unchanged }
+  const own = answer ? draft.issues.filter((issue) => pointOrigin(issue, demo) === 'system').length : 0
+  if (own > 0) rules.push(`סימנה ${counted(own, 'נקודה אחת', 'נקודות')} לבדיקה, בבדיקות שלה (בפירוט למטה).`)
+  return { model, rules }
 }
 
 /** "פחות מדקה", "4 דקות", "שעתיים", "6 ימים": the time from one moment to a later one. */

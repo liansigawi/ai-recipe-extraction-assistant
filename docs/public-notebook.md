@@ -125,30 +125,40 @@ it), and each with the record it comes from:
 
 A recipe with a **demonstration** shows that instead, as what it is: the recipe's original text imported
 again with the current system, on a separate copy of the notebook, and reviewed there. Its file
-(`data/public-notebook/demonstrations/<id>.json`, git-ignored) records:
+(`data/public-notebook/demonstrations/`, git-ignored; a newer run gets a file of its own, in a folder named
+by its date, and the selection names the one shown) records:
 - the draft exactly as that import saved it, its review points included;
 - the same recipe after its review, as it was saved, with each point's decision (added, dismissed or
   handled);
-- the run's time and model, and a fingerprint of the text it imported;
-- under `automatic`, evidence of what the import did by a fixed rule rather than the model (a bracket remark
-  joined to its step).
+- the run's time, model, code revision and settings, and a fingerprint of the text it imported;
+- under `answer`, what the model itself answered: its classification as given, and each review point it
+  raised, with the rule that left it out when the import did not show it (an "unclear or" in a passage with
+  no "או", a passage the model itself left out, a point with no passage, another check);
+- under `automatic`, what the import did by fixed rules rather than the model: a bracket remark joined to
+  its step, a line that refers to a separate recipe kept as written.
 
-The export refuses a demonstration that was not made from that recipe's own original text. It also refuses
-an `automatic` entry that the rule, the original and both recorded states do not all show. That evidence is
-not published: what the import already did right is the same in the draft and the result, so it is not a
-change.
+The export refuses a demonstration not made from that recipe's own original text, and evidence that does
+not hold: a joined remark that the rule, the original and both recorded states do not all show; a kept
+reference that is not the original's words, not a reference by the rule, or not where the draft has it; a
+model classification other than the draft's category; a model point whose words are not in the original,
+one left out for having no "או" whose passage has one, or one shown that the draft does not have.
 
 The page then has:
 - a one-line introduction ("הדגמה של ייבוא מחדש באמצעות הגרסה המעודכנת של המערכת."), with the date, the
-  model and a short note that the original import's draft was not kept and the saved recipe was not
-  replaced;
-- a summary of what review changed between that run's draft and its result, computed from the record, each
-  item tagged by who did it: the system by itself, the model, or the review performed while preparing the
-  demonstration;
+  model, its temperature and the code revision, and a short note on the original import's draft (not kept,
+  or kept apart and not shown) and that the saved recipe was not replaced;
+- "מה נעשה, ומי עשה", in three parts: the model (what its labels copied word for word, its title, its
+  category, how many points it raised and how many were shown); the system by fixed rules (the quantity read
+  from each line, a remark joined, a reference kept, the model's points it left out and why, the points it
+  raised by its own checks); and the review performed while preparing the demonstration, listing only what
+  it changed, part by part, as lines removed and added, and naming the parts it left as they were. What a
+  rule did, or a wrong category the model chose, is never shown as a review change;
+- "סיווג", the classification before and after review (above);
+- the review points, each with who raised it (the model or the system), the passage it quotes and what
+  review decided, or "הייבוא לא סימן נקודות לבדיקה.";
 - the original text beside "המתכון לאחר הבדיקה", the demonstration's reviewed result, where a line added
   from a point says "נוסף בעקבות התרעה" and opens its sentence;
-- folded under "הצגת הטיוטה לפני הבדיקה": the draft, its points with the action taken (or "הייבוא לא סימן
-  נקודות לבדיקה." when it had none), and what review changed, part by part.
+- folded under "הצגת הטיוטה לפני הבדיקה": the draft as the import saved it, with the model's category.
 
 Decisions are text, never buttons: the public copy changes nothing. The other recipes keep the saved
 recipe's comparison.

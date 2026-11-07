@@ -1,6 +1,6 @@
 import { Fragment, useId, type ReactNode, type Ref } from 'react'
 import { ISSUE_LABELS, RESOLUTION_LABELS } from '../labels'
-import { decisionFor, demonstrationSummary, elapsedText, reviewChanges, SUMMARY_TAGS, type Reviewed } from '../processing'
+import { decisionFor, demonstrationAccount, elapsedText, pointOrigin, reviewChanges, type Reviewed } from '../processing'
 import type { Category, CategoryRef, ClassificationCheck, Demonstration, ImportedOriginal, Issue, KeptDraft, Recipe, ResolvedIssue } from '../types'
 import CategoryChip from './CategoryChip'
 import Icon from './Icon'
@@ -160,19 +160,32 @@ function DraftRecord({ draft, recipe }: { draft: KeptDraft; recipe: Recipe }) {
   )
 }
 
-/** The review points a draft raised; with a review's record, what was decided about each (as text). */
-function PointList({ issues, resolved }: { issues: Issue[]; resolved?: ResolvedIssue[] }) {
+/** The review points a draft raised; with a review's record, what was decided about each (as text); with a
+ * demonstration's record, who raised each one. */
+function PointList({
+  issues,
+  resolved,
+  origin,
+  heading = true,
+}: {
+  issues: Issue[]
+  resolved?: ResolvedIssue[]
+  origin?: (issue: Issue) => 'model' | 'system' | null
+  heading?: boolean
+}) {
   if (issues.length === 0) return null
   return (
     <>
-      <h4 className="comparison-subtitle">נקודות לבדיקה שהייבוא סימן ({issues.length})</h4>
+      {heading && <h4 className="comparison-subtitle">נקודות לבדיקה שהייבוא סימן ({issues.length})</h4>}
       <ul className="review-list">
         {issues.map((issue, index) => {
           const decision = resolved === undefined ? undefined : decisionFor(issue, resolved)
+          const raisedBy = origin?.(issue) ?? null
           return (
             <li key={index} className="review-issue">
               <div className="review-issue-text">
                 <span className="issue-kind">{ISSUE_LABELS[issue.kind]}</span>
+                {raisedBy !== null && <span className="point-origin">{raisedBy === 'model' ? 'סימן המודל' : 'סימנה המערכת'}</span>}
                 <p dir="auto">{issue.message}</p>
                 {issue.quote !== null && (
                   <blockquote className="issue-quote" dir="auto">
@@ -208,11 +221,11 @@ function Decision({ decision }: { decision: ResolvedIssue | null }) {
 }
 
 /** What review changed, part by part, and the parts it left as they were. */
-function ChangeList({ draft, after, title, same }: { draft: KeptDraft; after: Reviewed; title: string; same: string }) {
+function ChangeList({ draft, after, title, same }: { draft: KeptDraft; after: Reviewed; title?: string; same: string }) {
   const { changed, unchanged } = reviewChanges(draft, after)
   return (
     <>
-      <h4 className="comparison-subtitle">{title}</h4>
+      {title !== undefined && <h4 className="comparison-subtitle">{title}</h4>}
       {changed.length === 0 ? (
         <p>שום דבר בתוכן: המתכון נשמר כמו שהטיוטה הייתה.</p>
       ) : (
@@ -417,8 +430,9 @@ function RecipeBody({ recipe, explainAdded = false }: { recipe: Omit<Reviewed, '
 }
 
 /** The recipe's original imported again with the current system, on a separate copy of the notebook, as recorded:
- * what happened (who did what), the original beside the reviewed result, and the draft from before the review, folded.
- * Never presented as the first import, and never in place of the saved recipe. */
+ * who did what (the model, the fixed rules, the review performed while preparing it, which alone lists changes), the
+ * classification, the review points, the original beside the reviewed result, and the draft from before the review,
+ * folded. Never presented as the first import, and never in place of the saved recipe. */
 function DemonstrationView({
   demonstration,
   original,
@@ -432,40 +446,63 @@ function DemonstrationView({
   categories: Category[]
 }) {
   const id = useId()
-  const { draft, reviewed } = demonstration
-  const { items, unchanged } = demonstrationSummary(demonstration, categories)
+  const { draft, reviewed, settings, revision } = demonstration
+  const { model, rules } = demonstrationAccount(demonstration)
   return (
     <>
       <p className="demonstration-lead">הדגמה של ייבוא מחדש באמצעות הגרסה המעודכנת של המערכת.</p>
       <p className="demonstration-meta">
-        {formatDate(demonstration.run_at)} · <bdi>{demonstration.model}</bdi>, {whereModelRuns(demonstration.model)} · בעותק נפרד של
-        המחברת. הטיוטה של הייבוא המקורי, מ-{formatDate(original.imported_at)}, {historicalKept ? 'שמורה בנפרד ואינה מוצגת כאן' : 'לא נשמרה'}; המתכון
-        השמור לא הוחלף בתוצאת ההדגמה.
+        {formatDate(demonstration.run_at)} · <bdi>{demonstration.model}</bdi>, {whereModelRuns(demonstration.model)}
+        {settings && <> · טמפרטורה {settings.temperature}</>}
+        {revision && (
+          <>
+            {' '}
+            · גרסת הקוד <bdi>{revision}</bdi>
+          </>
+        )}{' '}
+        · בעותק נפרד של המחברת. הטיוטה של הייבוא המקורי, מ-{formatDate(original.imported_at)},{' '}
+        {historicalKept ? 'שמורה בנפרד ואינה מוצגת כאן' : 'לא נשמרה'}; המתכון השמור לא הוחלף בתוצאת ההדגמה.
       </p>
 
-      <section className="recipe-section" aria-labelledby={`${id}-summary`}>
-        <h3 id={`${id}-summary`} className="section-title">
-          מה קרה בהדגמה הזו
+      <section className="recipe-section" aria-labelledby={`${id}-account`}>
+        <h3 id={`${id}-account`} className="section-title">
+          מה נעשה, ומי עשה
         </h3>
-        <p className="field-hint">מה עשתה המערכת בעצמה, ומה הוחלט בבדיקה שבוצעה בעת הכנת ההדגמה.</p>
-        <ul className="summary-list">
-          {items.map((item, index) => (
-            <li key={index} className="summary-item">
-              <p className="summary-head">
-                <span className="summary-topic" dir="auto">
-                  {item.topic}
-                </span>
-                {item.tags.map((tag) => (
-                  <span key={tag} className={`summary-tag summary-tag-${tag}`}>
-                    {SUMMARY_TAGS[tag]}
-                  </span>
+        <dl className="account">
+          <div>
+            <dt>
+              המודל, <bdi>{demonstration.model}</bdi>
+            </dt>
+            <dd>
+              <ul>
+                {model.map((text, index) => (
+                  <li key={index} dir="auto">
+                    {text}
+                  </li>
                 ))}
-              </p>
-              <p dir="auto">{item.text}</p>
-            </li>
-          ))}
-        </ul>
-        {unchanged.length > 0 && <p className="field-hint">בלי תיקון בבדיקה: {unchanged.join(', ')}.</p>}
+              </ul>
+            </dd>
+          </div>
+          <div>
+            <dt>המערכת, לפי כללים קבועים</dt>
+            <dd>
+              <ul>
+                {rules.map((text, index) => (
+                  <li key={index} dir="auto">
+                    {text}
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+          <div>
+            <dt>הבדיקה, שבוצעה בעת הכנת ההדגמה</dt>
+            <dd>
+              <ChangeList draft={draft} after={reviewed} same="בלי תיקון" />
+              {reviewed.resolved_issues.length > 0 && <p className="field-hint">ההחלטה על כל נקודה לבדיקה כתובה לידה, למטה.</p>}
+            </dd>
+          </div>
+        </dl>
       </section>
 
       <ClassificationRecord
@@ -473,6 +510,17 @@ function DemonstrationView({
         after={{ category: reviewed.category, subcategory: reviewed.subcategory, source: 'בבדיקה שבוצעה בעת הכנת ההדגמה.' }}
         categories={categories}
       />
+
+      <section className="recipe-section" aria-labelledby={`${id}-points`}>
+        <h3 id={`${id}-points`} className="section-title">
+          נקודות לבדיקה {draft.issues.length > 0 && `(${draft.issues.length})`}
+        </h3>
+        {draft.issues.length === 0 ? (
+          <p>הייבוא לא סימן נקודות לבדיקה.</p>
+        ) : (
+          <PointList issues={draft.issues} resolved={reviewed.resolved_issues} origin={(issue) => pointOrigin(issue, demonstration)} heading={false} />
+        )}
+      </section>
 
       <div className="comparison">
         <section className="comparison-pane" aria-labelledby={`${id}-original`}>
@@ -499,16 +547,10 @@ function DemonstrationView({
 
       <details className="draft-details">
         <summary>הצגת הטיוטה לפני הבדיקה</summary>
-        <p>כפי שהייבוא שמר אותה ב-{formatDate(draft.saved_at)}, לפני כל בדיקה, עם הנקודות שסימן ומה שנעשה בבדיקה.</p>
+        <p>כפי שהייבוא שמר אותה ב-{formatDate(draft.saved_at)}, לפני כל בדיקה: עם הקטגוריה שהמודל בחר.</p>
         <div className="demonstration-draft">
           <RecipeBody recipe={draft} />
         </div>
-        {draft.issues.length === 0 ? (
-          <p className="field-hint">הייבוא לא סימן נקודות לבדיקה.</p>
-        ) : (
-          <PointList issues={draft.issues} resolved={reviewed.resolved_issues} />
-        )}
-        <ChangeList draft={draft} after={reviewed} title="מה שונה בבדיקה" same="בלי תיקון" />
       </details>
     </>
   )

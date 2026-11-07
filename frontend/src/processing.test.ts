@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { demonstrationSummary, diffLines, elapsedText, reviewChanges } from './processing'
-import type { Category, Demonstration, Issue, KeptDraft, Recipe } from './types'
+import { demonstrationAccount, diffLines, elapsedText, pointOrigin, reviewChanges } from './processing'
+import type { Demonstration, Issue, KeptDraft, Recipe } from './types'
 
 describe('the lines that differ', () => {
   it('a changed line is one removal and one addition; the lines around it are left out', () => {
@@ -113,77 +113,68 @@ describe('time between two moments', () => {
   })
 })
 
-describe('what happened in a demonstration, from its record only', () => {
-  const chocolate: Issue = {
+describe('who did what in a demonstration, from its record only', () => {
+  const strawberries: Issue = {
     kind: 'ingredient_only_in_steps',
-    message: 'המצרך "שוקולד" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.',
-    quote: 'ממיסים 200 גרם שוקולד.',
-    proposed: { text: '200 גרם שוקולד', quantity: '200 גרם', group: null },
+    message: 'המצרך "תותים" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.',
+    quote: 'לקשט בתותים.',
+    proposed: { text: 'תותים', quantity: null, group: null },
   }
-  const yogurt: Issue = { ...chocolate, message: 'המצרך "יוגורט" מופיע בהוראות ההכנה, אך חסר ברשימת המצרכים.', proposed: { text: 'יוגורט', quantity: null, group: null } }
-  const categories: Category[] = [
-    { id: 1, name: 'קינוחים', description: null, subcategories: [], healthy_style: true },
-    { id: 3, name: 'ארוחות קלילות', description: null, subcategories: [] },
-  ]
-  const record = (reviewed: Partial<Demonstration['reviewed']>): Demonstration => ({
-    run_at: '2026-11-05T08:31:24Z',
+  const unclearOr: Issue = { kind: 'ambiguous_alternative', message: 'בקטע הזה יש "או" שלא ברור על מה הוא חל.', quote: 'חמאה או שמן' }
+  const reference = 'מכינים בצק לפי המתכון שלי מהבלוג.'
+  const record = (fields: Partial<Demonstration>): Demonstration => ({
+    run_at: '2026-11-07T11:51:28Z',
     model: 'qwen3:8b',
-    draft: { ...draft, category: { id: 3, name: 'ארוחות קלילות' }, healthy: null, issues: [chocolate, yogurt] },
-    reviewed: { ...draft, category: { id: 3, name: 'ארוחות קלילות' }, healthy: null, issues: [], resolved_issues: [], ...reviewed },
+    draft: { ...draft, title: 'עוגה', category: { id: 1, name: 'קינוחים' }, subcategory: { id: 13, name: 'טארטים ופאי' }, healthy: null },
+    reviewed: { ...draft, title: 'עוגה', healthy: null, issues: [], resolved_issues: [] },
+    ...fields,
   })
 
-  it('says what was added with its own amount, what was dismissed, and credits the model only with its choices', () => {
-    const added = { ...draft.ingredient_groups[0], ingredients: [...draft.ingredient_groups[0].ingredients] }
-    const { items, unchanged } = demonstrationSummary(
-      record({
-        category: { id: 1, name: 'קינוחים' },
-        ingredient_groups: [added, { name: null, ingredients: [{ text: '200 גרם שוקולד', quantity: '200 גרם', derived_from: chocolate.quote, added_in_review: true }] }],
-        resolved_issues: [{ ...chocolate, resolution: 'added' }, { ...yogurt, resolution: 'dismissed' }],
-        title: 'שייק בננה ותמר',
-      }),
-      categories,
-    )
-    expect(items.map((item) => [item.topic, item.tags])).toEqual([
-      ['שוקולד', ['detected', 'approved']],
-      ['יוגורט', ['detected', 'dismissed']],
-      ['קטגוריה', ['model', 'corrected']],
-      ['תיקונים נוספים', ['corrected']],
+  it("credits the model with its labels, its title and its category, and the rules with what they did on their own", () => {
+    const demo = record({
+      answer: {
+        classification: { fit: 'clear', category_id: 1, subcategory_id: 13, candidate_category_ids: [] },
+        points: [
+          { kind: 'ambiguous_alternative', passage: 'טורפים את החלמונים.', left_out: 'no_alternative' },
+          { kind: 'ambiguous_alternative', passage: 'מקציפים את הקרם.', left_out: 'no_alternative' },
+        ],
+      },
+      automatic: [
+        { kind: 'joined_remark', step: 'אופים 50 דקות', remark: '(כל תנור עובד אחרת).' },
+        { kind: 'kept_reference', text: reference, kept_as: 'step' },
+      ],
+      draft: {
+        ...record({}).draft,
+        step_groups: [{ name: null, steps: ['מערבלים.', reference] }],
+        issues: [strawberries],
+      },
+    })
+    const { model, rules } = demonstrationAccount(demo)
+    // The reference step is the rule's, not the model's: one step copied by the labels.
+    expect(model[0]).toBe('סימן לכל קטע בטקסט את תפקידו: כותרת, מצרך, שלב, הערה, או לא חלק מהמתכון. לפי הסימון הועתקו מהטקסט, מילה במילה, 2 שורות מצרכים ושלב אחד.')
+    expect(model.slice(1)).toEqual(['סימן את שורת הכותרת: "עוגה".', 'בחר בקטגוריה "קינוחים · טארטים ופאי".', 'סימן 2 נקודות לבדיקה; אף אחת מהן לא הוצגה.'])
+    expect(rules).toEqual([
+      'קראה את הכמות בכל שורת מצרך מתוך השורה עצמה, לפי כללים קבועים: היא מסומנת בתוצאה.',
+      'צירפה את ההערה "(כל תנור עובד אחרת)." לשלב שלפניה: במקור היא חותמת את המשפט שלו, בשורה הבאה.',
+      `שמרה כשלב, מילה במילה, את הקטע "${reference}", אף שהמודל סימן אותו כלא חלק מהמתכון: הקטע מפנה למתכון נפרד, שלא כלול בטקסט ולא יובא.`,
+      'לא הציגה 2 נקודות של המודל על "או" לא ברור: בקטעים שהמודל הצביע עליהם אין "או".',
+      'סימנה נקודה אחת לבדיקה, בבדיקות שלה (בפירוט למטה).',
     ])
-    expect(items[0].text).toContain('ו"200 גרם שוקולד" נוסף למצרכים עם הכמות שכתובה בהוראות, "200 גרם".')
-    expect(items[1].text).toContain('בבדיקה הוחלט להתעלם מההתרעה, ולא נוסף דבר.')
-    expect(items[2].text).toBe('המודל הציע "ארוחות קלילות"; בבדיקה זה תוקן ל"קינוחים".')
-    expect(items[3].text).toBe('בבדיקה תוקנו גם: כותרת. הפירוט בטיוטה שלפני הבדיקה.') // the added line is the decision, not another correction
-    expect(unchanged).toEqual(['כמות מנות', 'אופן ההכנה', 'הערות'])
   })
 
-  it('names nothing review did not record', () => {
-    const { items, unchanged } = demonstrationSummary(record({}), categories)
-    expect(items).toEqual([])
-    expect(unchanged).toEqual(['כותרת', 'כמות מנות', 'קטגוריה', 'מצרכים', 'אופן ההכנה', 'הערות'])
-  })
-})
-
-describe('a composed title in a demonstration', () => {
-  const titlePoint: Issue = {
-    kind: 'missing_title',
-    message: 'אין בטקסט שורת כותרת. הכותרת "סופגניות קרם ברולה" נבחרה מתוך השורה הפותחת; אשרו אותה או שנו.',
-    quote: 'איזה שם מתאים יותר: סופגניות סנט הונורה או סופגניות קרם ברולה?',
-  }
-  const run = (title: string): Demonstration => ({
-    run_at: '2026-11-05T11:22:51Z',
-    model: 'qwen3:8b',
-    draft: { ...draft, title: 'סופגניות קרם ברולה', issues: [titlePoint] },
-    reviewed: { ...draft, title, healthy: null, issues: [], resolved_issues: [{ ...titlePoint, resolution: 'handled' }] },
+  it('a composed title and an unclear category are the model\'s too', () => {
+    const titlePoint: Issue = { kind: 'missing_title', message: 'אין בטקסט שורת כותרת.', quote: 'איזה שם מתאים יותר?' }
+    const { model } = demonstrationAccount(record({ draft: { ...record({}).draft, category: null, subcategory: null, issues: [titlePoint] } }))
+    expect(model.slice(1)).toEqual(['בטקסט אין שורת כותרת, והמודל בחר בכותרת "עוגה".', 'לא בחר קטגוריה אחת בבירור.'])
   })
 
-  it('is credited to the model, with the line it came from, and approved or changed in review', () => {
-    const [confirmed] = demonstrationSummary(run('סופגניות קרם ברולה'), []).items
-    expect(confirmed.tags).toEqual(['model', 'approved'])
-    expect(confirmed.text).toBe(
-      'לכיתוב אין שורת כותרת, והמודל הציע את "סופגניות קרם ברולה" מתוך השורה "איזה שם מתאים יותר: סופגניות סנט הונורה או סופגניות קרם ברולה?". בבדיקה הכותרת אושרה כמו שהיא.',
-    )
-    const [changed] = demonstrationSummary(run('סופגניות סנט הונורה'), []).items
-    expect(changed.tags).toEqual(['model', 'corrected'])
-    expect(changed.text).toMatch(/בבדיקה היא שונתה ל"סופגניות סנט הונורה"\.$/)
+  it("a point is the model's only when its answer raised it and the import showed it; the others are the system's", () => {
+    const answer = {
+      classification: { fit: 'clear' as const, category_id: 1, subcategory_id: 13, candidate_category_ids: [] },
+      points: [{ kind: 'ambiguous_alternative' as const, passage: 'חמאה או שמן', left_out: null }],
+    }
+    expect(pointOrigin(unclearOr, record({ answer }))).toBe('model')
+    expect(pointOrigin(strawberries, record({ answer }))).toBe('system')
+    expect(pointOrigin(strawberries, record({}))).toBeNull() // an older record does not say
   })
 })

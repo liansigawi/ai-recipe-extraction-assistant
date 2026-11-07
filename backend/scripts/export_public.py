@@ -47,7 +47,8 @@ from sqlalchemy.orm import Session
 
 from app import crud, media, models, schemas
 from app.config import load_settings
-from app.extraction.review import join_closing_remarks
+from app.extraction.output import Classification
+from app.extraction.review import join_closing_remarks, names_an_alternative, refers_elsewhere, resolve_classification
 from app.schemas import ContractModel, NonEmptyStr
 
 
@@ -97,6 +98,43 @@ class JoinedRemark(ContractModel):
     remark: NonEmptyStr  # the line after it: "(...)."
 
 
+class KeptReference(ContractModel):
+    """Evidence of what the import did by a fixed rule, not the model: a line that sends the cook to a separate recipe
+    for a part of this one, kept as written although the model left it out (app/extraction/review.py, _references)."""
+
+    model_config = ConfigDict(str_strip_whitespace=False)
+
+    kind: Literal["kept_reference"]
+    text: NonEmptyStr  # as the draft holds it
+    kept_as: Literal["step", "note"]
+
+
+class RunSettings(ContractModel):
+    mode: NonEmptyStr  # "references": the model labels numbered passages
+    context_tokens: int
+    temperature: float
+
+
+class ModelPoint(ContractModel):
+    """A review point the model's answer raised: its kind and the passage it pointed at (the original's words), and,
+    when the import did not show it, the rule that left it out."""
+
+    model_config = ConfigDict(str_strip_whitespace=False)
+
+    kind: schemas.ModelIssueKind
+    passage: NonEmptyStr | None  # None: it pointed at no passage
+    # no_alternative: an "unclear or" in a passage without "או"; outside_recipe: a passage the model itself left out;
+    # no_passage: a point that needs a passage and had none; other_check: another of the import's checks.
+    left_out: Literal["no_alternative", "outside_recipe", "no_passage", "other_check"] | None = None
+
+
+class ModelAnswer(ContractModel):
+    """What the model itself answered, beside what the import made of it: its classification as given, and its points."""
+
+    classification: Classification
+    points: list[ModelPoint] = []
+
+
 class Demonstration(ContractModel):
     """A recipe's original text imported again on a separate copy of the notebook, as it was recorded: the draft
     the import made, and the same draft after its review (performed while preparing the demonstration). Never the
@@ -106,10 +144,13 @@ class Demonstration(ContractModel):
     source_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]  # of the text it imported: the recipe's own original
     run_at: AwareDatetime
     model: NonEmptyStr
+    revision: NonEmptyStr | None = None  # the code that ran (a commit)
+    settings: RunSettings | None = None
+    answer: ModelAnswer | None = None
     draft: KeptDraft
     reviewed: ReviewedDraft
-    # Checked against the original and both recorded states; kept as evidence, not published (not a review change).
-    automatic: list[JoinedRemark] = []
+    # What the import did by fixed rules, each checked against the original and both recorded states.
+    automatic: list[Annotated[JoinedRemark | KeptReference, Field(discriminator="kind")]] = []
 
 
 class CheckedAnswer(ContractModel):
@@ -209,9 +250,10 @@ def export_notebook(database_path: Path, media_root: Path, selection: Selection,
                 if recipe.id in selection.show_processing and recipe.original is None:
                     raise ExportError(f"Recipe {recipe.id} was typed in by hand: it has no original text to compare with.")
             public = [_public_recipe(session, media_root, recipe, selection, staging / "media", report) for recipe in chosen]
-            demonstrations = {rid: read_demonstration(folder / path, by_id[rid]) for rid, path in selection.demonstrations.items()}
+            every_category = crud.list_categories(session)
+            demonstrations = {rid: read_demonstration(folder / path, by_id[rid], every_category) for rid, path in selection.demonstrations.items()}
             checks = {rid: read_classification_check(folder / path, by_id[rid]) for rid, path in selection.classification_checks.items()}
-            categories = _used_categories(crud.list_categories(session), chosen)
+            categories = _used_categories(every_category, chosen)
         for recipe in public:
             if recipe["processing"] is not None:
                 draft, backup = find_kept_draft(database_path, recipe["id"])
@@ -219,9 +261,9 @@ def export_notebook(database_path: Path, media_root: Path, selection: Selection,
                 report.drafts[recipe["id"]] = backup
                 if recipe["id"] in demonstrations:
                     demo = demonstrations[recipe["id"]]
-                    # The checks' data stays here: the record's ids, and the evidence of what the import did by a rule
-                    # (the same in its draft and its result, so not a change the page shows).
-                    recipe["processing"]["demonstration"] = demo.model_dump(mode="json", exclude={"recipe_id", "source_sha256", "automatic"})
+                    # The record's ids stay here; what the model answered and what the rules did are shown apart from
+                    # what review changed.
+                    recipe["processing"]["demonstration"] = demo.model_dump(mode="json", exclude={"recipe_id", "source_sha256"})
                     report.demonstrations[recipe["id"]] = f"run {demo.run_at:%Y-%m-%d %H:%M} UTC with {demo.model}"
                 if recipe["id"] in checks:
                     if draft is not None:
@@ -274,8 +316,9 @@ def _public_recipe(
     return data
 
 
-def read_demonstration(path: Path, recipe: schemas.Recipe) -> Demonstration:
-    """The recorded demonstration, checked: valid, about this recipe, and made from exactly its original text."""
+def read_demonstration(path: Path, recipe: schemas.Recipe, categories: list[schemas.Category]) -> Demonstration:
+    """The recorded demonstration, checked: valid, about this recipe, made from exactly its original text, and its
+    evidence (the model's answer, what the rules did) consistent with that text and the recorded draft."""
     try:
         demonstration = Demonstration.model_validate_json(path.read_bytes())
     except FileNotFoundError:
@@ -286,13 +329,39 @@ def read_demonstration(path: Path, recipe: schemas.Recipe) -> Demonstration:
         raise ExportError(f"{path} is a demonstration of recipe {demonstration.recipe_id}, not {recipe.id}.")
     if recipe.original is None or hashlib.sha256(recipe.original.text.encode()).hexdigest() != demonstration.source_sha256:
         raise ExportError(f"{path} was not made from recipe {recipe.id}'s original text.")
+    original = recipe.original.text
+    draft = demonstration.draft
     steps = {state: {s for g in getattr(demonstration, state).step_groups for s in g.steps} for state in ("draft", "reviewed")}
-    for joined in demonstration.automatic:
-        # The rule itself joins the two lines of the original, and both the draft and the reviewed recipe hold the result.
-        whole = f"{joined.step} {joined.remark}"
-        by_rule = join_closing_remarks([schemas.StepGroup(steps=[joined.step, joined.remark])], recipe.original.text)[0].steps == [whole]
-        if not (by_rule and whole in steps["draft"] and whole in steps["reviewed"]):
-            raise ExportError(f"{path}: the joined remark {joined.remark!r} is not what the import and its review show.")
+    notes = {state: set(getattr(demonstration, state).notes) for state in ("draft", "reviewed")}
+    for item in demonstration.automatic:
+        if item.kind == "joined_remark":
+            # The rule itself joins the two lines of the original, and both the draft and the reviewed recipe hold the result.
+            whole = f"{item.step} {item.remark}"
+            by_rule = join_closing_remarks([schemas.StepGroup(steps=[item.step, item.remark])], original)[0].steps == [whole]
+            if not (by_rule and whole in steps["draft"] and whole in steps["reviewed"]):
+                raise ExportError(f"{path}: the joined remark {item.remark!r} is not what the import and its review show.")
+        else:
+            # The original's own words, a reference by the rule, where the draft has it (a step or a note).
+            kept = steps if item.kept_as == "step" else notes
+            if not (item.text in original and refers_elsewhere(item.text) and item.text in kept["draft"]):
+                raise ExportError(f"{path}: the kept reference {item.text!r} is not what the original and the import show.")
+    if demonstration.answer is not None:
+        answer = demonstration.answer
+        category_id, subcategory_id, _ = resolve_classification(answer.classification, categories)
+        drafted = (draft.category.id if draft.category else None, draft.subcategory.id if draft.subcategory else None)
+        if (category_id, subcategory_id) != drafted:
+            raise ExportError(f"{path}: the model's classification is not the draft's category.")
+        for point in answer.points:
+            if point.passage is not None and point.passage not in original:
+                raise ExportError(f"{path}: the model's point {point.kind} quotes words the original does not have.")
+            if point.left_out == "no_alternative" and (point.kind != "ambiguous_alternative" or names_an_alternative(point.passage or "")):
+                raise ExportError(f"{path}: a point left out for having no \"או\" points at a passage that has one.")
+            if point.left_out is None and point.kind != "multiple_recipes" and not any(
+                issue.kind == point.kind and issue.quote is not None and point.passage is not None
+                and (issue.quote == point.passage or (issue.quote.endswith("…") and point.passage.startswith(issue.quote[:-1])))
+                for issue in draft.issues
+            ):
+                raise ExportError(f"{path}: the model's point {point.kind} is not among the draft's points.")
     return demonstration
 
 

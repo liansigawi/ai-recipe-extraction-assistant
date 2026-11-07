@@ -23,6 +23,10 @@ const STRAWBERRIES = {
 const demonstration: Demonstration = {
   run_at: '2026-11-04T17:10:00Z',
   model: 'qwen3:8b',
+  revision: '75bfd06',
+  settings: { mode: 'references', context_tokens: 8192, temperature: 0 },
+  answer: { classification: { fit: 'clear', category_id: 1, subcategory_id: 13, candidate_category_ids: [] }, points: [] },
+  automatic: [{ kind: 'joined_remark', step: 'אופים על 150 מעלות', remark: '(כל תנור עובד אחרת).' }],
   draft: {
     title: TORTE,
     servings: null,
@@ -295,7 +299,7 @@ describe('the public copy', () => {
     await user.click(screen.getByRole('button', { name: 'מהמקור למתכון' }))
     expect(screen.getByText('הדגמה של ייבוא מחדש באמצעות הגרסה המעודכנת של המערכת.')).toBeInTheDocument()
     const meta = document.querySelector('.demonstration-meta')
-    expect(meta).toHaveTextContent(/^4 בנובמבר 2026 · qwen3:8b, מודל שרץ על המחשב שלי דרך Ollama/)
+    expect(meta).toHaveTextContent(/^4 בנובמבר 2026 · qwen3:8b, מודל שרץ על המחשב שלי דרך Ollama · טמפרטורה 0 · גרסת הקוד 75bfd06 · /)
     expect(meta).toHaveTextContent('הטיוטה של הייבוא המקורי, מ-28 באוקטובר 2026, לא נשמרה')
 
     // One comparison: the original beside the demonstration's reviewed result, never the saved recipe in its place.
@@ -312,31 +316,39 @@ describe('the public copy', () => {
     // Their group has no name: a display heading keeps it apart from the named group above it.
     expect(within(result).getByRole('heading', { name: 'מצרכים נוספים' })).toBeInTheDocument()
 
-    // What review changed, each with who did it: the system by itself, the model, the review. The remark the import
-    // already joined to its step is the same in the draft and the result: not listed.
-    const summary = within(screen.getByRole('region', { name: 'מה קרה בהדגמה הזו' }))
-    const items = summary.getAllByRole('listitem').map((li) => li.textContent)
-    expect(items[0]).toMatch(/^תותיםזוהה אוטומטיתאושר בבדיקה/)
-    expect(items[0]).toContain('נוסף למצרכים ללא כמות: לא הומצאה כמות.')
-    expect(items[1]).toBe('סוג הקינוחהצעת המודלתוקן בבדיקההמודל הציע "טארטים ופאי"; בבדיקה זה תוקן ל"עוגות".')
-    expect(items[2]).toContain('בטיוטה: לא נקבע. בבדיקה: לא קינוח בריא.')
-    expect(items).toHaveLength(3)
-    expect(summary.getByText('בלי תיקון בבדיקה: כותרת, כמות מנות, אופן ההכנה, הערות.')).toBeInTheDocument()
+    // Who did what: the model, the fixed rules, and the review, which alone lists changes. The remark a rule joined to
+    // its step is the rules' (the same in the draft and the result), never a review change.
+    const account = screen.getByRole('region', { name: 'מה נעשה, ומי עשה' })
+    const [model, rules, review] = [...account.querySelectorAll('.account > div > dd')] as HTMLElement[]
+    expect([...account.querySelectorAll('.account > div > dt')].map((term) => term.textContent)).toEqual([
+      'המודל, qwen3:8b',
+      'המערכת, לפי כללים קבועים',
+      'הבדיקה, שבוצעה בעת הכנת ההדגמה',
+    ])
+    expect(model).toHaveTextContent('בחר בקטגוריה "קינוחים · טארטים ופאי".')
+    expect(model).toHaveTextContent('לא סימן נקודות לבדיקה.')
+    expect(rules).toHaveTextContent('צירפה את ההערה "(כל תנור עובד אחרת)." לשלב שלפניה')
+    expect(rules).toHaveTextContent('סימנה נקודה אחת לבדיקה, בבדיקות שלה')
+    expect(review).not.toHaveTextContent('כל תנור')
+    expect(within(review).getByText('קינוחים · טארטים ופאי', { selector: '.diff-lines li' })).toHaveClass('diff-removed')
+    expect(within(review).getByText('קינוחים · עוגות · לא קינוח בריא', { selector: '.diff-lines li' })).toHaveClass('diff-added')
+    expect(within(review).getByText(/^תותים · ללא כמות/, { selector: '.diff-lines li' })).toHaveClass('diff-added')
+    expect(review).toHaveTextContent('בלי תיקון: כותרת, כמות מנות, אופן ההכנה, הערות.')
+    // The points, each with who raised it and what review decided.
+    const point = within(screen.getByRole('region', { name: 'נקודות לבדיקה (1)' })).getByText(STRAWBERRIES.message).closest('li')!
+    expect(point).toHaveTextContent('סימנה המערכת')
+    expect(point).toHaveTextContent('בבדיקה שבוצעה בעת הכנת ההדגמה: נוסף למצרכים — תותים, ללא כמות, בלי קבוצה')
     // The classification on its own: the demonstration draft's beside the reviewed one; the healthy style is not a type.
     const [before, after] = within(screen.getByRole('region', { name: 'סיווג' })).getAllByRole('definition')
     expect(before).toHaveTextContent('קטגוריה ראשית: קינוחיםסוג הקינוח: טארטים ופאיבטיוטה של ההדגמה, מ-4 בנובמבר 2026.')
     expect(after).toHaveTextContent('קטגוריה ראשית: קינוחיםסוג הקינוח: עוגותבבדיקה שבוצעה בעת הכנת ההדגמה.')
     expect(after).not.toHaveTextContent('קינוח בריא')
 
-    // The draft as the run saved it, its point with the action taken while preparing the demonstration: folded.
+    // The draft as the run saved it, with the model's category: folded.
     const folded = screen.getByText('הצגת הטיוטה לפני הבדיקה').closest('details')!
     expect(folded).not.toHaveAttribute('open')
     await user.click(screen.getByText('הצגת הטיוטה לפני הבדיקה'))
     expect(folded.querySelector('.demonstration-draft')).toHaveTextContent('טארטים ופאי')
-    expect(within(folded).getByText(STRAWBERRIES.message).closest('li')).toHaveTextContent(
-      'בבדיקה שבוצעה בעת הכנת ההדגמה: נוסף למצרכים — תותים, ללא כמות, בלי קבוצה',
-    )
-    expect(within(folded).getByText('קינוחים · טארטים ופאי', { selector: '.diff-lines li' })).toHaveClass('diff-removed')
 
     // Read-only: nothing to add, ignore or undo; the recipe's own page is one click away.
     expect(screen.queryByRole('button', { name: /הוספת|התעלמות|טופל|ביטול/ })).not.toBeInTheDocument()
@@ -354,7 +366,7 @@ describe('the public copy', () => {
     expect(document.querySelector('.demonstration-meta')).toHaveTextContent('הטיוטה של הייבוא המקורי, מ-20 באוקטובר 2026, שמורה בנפרד ואינה מוצגת כאן')
   })
 
-  it('a demonstration whose draft had no points says so; only the corrected category is listed as a review change', async () => {
+  it('a demonstration whose draft had no points says so; the corrected category is the only review change', async () => {
     const recipe = notebook.recipes.find((r) => r.id === 6)!
     const state = { title: DRINK, servings: null, healthy: null, ingredient_groups: recipe.ingredient_groups, step_groups: recipe.step_groups, notes: [] }
     const drink: Demonstration = {
@@ -369,15 +381,15 @@ describe('the public copy', () => {
     await renderCopy()
     await openRecipe(user, DRINK)
     await user.click(screen.getByRole('button', { name: 'מהמקור למתכון' }))
-    const summary = within(screen.getByRole('region', { name: 'מה קרה בהדגמה הזו' }))
-    expect(summary.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'קטגוריההצעת המודלתוקן בבדיקההמודל הציע "קינוחים · קינוחי כוסות ומוסים"; בבדיקה זה תוקן ל"משקאות".',
+    const review = screen.getByRole('region', { name: 'מה נעשה, ומי עשה' }).querySelectorAll<HTMLElement>('.account > div > dd')[2]
+    expect([...review.querySelectorAll('.diff-lines li')].map((li) => li.textContent)).toEqual([
+      'בטיוטה: קינוחים · קינוחי כוסות ומוסים',
+      'אחרי הבדיקה: משקאות',
     ])
-    expect(summary.getByText('בלי תיקון בבדיקה: כותרת, כמות מנות, מצרכים, אופן ההכנה, הערות.')).toBeInTheDocument()
-    await user.click(screen.getByText('הצגת הטיוטה לפני הבדיקה'))
-    const folded = screen.getByText('הצגת הטיוטה לפני הבדיקה').closest('details')!
-    expect(within(folded).getByText('הייבוא לא סימן נקודות לבדיקה.')).toBeInTheDocument()
-    expect(folded.querySelectorAll('.review-issue')).toHaveLength(0)
+    expect(review).toHaveTextContent('בלי תיקון: כותרת, כמות מנות, מצרכים, אופן ההכנה, הערות.')
+    const points = screen.getByRole('region', { name: 'נקודות לבדיקה' })
+    expect(points).toHaveTextContent('הייבוא לא סימן נקודות לבדיקה.')
+    expect(points.querySelectorAll('.review-issue')).toHaveLength(0)
   })
 
   it('the page about the project links each comparison and the repository', async () => {

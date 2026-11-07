@@ -1,6 +1,7 @@
 """The public copy's export (scripts/export_public.py): only chosen saved recipes, only what the public page
 shows, the notebook opened read-only, and an import's draft only when a backup really kept it."""
 
+import copy
 import hashlib
 import sqlite3
 import json
@@ -251,7 +252,8 @@ def test_a_recorded_demonstration_is_public_only_when_made_from_the_recipe_s_own
     data, report = export(data_dir, out, recipes=[lemonade], show_processing=[lemonade], demonstrations={lemonade: "demonstrations/lemonade.json"})
     [recipe] = data["recipes"]
     shown = recipe["processing"]["demonstration"]
-    assert set(shown) == {"run_at", "model", "draft", "reviewed"}  # the checks' data stays out
+    assert set(shown) == {"run_at", "model", "revision", "settings", "answer", "draft", "reviewed", "automatic"}  # the ids stay out
+    assert (shown["answer"], shown["automatic"]) == (None, [])  # an older record: no model answer kept, no rule evidence
     assert shown["draft"]["issues"][0]["proposed"] == {"text": "סוכר", "quantity": None, "group": None}
     assert shown["reviewed"]["resolved_issues"][0]["resolution"] == "dismissed"
     assert recipe["resolved_issues"] == []  # the notebook's own review record is not published
@@ -309,7 +311,7 @@ def test_a_classification_check_is_public_only_for_a_recipe_whose_import_left_no
     assert json.loads((folder / "export" / "notebook.json").read_text(encoding="utf-8")) == data  # a refused export leaves the last one
 
 
-def test_a_demonstration_s_evidence_of_a_joined_remark_is_checked_but_not_published(client, data_dir, tmp_path):
+def test_a_demonstration_s_evidence_of_a_joined_remark_is_checked_and_published_as_the_rules(client, data_dir, tmp_path):
     draft = client.post("/api/imports/text", json={"text": TORTE, "use_model": False}, headers=ORIGIN).json()
     joined = "אופים 50 דקות על 150 מעלות (כל תנור עובד אחרת)."
     body = {"title": "טורט", "ingredient_groups": [{"name": None, "ingredients": [{"text": "4 ביצים", "quantity": "4"}]}],
@@ -326,9 +328,54 @@ def test_a_demonstration_s_evidence_of_a_joined_remark_is_checked_but_not_publis
     choose = {"recipes": [torte["id"]], "show_processing": [torte["id"]], "demonstrations": {torte["id"]: "torte.json"}}
 
     data, _ = export(data_dir, tmp_path / "public" / "export", **choose)
-    assert "automatic" not in data["recipes"][0]["processing"]["demonstration"]  # the same in draft and result: not a change
+    # What a rule did, shown as the rules' (the same in draft and result: never a review change).
+    assert data["recipes"][0]["processing"]["demonstration"]["automatic"] == record["automatic"]
 
     record["reviewed"]["step_groups"] = [{"name": None, "steps": ["אופים 50 דקות על 150 מעלות", "(כל תנור עובד אחרת).", "מגישים."]}]
     demo.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")  # review split it again: not what was recorded
     with pytest.raises(ExportError, match="joined remark"):
         export(data_dir, tmp_path / "public" / "export", **choose)
+
+
+def test_a_demonstration_s_model_answer_and_kept_reference_are_published_only_when_they_hold(client, data_dir, tmp_path):
+    text = "סופגניות\n500 גר׳ חלב או מים\nמבשלים קרם.\nמכינים בצק לפי המתכון לבצק שלי מהבלוג.\nממלאים."
+    steps = ["מבשלים קרם.", "מכינים בצק לפי המתכון לבצק שלי מהבלוג.", "ממלאים."]
+    draft = client.post("/api/imports/text", json={"text": text, "use_model": False}, headers=ORIGIN).json()
+    desserts = category_id(client, "קינוחים")
+    body = {"title": "סופגניות", "ingredient_groups": [{"name": None, "ingredients": [{"text": "500 גר׳ חלב או מים", "quantity": "500 גר׳"}]}],
+            "step_groups": [{"name": None, "steps": steps}], "notes": [], "sources": draft["sources"], "category_id": desserts,
+            "status": "saved", "issues": []}
+    recipe = client.put(f"/api/recipes/{draft['id']}", json=body, headers=ORIGIN).json()
+    record = demonstration_of(recipe["id"], text)
+    for state in ("draft", "reviewed"):
+        record[state]["step_groups"] = body["step_groups"]
+    record["draft"]["category"] = {"id": desserts, "name": "קינוחים"}
+    record |= {
+        "revision": "75bfd06",
+        "settings": {"mode": "references", "context_tokens": 8192, "temperature": 0},
+        "answer": {"classification": {"fit": "clear", "category_id": desserts, "subcategory_id": None, "candidate_category_ids": []},
+                   "points": [{"kind": "ambiguous_alternative", "passage": "מבשלים קרם.", "left_out": "no_alternative"}]},
+        "automatic": [{"kind": "kept_reference", "text": steps[1], "kept_as": "step"}],
+    }
+    (tmp_path / "public").mkdir()
+    demo = tmp_path / "public" / "dough.json"
+    choose = {"recipes": [recipe["id"]], "show_processing": [recipe["id"]], "demonstrations": {recipe["id"]: "dough.json"}}
+    demo.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+
+    data, _ = export(data_dir, tmp_path / "public" / "export", **choose)
+    shown = data["recipes"][0]["processing"]["demonstration"]
+    assert (shown["revision"], shown["settings"]["temperature"]) == ("75bfd06", 0)
+    assert shown["answer"] == record["answer"] and shown["automatic"] == record["automatic"]
+    assert "source_sha256" not in shown and "recipe_id" not in shown
+
+    for change, refused in (
+        (lambda r: r["answer"]["classification"].update(fit="no_fit", category_id=None), "classification is not the draft"),
+        (lambda r: r["answer"]["points"][0].update(passage="500 גר׳ חלב או מים"), "has one"),  # that passage has an "או"
+        (lambda r: r["answer"]["points"][0].update(passage="מבשלים קרם היטב."), "does not have"),
+        (lambda r: r["automatic"][0].update(kept_as="note"), "kept reference"),  # not among the notes
+    ):
+        broken = copy.deepcopy(record)
+        change(broken)
+        demo.write_text(json.dumps(broken, ensure_ascii=False), encoding="utf-8")
+        with pytest.raises(ExportError, match=refused):
+            export(data_dir, tmp_path / "public" / "export", **choose)
