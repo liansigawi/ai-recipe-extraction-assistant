@@ -135,6 +135,29 @@ uv run python -m evals.run_extraction --extractor ollama --case 38-chicken-soup-
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
 
+### 2026-11-07: the five featured examples imported again, with the adopted classifier
+
+The recipes of the five comparison pages, each imported once more from its preserved original on its own
+copy of the notebook (11:51-11:53 UTC, qwen3:8b, temperature 0, code 75bfd06), the first completed run of
+each, and reviewed while preparing the demonstrations (docs/public-notebook.md). Five curated recipes: not
+an accuracy estimate.
+
+| Recipe | The model's category · type | Expected | Points raised | Review changed |
+|---|---|---|---|---|
+| 12 טורט וניל | קינוחים · טארטים ופאי | קינוחים · עוגות | 1 (strawberries, the system's) | the type; the strawberries added |
+| 15 עוגת קפה ושוקולד | קינוחים · עוגות | the same | none | a remark put back into its step |
+| 17 בננה אייס לאטה | קינוחים · גלידות וקינוחים קפואים | משקאות | none | the category |
+| 14 פנקייק מלוח | קינוחים · מאפים מתוקים | ארוחות קלילות | 1 (a note on the cheese, the system's) | the category; the yield line restored |
+| 29 סופגניות קרם ברולה | קינוחים · מאפים מתוקים | the same | 2 (title, separate recipe, the system's) | nothing |
+
+- **Categories**: 2 of 5 fully right (15, 29), the type wrong on one (12), the main category wrong on two
+  (14 and 17, both filed as desserts again). Recipe 29, a meat meal in both runs before the classifier
+  changed, is right; the others answered as on 2026-11-05.
+- **The model's own points**: five, all on recipe 29, all "unclear or" on passages without "או", all left
+  out by the rule.
+- **Extraction**: the remark of 15 and the yield line of 14, labeled a tip and not part of the recipe,
+  needed review; every other line was copied as the original has it.
+
 ### 2026-11-05 (evening): classification without the dish description, one candidate
 
 Question: does the free-text "dish" description the category request asks for first (sweet or savory, what it

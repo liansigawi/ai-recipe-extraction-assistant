@@ -163,11 +163,31 @@ The page then has:
 Decisions are text, never buttons: the public copy changes nothing. The other recipes keep the saved
 recipe's comparison.
 
-Recipe 12's demonstration (run on 2026-11-05 08:31 UTC with qwen3:8b) used the preserved caption, pasted
-as text (the path the notebook offers when a post cannot be read), on a copy of the notebook. Its review
-was performed while preparing the demonstration: the strawberries were added from their point with no
-amount, and the dessert type was corrected from "טארטים ופאי" to "עוגות". The new import itself joined
-the oven remark to its baking step.
+The five comparison pages show demonstrations run on 2026-11-07, 11:51-11:53 UTC, with qwen3:8b
+(temperature 0, labeling mode, 8,192 tokens) at code 75bfd06: the first completed run of each, none retried,
+each on its own copy of the notebook. Each read its recipe's preserved original through the text import,
+which hands it to the same function as the Instagram or website import did, without fetching the post or
+the page again (so without its pictures). Inputs, raw answers, drafts, copies and the review script are in
+`data/evals/extraction/20261107-five-demonstrations/`. The reviews were performed while preparing them:
+- 12: the model chose "קינוחים · טארטים ופאי"; the system raised one point (strawberries only in the
+  steps) and joined the oven remark to its step. Review added the strawberries, with no amount, and
+  corrected the type to "עוגות".
+- 15: the model chose "קינוחים · עוגות"; no point. Review put the remark in brackets about a tall cake's
+  baking time back into its baking step (the original writes it on that step's line; the draft made it a
+  note).
+- 17: the model chose "קינוחים · גלידות וקינוחים קפואים"; no point. Review corrected the category to
+  "משקאות".
+- 14: the model chose "קינוחים · מאפים מתוקים"; the system raised one point (a remark on the cheese kept as
+  a note), marked done. Review corrected the category to "ארוחות קלילות" and restored the yield line the
+  model left out, "מהתערובת הכנתי 4 פנקייקים, הערכים ליחידה-", before the nutrition values it introduces.
+  The saved recipe lacks that line too; it was not changed.
+- 29: the model chose "קינוחים · מאפים מתוקים", right; the system kept both lines that refer to the
+  separate dough recipe, left out the model's five "unclear or" points (no "או" in those passages) and
+  raised two points (the title chosen from the opening line, the separate recipe), both marked done. Review
+  changed nothing.
+
+The demonstrations of 2026-11-05 (12, 17 and 29) are kept beside them in `demonstrations/`, unpublished,
+and recipe 15's classification check in `classifications/15.json`.
 
 ## Costs and limitations
 
