@@ -366,12 +366,12 @@ def test_a_point_without_its_passage_or_about_text_left_out_of_the_recipe_is_not
     points = [
         {"kind": "unclear_text", "passage": None},  # no evidence
         {"kind": "unclear_text", "passage": 1},  # the introduction: labeled not part of the recipe
-        {"kind": "ambiguous_alternative", "passage": 5},  # an ingredient: shown, quoting it
+        {"kind": "unclear_text", "passage": 5},  # an ingredient: shown, quoting it
         {"kind": "multiple_recipes", "passage": None},  # about the whole text
     ]
     shown = [(issue.kind, issue.quote) for issue in draft_of(answer(issues=points)).issues]
-    assert ("ambiguous_alternative", "שוט אספרסו") in shown and ("multiple_recipes", None) in shown
-    assert "unclear_text" not in [kind for kind, _ in shown]
+    assert ("multiple_recipes", None) in shown
+    assert [quote for kind, quote in shown if kind == "unclear_text"] == ["שוט אספרסו"]
 
 
 MUFFINS = "מאפינס\n2 כוסות קמח\nמוסיפים את הקמח ואת התותים החתוכים.\nאופים 20 דקות ב-180 מעלות."
@@ -1018,3 +1018,22 @@ def test_saved_steps_are_joined_by_the_same_rule_only_where_the_original_has_the
     assert join_closing_remarks([StepGroup(name=None, steps=steps)], elsewhere)[0].steps == steps
     ended = [steps[0] + ".", steps[1], steps[2]]  # that step ended its sentence
     assert join_closing_remarks([StepGroup(name=None, steps=ended)], BAKING.replace("מעלות\n", "מעלות.\n"))[0].steps == ended
+
+
+# --- An unclear "or" needs an "or" ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("step", "shown"),
+    [
+        ("טורפים את החלמונים עם הסוכר לתערובת אחידה.", False),  # no "או": the claim has no evidence (recipe 29's five)
+        ("מוסיפים חמאה או שמן וסוכר ומערבבים.", True),  # an "or": the point stays
+        ("Add butter or oil and the sugar.", True),
+    ],
+)
+def test_an_unclear_or_is_shown_only_in_a_passage_that_has_one(step, shown):
+    source = f"עוגה\n2 כוסות קמח\n{step}"
+    draft = draft_for(source, ["title", "ingredient", "step"], title="עוגה", title_written_in_text=True,
+                      issues=[{"kind": "ambiguous_alternative", "passage": 3}])
+    assert [(i.kind, i.quote) for i in draft.issues if i.kind == "ambiguous_alternative"] == ([("ambiguous_alternative", step)] if shown else [])
+

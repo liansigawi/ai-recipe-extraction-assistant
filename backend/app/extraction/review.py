@@ -134,6 +134,8 @@ _POINT_MESSAGES = {
     "ambiguous_alternative": ("ambiguous_alternative", 'בקטע הזה יש "או" שלא ברור על מה הוא חל.'),
     "multiple_recipes": ("multiple_recipes", "נראה שבטקסט יש יותר ממתכון אחד; נלקח העיקרי. בדקו שלא חסר דבר."),
 }
+# What the "unclear or" point says a passage has: the word "או" (also "ואו") or "or".
+_ALTERNATIVE = re.compile(r"(?<!\w)ו?או(?!\w)|(?<!\w)or(?!\w)", re.IGNORECASE)
 _NO_TEMPERATURE = "הטקסט מזכיר אפייה בתנור, אבל לא באיזו טמפרטורה. השלימו אם אתם יודעים."
 _NO_BAKING_TIME = "בשלב הזה לא כתוב כמה זמן לאפות. השלימו אם אתם יודעים."
 FIXED_MESSAGES = {message for _, message in _POINT_MESSAGES.values()} | {_NO_TEMPERATURE, _NO_BAKING_TIME}
@@ -1017,19 +1019,23 @@ def _referenced_issues(
     output: ReferenceOutput, source_text: str, segments: list[Segment], labels: dict[int, str]
 ) -> list[schemas.Issue]:
     """The passages the model pointed at, each with the fixed message for its kind and the passage
-    quoted as the evidence. Not shown: a point that needs a passage and has none, and a point about a
-    passage the model itself labeled as not part of the recipe (it is already left out)."""
+    quoted as the evidence. Not shown: a point that needs a passage and has none, a point about a
+    passage the model itself labeled as not part of the recipe (it is already left out), and an
+    unclear "or" in a passage that has no "או" (or "or") at all: the message says it has one, and the
+    measured claims pointed at passages without one (0 of 18: recipe 29's caption, the evaluation's runs)."""
     issues = []
     for issue in output.issues[:MAX_MODEL_ISSUES]:
         if labels.get(issue.passage) in ("not_recipe", "title"):
             continue
         kind, message = _POINT_MESSAGES[issue.kind]
-        quote = None
+        passage = None
         if issue.passage is not None and 1 <= issue.passage <= len(segments):
-            quote = _short(passage_text(source_text, segments, issue.passage, issue.passage), 300) or None
-        if quote is None and issue.kind != "multiple_recipes":
+            passage = passage_text(source_text, segments, issue.passage, issue.passage) or None
+        if passage is None and issue.kind != "multiple_recipes":
             continue
-        issues.append(schemas.Issue(kind=kind, message=message, quote=quote))
+        if issue.kind == "ambiguous_alternative" and not _ALTERNATIVE.search(passage or ""):
+            continue
+        issues.append(schemas.Issue(kind=kind, message=message, quote=_short(passage, 300) if passage else None))
     return issues
 
 
