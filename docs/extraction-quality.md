@@ -187,6 +187,87 @@ only. **Adopted for the local model** on 2026-11-05, exactly this request (docs/
 2026-11-05 (9)); the Claude API keeps the description, as it was not measured without it. These figures describe
 this collection, measured once: they are not an accuracy to expect of future imports, and the errors above remain.
 
+### 2026-11-05 (later): the featured examples' classification, measured
+
+The four recipes with a comparison page in the public copy, each classified by the current pipeline. A
+curated set of four, chosen for the pages: **not an estimate of overall accuracy.**
+- **Expected answers first**: written from each source and the category descriptions before any run
+  (`data/evals/extraction/20261105-featured-classification/expected.md`, 14:57 UTC); the saved category was a
+  reference to check, and agreed with them in all four.
+- **Runs**: one fresh import of each preserved original on its own copy of the notebook (2026-11-05
+  14:57-14:59 UTC; qwen3:8b through Ollama, references mode, temperature 0, 8,192 tokens; code 129d174 with
+  that day's uncommitted changes, none of them to the prompts or the classification), its classification
+  request and raw answer recorded, then that request sent again unchanged. Nothing tuned, no paid API.
+  Recipe 17 was not rerun: its result is the demonstration recorded at 13:18 UTC.
+- **The healthy style is not counted**: the model never sets it.
+
+| Recipe | Expected | Saved | Shown before as the model's | This run, 1st / 2nd answer | Verdict |
+|---|---|---|---|---|---|
+| 15 עוגת קפה ושוקולד | קינוחים · עוגות | the same | nothing (no draft kept) | קינוחים · עוגות / the same | correct |
+| 12 טורט וניל | קינוחים · עוגות | the same | קינוחים · טארטים ופאי (demonstration, 08:31 UTC) | קינוחים · טארטים ופאי / the same | type wrong |
+| 14 פנקייק מלוח | ארוחות קלילות | the same | קינוחים (import draft, 2026-10-28) | קינוחים · מאפים מתוקים / the same | category wrong |
+| 17 בננה אייס לאטה | משקאות | the same | קינוחים · קינוחי כוסות ומוסים (demonstration, 13:18 UTC) | (one answer) the same | category wrong |
+
+- **Main category**: right for 2 of 4 (15, 12); wrong for 14 and 17, both filed as desserts. **Type**: right
+  for 1 of the 2 desserts (12's layered torte became a tart); 14 also got a dessert type, being no dessert.
+  Fully right: 1 of 4.
+- **Consistency**: each request sent twice got the same answer twice (3 of 3). The same input is answered
+  the same way; a different extraction of the same text can still change the answer (recipe 29 above).
+- **12 against its demonstration**: the new draft equals the demonstration's of 08:31 UTC in every part,
+  its category and type included.
+- **The dish line**: the description the model writes before the category was wrong whenever the category
+  was: 14 "מאפה מתוק או חם" for savory pancakes, 17 "קינוח מתוק עם ביצים וקמח" for an iced coffee with
+  neither; 12's "עוגה עם שוקולד ותותים" names a cake (yet the type chosen is a tart) and chocolate the recipe
+  does not have. Every classification request held only the draft's title, ingredients and steps, as copied.
+- **14 then and now**: its import of 2026-10-28 also suggested "קינוחים" (with "קינוחים רגילים", the healthy
+  style's old form; dessert types did not exist yet).
+
+### 2026-11-05: the "unclear or" point, measured where it came from
+
+Recipe 29's public comparison showed five "חלופה לא ברורה" points on passages without an "או". The local
+model's own answer named those passages (recorded in a fresh run of the preserved caption, qwen3:8b,
+temperature 0, code 129d174); the notebook quoted exactly the passages named. In the evaluation's stored
+runs the model made 13 such claims, none on a passage with "או" or "or". The point is now shown only where
+the passage has one (docs/architecture.md, 2026-11-05 (5)); no case in the evaluation requires it.
+
+Repeated runs of the same caption at temperature 0 did not return the same answer: a third run chose the
+other title and pointed its "או" claims at other passages, all of them filtered out. The category request,
+which reads the finished draft, answered "savory" and "ארוחות בשריות" in both runs whose draft included the
+caption's dough lines, and "מאפים מתוקים" in the run before they were kept.
+
+**That category, inspected.** The classification requests were rebuilt from the recorded labeling answers
+with the app's own `make_draft` and `build_classification_request` (run 1's at 129d174, before the dough
+lines were kept), and each was sent once more through the production request:
+- the recipe in the request is the draft's title, its 8 ingredient lines and its steps, all copied from the
+  caption: custard, caramel and doughnuts, nothing savory and no meat;
+- the categories are the notebook's, with their descriptions; "מאפים מתוקים" (16, under "קינוחים", 1)
+  names סופגניות, and "ארוחות בשריות" (2) asks for meat or poultry as the main ingredient;
+- the answer schema allows exactly the existing ids (categories 1-10, subcategories 11-16);
+- the two requests differ by one line, the step "מכינים בצק סופגניות לפי המתכון לבצק סופגניות קלאסי שלי
+  מהבלוג. עושים הכל לפי ההוראות כולל הטיגון.";
+- with it, the raw answer was `"dish": "savory, cream-filled pastry"`, `fit: clear`, `category_id: 2` (3 of
+  3 answers: runs 2 and 3, and the resend); without it, `category_id: 1`, `subcategory_id: 16` (2 of 2);
+- the answer is parsed and mapped as written: id 2 is "ארוחות בשריות".
+
+No implementation defect: the input, the categories and the mapping are right; the local model's answer is
+wrong. Not tuned (no new wording was tried); recorded as a limitation (docs/architecture.md, "The local
+model still files some dishes in the wrong category"). The runs, the rebuilt requests and the raw answers are kept in
+`data/evals/extraction/20261105-recipe-29/`.
+
+### 2026-11-05: recipe 17's caption imported again
+
+Recipe 17 ("בננה אייס לאטה", imported 2026-11-01 with qwen3:8b) has no kept draft: it was saved 21 seconds
+after its import, and the first backup after that is from 12:38 UTC. No other database, backup or
+evaluation folder holds a draft of that import (the classification-context evaluation's "recipe-17" is the
+saved recipe). Its preserved caption (real-4, on which retyping once turned "מג׳הול" into "מג׳ hollow") was
+imported once more on a copy of the notebook (2026-11-05 13:18 UTC, qwen3:8b, references, temperature 0,
+8,192 tokens, code 129d174 with that day's uncommitted fixes), every request and raw answer recorded:
+- the title, the five ingredient lines under the source's heading "הגירסה שלי", their quantities and the one
+  step are the caption's own words, "מג׳הול" included; the introduction, the two sponsor lines with their
+  discount codes and the hashtags are left out; no review point;
+- the category request answered `"dish": "קינוח מתוק עם ביצים וקמח"` (the recipe has neither) and
+  "קינוחים · קינוחי כוסות ומוסים", although "משקאות" says that a coffee drink, sweet or on milk, belongs
+  there and "קינוחים" says "לא משקאות": the known limitation again, corrected at review.
 
 ### 2026-11-04: dessert types, one candidate with definitions from ingredients and preparation
 
