@@ -42,6 +42,8 @@
   --tone-side-ink: #8a3a7c;
   --tone-spread: #e8ecc4;
   --tone-spread-ink: #59651a;
+  --tone-snack: #f9dfb9;
+  --tone-snack-ink: #8a5000;
   --tone-none: #e9e5f3;
   --tone-none-ink: #574c84;
   --tone-other: #efe8d2;
@@ -1779,6 +1781,11 @@ h4.category-name {
   color: var(--tone-spread-ink);
 }
 
+.tone-snack {
+  background-color: var(--tone-snack);
+  color: var(--tone-snack-ink);
+}
+
 .tone-none {
   background-color: var(--tone-none);
   color: var(--tone-none-ink);
@@ -1819,6 +1826,10 @@ h4.category-name {
 
 .category-dot.tone-spread {
   background-color: var(--tone-spread-ink);
+}
+
+.category-dot.tone-snack {
+  background-color: var(--tone-snack-ink);
 }
 
 .category-dot.tone-none {
