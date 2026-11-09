@@ -16,6 +16,7 @@ import sys
 
 import httpx2
 from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 PHONE = {"width": 390, "height": 844}
 DESKTOP = {"width": 1280, "height": 900}
@@ -38,8 +39,23 @@ def open_page(page: Page, url: str) -> None:
 
 
 def images_loaded(page: Page) -> tuple[int, list[str]]:
-    """How many pictures the page shows, and the ones that did not load."""
-    state = page.evaluate("[...document.images].map(i => [i.currentSrc, i.complete && i.naturalWidth > 0])")
+    """How many pictures the page shows, and the ones that did not load. The pictures load lazily, as they
+    come near the screen: the page is scrolled to its end first, as a visitor would, and back to the top."""
+    page.evaluate(
+        """async () => {
+            for (let y = 0; y < document.documentElement.scrollHeight; y += 600) {
+                window.scrollTo(0, y)
+                await new Promise((resolve) => setTimeout(resolve, 60))
+            }
+            window.scrollTo(0, 0)
+        }"""
+    )
+    page.wait_for_load_state("networkidle")
+    try:
+        page.wait_for_function("[...document.images].every((i) => i.complete)", timeout=30_000)
+    except PlaywrightTimeout:
+        pass  # the ones still loading are reported below
+    state = page.evaluate("[...document.images].map(i => [i.currentSrc || i.src, i.complete && i.naturalWidth > 0])")
     return len(state), [src for src, ok in state if not ok]
 
 
