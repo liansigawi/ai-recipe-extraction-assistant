@@ -135,6 +135,36 @@ uv run python -m evals.run_extraction --extractor ollama --case 38-chicken-soup-
 Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
 Reference mode has not been tried with the Claude API at all (see the last section).
 
+### 2026-11-09: the new category "חטיפים ונשנושים"
+
+The person added a top-level category through category management ("מתכונים שמיועדים לאכילה כנשנוש בפני עצמם,
+כגון אגוזים מתובלים, פיצוחים, קרקרים, פופקורן וגרגירי חומוס קלויים. יכולים להיות מלוחים, מתוקים או חריפים. עוגות
+ועוגיות נשארות בקטגוריית קינוחים.") and filed recipe 81 in it by hand. A small check of the classifier with the
+nine categories, not a tuning round: one request per case through the import's own category request
+(`classify_draft`), qwen3:8b, temperature 0, one run (finished 16:49 UTC, code 38cf304,
+`data/evals/extraction/20261109-snacks-category/`). Three saved recipes (their saved content, category removed) and
+nine invented dishes. Twelve cases: not an accuracy estimate.
+
+| Case | Expected | The model's category · type |
+|---|---|---|
+| recipe 81, maple-spiced nuts | חטיפים ונשנושים (the person's choice) | חטיפים ונשנושים |
+| recipe 102, maple-caramelized nuts | חטיפים ונשנושים (sweet nuts, by the description) | חטיפים ונשנושים |
+| recipe 73, candied pecans | חטיפים ונשנושים (sweet nuts, by the description) | **קינוחים · עוגות** |
+| popcorn; spicy roasted chickpeas; seed crackers; sweet-potato chips | חטיפים ונשנושים | חטיפים ונשנושים (all four) |
+| oat cookies | קינוחים · עוגיות וחיתוכיות | the same |
+| date energy balls | a boundary (below) | קינוחים · עוגיות וחיתוכיות |
+| granola bars | a boundary (below) | חטיפים ונשנושים |
+| hummus | ממרחים, מטבלים ורטבים | the same |
+| a salad with candied pecans | סלטים | the same |
+
+- **Sweet nuts can still go to the desserts**, with a wrong type (73 as a cake): the import's draft shows the
+  category as a suggestion to correct before saving.
+- **Sweet bars and balls sit on a boundary of the descriptions themselves**: the dessert type "עוגיות וחיתוכיות"
+  names "כדורים וחטיפים מתוקים (למשל כדורי תמרים)", while the new category allows sweet snacks. The model put the
+  energy balls in the desserts and the granola bars in the snacks. Which is meant is for the person to say in
+  one of the two descriptions; neither was changed.
+- **No saved recipe was reclassified** (102 and 73 stay unclassified in the notebook).
+
 ### 2026-11-07 (later): two replacements for the featured examples
 
 The latte (17) and the savory pancakes (14), both filed as desserts above, were replaced on the comparison pages

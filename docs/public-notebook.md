@@ -203,12 +203,15 @@ demonstrations of 2026-11-05 (12, 17 and 29) and recipe 15's classification chec
 
 - **Cost: none** on Cloudflare's free plan. Cloudflare's documentation: "On both free and paid plans,
   requests to static assets are free and unlimited." Its other limits (500 builds a month, 20,000 files of
-  up to 25 MiB each per site) are far above what this needs: one run uploads about 20 files.
+  up to 25 MiB each per site) are far above what this needs: one run uploads about 90 files (88 recipes, 2026-11-09).
 - **Every deployment keeps its own address.** Cloudflare gives each upload a permanent address of its own
   (`https://<id>.recipe-notebook.pages.dev`) besides the main one. A recipe you take out of the selection
   disappears from the main address, but stays at the older deployments' addresses until you delete those
   deployments (Cloudflare dashboard, Workers & Pages, the project, Deployments).
 - **Not automatic.** A save in the notebook is not published until you run the command.
+- **Stop a preview of the site before publishing (Windows).** `npm run preview:public` keeps
+  `data/public-notebook/site` open, and Windows then refuses to put the new build in its place ("Access is
+  denied"); nothing is uploaded. Stop the preview and run the command again.
 - **A Cloudflare address.** `*.pages.dev`; your own domain is possible later (Cloudflare dashboard).
 - **Hebrew interface.** The pages are in Hebrew, like the notebook; the technical README is in English.
 
@@ -219,7 +222,8 @@ cd backend
 uv run python -m scripts.check_public_site https://recipe-notebook.pages.dev
 ```
 
-It uses the public address only, in a real browser: the gallery and every picture, search and each filter,
+It uses the public address only, in a real browser: the gallery and every picture (scrolled to its end first,
+since the pictures load as they come near the screen), search and each filter,
 every recipe and comparison page by its direct link and after a reload, the back button, the about page,
 the phone width, no control that changes data, a change sent to the site changing nothing, no API behind
 it, nothing loaded from other sites. One line per check; exit code 0 only when all passed.
