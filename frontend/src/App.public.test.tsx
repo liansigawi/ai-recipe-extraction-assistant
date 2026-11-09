@@ -410,12 +410,25 @@ describe('the public copy', () => {
     expect(points.querySelectorAll('.review-issue')).toHaveLength(0)
   })
 
-  it('the page about the project links each comparison and the repository', async () => {
+  it('the page about the project shows everything at once: the stack, the steps, the comparisons with what each shows, the evaluation', async () => {
     const user = userEvent.setup()
     await renderCopy()
     await user.click(screen.getByRole('button', { name: 'על הפרויקט' }))
     expect(screen.getByRole('heading', { level: 2, name: 'על מחברת המתכונים' })).toHaveFocus()
-    expect(screen.getByText(/ייבוא מתכון מצילום מסך עדיין לא חלק מהמחברת/)).toBeInTheDocument()
+    const sections = ['הרעיון מאחורי הפרויקט', 'איך מתכון נכנס למחברת', 'למה המודל לא מנסח את המתכון מחדש?', 'לראות את התהליך בפועל', 'בדיקות והערכת איכות', 'מאחורי הקלעים']
+    expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual(sections)
+    for (const name of sections) expect(screen.getByRole('heading', { level: 3, name })).toBeVisible()
+    expect(document.querySelector('.about-page details')).toBeNull()
+    expect(within(screen.getByRole('list', { name: 'טכנולוגיות' })).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Python', 'FastAPI', 'React', 'TypeScript', 'SQLite', 'Qwen3:8B', 'Ollama',
+    ])
+    expect(screen.getAllByRole('heading', { level: 4 }).map((heading) => heading.textContent)).toEqual(['בדיקות תוכנה — pytest ו־Vitest', 'הערכת איכות המודל'])
+    expect(screen.getByText('מ־74 ל־86').closest('p')).toHaveTextContent('"נכון במלואו" מתייחס לסיווג בלבד')
+    // The featured comparisons in the page's own order, each described where it has a description.
+    const examples = screen.getAllByRole('button').filter((button) => button.closest('.compared-list'))
+    expect(examples.map((button) => button.textContent)).toEqual([TORTE, DRINK])
+    expect(examples[0]).toHaveAccessibleDescription('זיהוי מצרך חסר והוספתו במהלך הבדיקה, לצד תיקון סוג הקינוח.')
+    expect(examples[1]).not.toHaveAccessibleDescription()
     expect(screen.getByRole('link', { name: 'https://github.com/example/recipes' })).toHaveAttribute('href', 'https://github.com/example/recipes')
     expect(screen.getByText(/עודכן ב-/)).toHaveTextContent('2026')
     await user.click(screen.getByRole('button', { name: TORTE }))

@@ -2458,6 +2458,98 @@ h4.category-name {
   padding-inline-start: 1.5rem;
 }
 
+/* The page about the project: room between its paragraphs, and before the list of comparisons. */
+.about-page p + p,
+.about-page p + .compared-list {
+  margin-block-start: 0.75rem;
+}
+
+/* The technologies as small tags, with a one-line summary under them. */
+.about-summary {
+  margin-block-start: 1.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-page);
+}
+
+.tech-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tech-tags li {
+  padding: 0.1rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.tech-tags + p {
+  margin-block-start: 0.75rem;
+}
+
+/* Each step's name on its own line, above what happens in it. */
+.about-page .process-steps {
+  gap: 0.9rem;
+}
+
+.about-page .process-step-title {
+  display: block;
+}
+
+/* The design decision and the measured result: set apart, with the accent on the reading edge. */
+.about-callout {
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--color-border);
+  border-inline-start: 4px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-page);
+}
+
+.about-callout > .section-title {
+  margin-block-end: 0.5rem;
+  padding-block-end: 0;
+  border-block-end: 0;
+}
+
+/* "מ־74 ל־86" stays on one line. */
+.about-result strong {
+  white-space: nowrap;
+}
+
+.about-page .compared-list {
+  gap: 0.75rem;
+}
+
+/* What a featured comparison shows, under its link. */
+.compared-note {
+  display: block;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.about-subtitle {
+  margin-block: 1rem 0.35rem;
+  font-size: 1rem;
+}
+
+.about-stack li {
+  margin-block: 0.45rem;
+}
+
+.about-footer {
+  margin-block-start: 1.5rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
 /* ---- Narrow screens ---- */
 @media (max-width: 900px) {
   .comparison,

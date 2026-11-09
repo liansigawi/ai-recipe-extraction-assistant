@@ -3,6 +3,28 @@ import type { Recipe } from '../types'
 
 const dateFormat = new Intl.DateTimeFormat('he-IL', { dateStyle: 'long' })
 
+const TECHNOLOGIES = ['Python', 'FastAPI', 'React', 'TypeScript', 'SQLite', 'Qwen3:8B', 'Ollama']
+
+/** What each featured comparison shows, in this order. Each was checked against its recorded demonstration
+ * (docs/public-notebook.md); a recipe not listed here is shown after these, with its title alone. */
+const EXAMPLES: ReadonlyArray<[number, string]> = [
+  [12, 'זיהוי מצרך חסר והוספתו במהלך הבדיקה, לצד תיקון סוג הקינוח.'],
+  [15, 'חילוץ מתכון מהטקסט שנשמר מדף באתר וסיווג נכון, עם תיקון מיקום של הערת אפייה בבדיקה.'],
+  [29, 'שמירת הפניה למתכון נוסף וסינון התרעות ללא בסיס בטקסט.'],
+  [36, 'חילוץ קבוצות מצרכים ומספר יחידות, תוך סינון תוכן פרסומי.'],
+  [38, 'חילוץ מצרכים, כמויות והערות, עם סיווג נכון וללא תיקוני תוכן בבדיקה.'],
+]
+const EXAMPLE_NOTES = new Map(EXAMPLES)
+const EXAMPLE_ORDER = EXAMPLES.map(([id]) => id)
+
+function inExampleOrder(recipes: Recipe[]): Recipe[] {
+  const place = (recipe: Recipe) => {
+    const index = EXAMPLE_ORDER.indexOf(recipe.id)
+    return index === -1 ? EXAMPLE_ORDER.length : index
+  }
+  return [...recipes].sort((a, b) => place(a) - place(b))
+}
+
 interface AboutPageProps {
   /** The recipes that show their original text beside the saved recipe. */
   compared: Recipe[]
@@ -12,104 +34,178 @@ interface AboutPageProps {
   onOpenComparison: (recipeId: number) => void
 }
 
-// The public copy's page about the project: what it is, how a recipe gets in, how it is checked, and
-// what is still an experiment. Short on purpose: the details are in the repository's README and docs.
+// The public copy's page about the project, for someone deciding quickly what it is: why it exists (in the
+// person's own words), what it is built with, how a recipe gets in, the main design decision, the featured
+// comparisons with what each shows, how it was tested and evaluated, and what each part does. Everything is
+// visible: nothing essential is folded away.
 export default function AboutPage({ compared, exportedAt, repositoryUrl, titleRef, onOpenComparison }: AboutPageProps) {
   return (
     <article className="recipe-view about-page">
       <h2 ref={titleRef} className="recipe-title" tabIndex={-1}>
         על מחברת המתכונים
       </h2>
-      <p>
-        פרויקט אישי: מחברת מתכונים שרצה על המחשב שלי. היא מייבאת מתכונים מפוסטים באינסטגרם, מדפי מתכונים באתרים ומטקסט שמודבק, והופכת
-        אותם למתכונים מסודרים שאפשר לחפש ולסנן. הממשק כתוב ב-React וב-TypeScript, והשרת ב-Python (FastAPI) עם SQLite.
-      </p>
-      <p>
-        זה עותק ציבורי לקריאה בלבד של מתכונים שבחרתי מהמחברת: אפשר לדפדף, לחפש ולסנן, אבל לא לשנות דבר. מאחוריו אין שרת ואין מודל, רק
-        קבצים.
-      </p>
+
+      <section className="recipe-section">
+        <h3 className="section-title">הרעיון מאחורי הפרויקט</h3>
+        <p>
+          הפרויקט התחיל מהאהבה שלי לאפייה ומהרגל לשמור מתכונים באינסטגרם ובאתרים שונים. עם הזמן המתכונים התפזרו בין המקורות, והיה קשה למצוא
+          אותם ולעקוב אחרי מה שכבר הכנתי ומה שעוד רציתי לנסות.
+        </p>
+        <p>
+          בניתי את מחברת המתכונים כדי לרכז אותם במקום אחד, עם חיפוש, חלוקה לקטגוריות וסימון מתכונים שכבר הכנתי. המערכת נעזרת במודל שפה כדי
+          להפוך טקסט מהמקור לטיוטת מתכון מסודרת, שאפשר לבדוק ולערוך לפני השמירה.
+        </p>
+      </section>
+
+      <div className="about-summary">
+        <ul className="tech-tags" aria-label="טכנולוגיות">
+          {TECHNOLOGIES.map((name) => (
+            <li key={name} dir="ltr">
+              {name}
+            </li>
+          ))}
+        </ul>
+        <p>
+          אפליקציה מקומית לייבוא וניהול מתכונים, המשלבת מודל שפה עם עיבוד טקסט, כללי בדיקה ועריכה לפני השמירה. האתר הציבורי הוא גרסה סטטית
+          לצפייה, המתארחת ב־Cloudflare Pages.
+        </p>
+      </div>
 
       <section className="recipe-section">
         <h3 className="section-title">איך מתכון נכנס למחברת</h3>
         <ol className="process-steps">
           <li>
             <span className="process-step-title">קריאת המקור</span>
-            השרת המקומי קורא את הכיתוב מהדף הציבורי של הפוסט באינסטגרם, או את המתכון מדף האתר (נתוני המתכון שבדף, או הטקסט הראשי שלו).
-            הטקסט נשמר כמו שהוא, ומטופל כחומר מקור בלבד, אף פעם לא כהוראות.
+            המערכת קוראת כיתוב של פוסט ציבורי באינסטגרם, דף מתכון באתר או טקסט שהודבק ישירות. המקור נשמר לצד המתכון, כדי שאפשר יהיה לחזור
+            אליו ולהשוות.
           </li>
           <li>
-            <span className="process-step-title">תיוג</span>
-            השרת מחלק את הטקסט לקטעים ממוספרים, ומודל שפה שרץ על כרטיס המסך של המחשב הנייד שלי (<bdi>Qwen3 8B</bdi> דרך Ollama, על{' '}
-            <bdi>8 GB</bdi>) מסמן לכל קטע את תפקידו: כותרת, מצרך, שלב, טיפ, או לא חלק מהמתכון. בבקשה שנייה הוא בוחר קטגוריה, רק מתוך
-            הקיימות. בהגדרה אחת אפשר להחליף אותו ב-Claude API.
+            <span className="process-step-title">זיהוי התוכן וסיווג</span>
+            כשמעבדים טקסט, מודל השפה המקומי מזהה אילו קטעים הם מצרכים, שלבי הכנה והערות, ואילו אינם חלק מהמתכון. בבקשה נפרדת הוא מציע
+            קטגוריה מתוך הקטגוריות הקיימות. באתרים עם נתוני מתכון מובנים, המערכת יכולה לחלץ את המתכון ישירות.
           </li>
           <li>
-            <span className="process-step-title">בניית הטיוטה</span>
-            השרת מעתיק כל מצרך וכל שלב מהטקסט עצמו, אות באות, וקורא את הכמות מכל שורה לפי כללים קבועים: המודל לא מקליד את המתכון מחדש
-            ולא ממציא כמויות. מה שלא ברור, או מצרך שמופיע רק בהוראות, מסומן כנקודה לבדיקה.
+            <span className="process-step-title">בניית הטיוטה ובדיקתה</span>
+            המערכת בונה את המתכון מהקטעים המקוריים ומפענחת כמויות באמצעות כללים בקוד. בדיקות נוספות יכולות להצביע על בעיות, למשל מצרך שמופיע
+            בהוראות אך חסר ברשימת המצרכים.
           </li>
           <li>
-            <span className="process-step-title">בדיקה</span>
-            הטיוטה נבדקת מול הטקסט המקורי, מתוקנת ונשמרת. רק מתכונים שנשמרו מופיעים כאן.
+            <span className="process-step-title">עריכה ושמירה</span>
+            הטיוטה מוצגת לבדיקה מול המקור. אפשר לתקן את הסיווג, לערוך את התוכן ולהוסיף או לדחות מצרך שהמערכת סימנה כחסר. המתכון נשמר במחברת
+            עם המקור והקרדיט ליוצר.
           </li>
         </ol>
+      </section>
+
+      <section className="recipe-section about-callout">
+        <h3 className="section-title">למה המודל לא מנסח את המתכון מחדש?</h3>
         <p>
-          למה להעתיק ולא להקליד מחדש? בגרסה הראשונה המודל הקליד את המתכון מחדש, והחליף מילים נדירות במילים דומות: "מג׳הול" הפך ל-"
-          <bdi>מג׳ hollow</bdi>". הבעיה הייתה בעצם ההקלדה ולא בהגדרה כלשהי, ולכן מאז המודל רק מסמן תפקידים.
+          בניסויים הראשונים, יצירה מחדש של הטקסט הובילה לשינויים במילים מהמקור. לכן עברתי לגישה שבה המודל מסמן את תפקידם של קטעים, והמערכת
+          בונה מהם את הטיוטה תוך שימוש בנוסח המקורי. הגישה מצמצמת שכתוב לא רצוי, אך עדיין דורשת בדיקה של בחירת הקטעים, הכמויות והסיווג.
         </p>
       </section>
 
       {compared.length > 0 && (
         <section className="recipe-section">
-          <h3 className="section-title">מהמקור למתכון</h3>
-          <p>בכמה מתכונים אפשר לראות את הטקסט המקורי לצד המתכון השמור, ומה ידוע על הדרך ביניהם:</p>
+          <h3 className="section-title">לראות את התהליך בפועל</h3>
+          <p>
+            בחמש הדוגמאות הבאות אפשר להשוות בין המקור, הטיוטה שהמערכת הפיקה והתוצאה לאחר הבדיקה. בכל דוגמה מוצג מה ביצע המודל, מה טופל
+            באמצעות כללי המערכת ומה תוקן בבדיקה.
+          </p>
+          <p>הדוגמאות נבחרו כדי להמחיש יכולות שונות של המערכת; הן אינן מדגם למדידת הדיוק הכולל שלה.</p>
           <ul className="compared-list">
-            {compared.map((recipe) => (
-              <li key={recipe.id}>
-                <button type="button" className="text-button" dir="auto" onClick={() => onOpenComparison(recipe.id)}>
-                  {recipe.title}
-                </button>
-              </li>
-            ))}
+            {inExampleOrder(compared).map((recipe) => {
+              const note = EXAMPLE_NOTES.get(recipe.id)
+              return (
+                <li key={recipe.id}>
+                  <button
+                    type="button"
+                    className="text-button"
+                    dir="auto"
+                    aria-describedby={note ? `example-note-${recipe.id}` : undefined}
+                    onClick={() => onOpenComparison(recipe.id)}
+                  >
+                    {recipe.title}
+                  </button>
+                  {note && (
+                    <span id={`example-note-${recipe.id}`} className="compared-note">
+                      {note}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </section>
       )}
 
       <section className="recipe-section">
-        <h3 className="section-title">בדיקות</h3>
-        <ul className="note-list">
-          <li>בדיקות תוכנה אוטומטיות לשרת ולממשק (pytest ו-Vitest), שרצות בלי מודל ובלי אינטרנט.</li>
+        <h3 className="section-title">בדיקות והערכת איכות</h3>
+        <h4 className="about-subtitle">
+          בדיקות תוכנה — <bdi>pytest</bdi> ו־<bdi>Vitest</bdi>
+        </h4>
+        <p>
+          בדיקות אוטומטיות בודקות את פעולות הייבוא, השמירה והעריכה ואת התנהגות הממשק, כדי לוודא ששינויים בקוד אינם פוגעים בפעולות קיימות.
+        </p>
+        <h4 className="about-subtitle">הערכת איכות המודל</h4>
+        <p>
+          בבדיקות האיכות השוויתי את התוצאה למקור: האם נשמרו המצרכים והכמויות, האם ההוראות אורגנו נכון והאם הסיווג מתאים. שינויים בהנחיות למודל
+          נבדקו מול הגרסה הקודמת, תוך מעקב גם אחרי שיפורים וגם אחרי מקרים שנפגעו.
+        </p>
+        <p className="about-callout about-result">
+          באוסף בדיקה של 119 מקרים, מעבר לבקשת סיווג ישירה העלה את מספר המקרים שבהם הסיווג היה נכון במלואו{' '}
+          <strong>מ־74 ל־86</strong>. "נכון במלואו" מתייחס לסיווג בלבד: הקטגוריה, ובקינוחים גם סוג הקינוח; לא לחילוץ המתכון כולו. הנתון
+          מתייחס לאוסף שנבדק, ואינו אומדן לדיוק במתכונים חדשים. הסיווג נשאר הצעה שניתן לתקן לפני השמירה.
+        </p>
+      </section>
+
+      <section className="recipe-section">
+        <h3 className="section-title">מאחורי הקלעים</h3>
+        <ul className="note-list about-stack">
           <li>
-            בדיקת איכות נפרדת מריצה את המודל האמיתי על 37 מתכוני בדיקה שנכתבו לשם כך ועל כיתובים אמיתיים, ומשווה כל טיוטה לציפיות שנכתבו
-            ביד: מילים שהשתנו, שורות חסרות או מיותרות, כמויות, קבוצות, קטגוריה ונקודות לבדיקה. התוצאות מתועדות, כולל מה שעדיין נכשל.
+            <strong>
+              <bdi>React</bdi> ו־<bdi>TypeScript</bdi>
+            </strong>{' '}
+            — הממשק: הגלריה, החיפוש, מסך הבדיקה מול המקור והעריכה.
+          </li>
+          <li>
+            <strong>
+              <bdi>FastAPI</bdi> (<bdi>Python</bdi>)
+            </strong>{' '}
+            — השרת המקומי: קריאת המקורות, הבקשות למודל, בניית הטיוטה ובדיקתה, והשמירה.
+          </li>
+          <li>
+            <strong>
+              <bdi>SQLite</bdi>
+            </strong>{' '}
+            — המחברת עצמה: המתכונים, הטקסט המקורי של כל ייבוא, הקטגוריות וסימוני המתכונים שהכנתי.
+          </li>
+          <li>
+            <strong>
+              <bdi>Qwen3:8B</bdi> דרך <bdi>Ollama</bdi>
+            </strong>{' '}
+            — מודל שפה קיים שרץ על המחשב שלי, ולא אומן בפרויקט. העבודה היא בשילובו באפליקציה: מה מבקשים ממנו, ואיך התשובות נבדקות לפני שהן
+            הופכות לטיוטה.
           </li>
         </ul>
-      </section>
-
-      <section className="recipe-section">
-        <h3 className="section-title">בניסוי: ייבוא מצילומי מסך</h3>
         <p>
-          ייבוא מתכון מצילום מסך עדיין לא חלק מהמחברת. נבדקו כמה דרכים מקומיות לקרוא צילומי מסך אמיתיים של מתכונים בעברית; הטובה שבהן
-          קוראת נכון את רוב המילים, אבל עדיין משנה לפעמים מספרים, כמו כמויות וזמנים, בלי שום סימן. לכן הניסוי נמשך, והייבוא מצילומי מסך לא
-          שוחרר.
+          האפליקציה המקומית היא זו שמייבאת, בודקת ושומרת. האתר הזה הוא עותק שמיוצא ממנה: מבחר מתכונים שמורים וההדגמות שלהם, כקבצים סטטיים
+          ב־Cloudflare Pages, בלי שרת ובלי מודל מאחוריהם.
         </p>
       </section>
 
-      <section className="recipe-section">
-        <h3 className="section-title">העותק הזה</h3>
-        <p>
-          נוצר מהמחברת בסקריפט ייצוא: רק מתכונים שמורים שבחרתי, ורק מה שהעמודים מציגים. לכל מתכון נשמרים הקרדיט ליוצרים והקישור למקור;
-          מסרטונים מוצגת רק תמונה, עם קישור לפוסט. עודכן ב-<time dateTime={exportedAt}>{dateFormat.format(new Date(exportedAt))}</time>.
-        </p>
+      <p className="about-footer">
+        עודכן ב-<time dateTime={exportedAt}>{dateFormat.format(new Date(exportedAt))}</time>.
         {repositoryUrl !== null && (
-          <p>
+          <>
+            {' '}
             הקוד והתיעוד המלא (באנגלית):{' '}
             <a href={repositoryUrl} target="_blank" rel="noopener noreferrer" dir="ltr">
               {repositoryUrl}
             </a>
-          </p>
+          </>
         )}
-      </section>
+      </p>
     </article>
   )
 }
