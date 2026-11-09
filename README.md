@@ -1,28 +1,55 @@
 # Local Recipe Notebook
 
-A personal recipe notebook that runs on your own computer. The goal: import recipes from Instagram
-posts, recipe websites, screenshots, or pasted text; review them; and keep them in a searchable
-collection that supports Hebrew and right-to-left text.
+A personal recipe notebook that runs on your own computer. It imports recipes from a pasted text, a
+public Instagram post or a recipe website, uses a language model to turn the source into a draft,
+and keeps the reviewed recipes in a searchable notebook. The interface is in Hebrew, right to left.
 
-> **Status: milestones 5 and 6 in progress.** A FastAPI backend with a SQLite database and a React +
-> TypeScript frontend run locally. You can **paste recipe text or an Instagram post's link** and have
-> a model (a local one through Ollama, or Claude) turn it into a draft, review the draft beside the
-> original text, and save it explicitly; or create, edit and delete recipes by hand. The recipes are a
-> **gallery of photos** (a drawing of the category for those without one); you can **mark what you
-> have already cooked**, **search and filter** the gallery, **manage your categories and
-> subcategories**, and the app **warns about a post you already have**. An imported post keeps its
-> **creator's credit** and its **pictures and videos**, saved on this computer; you can add pictures of
-> your own to any recipe. A new database
-> starts with eight categories, six dessert types and **four invented sample recipes**, labeled
-> "דוגמה". The same link field also imports **recipe pages from websites** (a first version: see
-> [docs/website-import.md](docs/website-import.md) for what was tested and what is not supported). Next on
-> the roadmap: reading recipes from screenshots, and scaling quantities. A **public, read-only copy** of
-> chosen recipes is published as a static site with one command, `.\publish-notebook.cmd`
-> ([docs/public-notebook.md](docs/public-notebook.md)).
-> Milestone 1 (Instagram feasibility) is documented in
-> [docs/instagram-feasibility.md](docs/instagram-feasibility.md). The plan and the recipe data
-> contract are in [docs/architecture.md](docs/architecture.md), and the original requirements are
-> in [docs/brief.md](docs/brief.md).
+**Live demo (read-only):** https://recipe-notebook-5fi.pages.dev. It is a static copy of 88 saved recipes,
+with five pages that compare a recipe's original text with the model's draft and the reviewed recipe. The
+copy has no server and no model behind it: importing and editing happen only in the local app.
+
+**Built with:** Python, FastAPI, SQLAlchemy, Alembic and SQLite; React, TypeScript and Vite; a local model
+(Qwen3:8B through Ollama) or the Claude API; pytest, Vitest and Playwright; Cloudflare Pages for the copy.
+
+### What works today
+
+- **Import** from pasted text, a public Instagram post's link (caption, creator credit, pictures and
+  videos, read without logging in) or a recipe web page (its schema.org recipe data, or else its main
+  text). The original is kept beside the recipe.
+- **The model does not rewrite the recipe.** It labels the source's passages (ingredients, steps,
+  notes, other text); the app builds the draft from the source's own wording, and code rules read the
+  quantities ([docs/quantity-conventions.md](docs/quantity-conventions.md)). Checks raise review points,
+  such as an ingredient that only the steps mention.
+- **Review before saving.** The draft is shown beside the original; nothing is saved until you save it.
+- **Categories by your own descriptions.** The model may only choose among your existing categories,
+  and its choice is a suggestion you can change. Desserts have types and a "healthy" mark.
+- **The notebook:** a photo gallery, search, filters, "already cooked" marks, category management, a
+  warning about a post you already have, your own pictures, and recipes typed in by hand. A new database
+  starts with eight categories, six dessert types and four invented sample recipes, labeled "דוגמה".
+- **Safe upgrades:** database migrations (Alembic) run at start-up, after a backup of the database.
+- **A public, read-only copy** of chosen recipes, exported, built, checked and published with one
+  command ([docs/public-notebook.md](docs/public-notebook.md)).
+- **Tests:** about 850 backend tests (pytest) and 230 frontend tests (Vitest), offline, plus a separate
+  model evaluation run by hand ([docs/extraction-quality.md](docs/extraction-quality.md)).
+
+### Known limitations
+
+- **Instagram:** public posts only, read the way a logged-out visitor sees them. Instagram can refuse or
+  change its pages at any time; nothing works around a login or a block, and share links
+  (`instagram.com/share/...`) are not supported.
+- **Websites:** tried on a small set of recipe sites. Pages that build the recipe with scripts, or refuse
+  automated readers, are not supported ([docs/website-import.md](docs/website-import.md)).
+- **The model makes mistakes.** On an evaluation set of 119 cases, the local model's category (with the
+  dessert type for desserts) was fully right in 86. Every draft needs a review before it is saved.
+- **The Claude API** is supported, but the current way of reading recipes has been evaluated with the local
+  model only.
+- **Not built yet:** reading recipes from screenshots, scaling quantities, deleting a category.
+- **One person, one computer:** no accounts; both servers listen on this computer only. Tested on
+  Windows 11.
+
+The plan and the recipe data contract are in [docs/architecture.md](docs/architecture.md), the original
+requirements in [docs/brief.md](docs/brief.md), and the Instagram feasibility study (milestone 1) in
+[docs/instagram-feasibility.md](docs/instagram-feasibility.md).
 
 ## Privacy: what stays on this computer
 
@@ -624,10 +651,17 @@ The project keeps these separate and reports which one was run:
 ```text
 .
 ├── README.md, .gitignore, .gitattributes, .env.example
+├── publish-notebook.cmd             export, build, check and publish the public copy (docs/public-notebook.md)
+├── maintain-recipes.cmd             brings saved recipes up to improved import rules: a report, then only approved changes, after a backup (docs/maintenance.md)
 ├── docs/
 │   ├── brief.md                     original requirements
 │   ├── architecture.md              plan, recipe contract, API, milestones, decisions
-│   └── instagram-feasibility.md     milestone 1 findings
+│   ├── instagram-feasibility.md     milestone 1 findings
+│   ├── website-import.md            importing recipe web pages: what was tried, what is not supported
+│   ├── quantity-conventions.md      how quantities are read from a line
+│   ├── extraction-quality.md        the model evaluation: method, cases and dated results
+│   ├── public-notebook.md           the public, read-only copy: what becomes public, publishing, checks
+│   └── maintenance.md               bringing saved recipes up to improved import rules
 ├── backend/                         Python: uv project
 │   ├── pyproject.toml, uv.lock, .python-version
 │   ├── app/
@@ -649,7 +683,8 @@ The project keeps these separate and reports which one was run:
 │   ├── migrations/                  database migrations (Alembic): 0001 milestone 3, 0002 imports, 0003-0005 categories,
 │   │                                0006 Instagram originals, 0007 subcategories, 0008 structured credit, 0009 media,
 │   │                                0010 cooked marks, 0011 website pictures, 0012 salads, soups and sides,
-│   │                                0013 spreads, dips and sauces, 0014 dessert types and the healthy style
+│   │                                0013 spreads, dips and sauces, 0014 dessert types and the healthy style,
+│   │                                0015 review decisions kept with a saved recipe
 │   ├── alembic.ini                  Alembic's settings, for its command line
 │   ├── evals/                       the extraction quality check (paid; run by hand) and its cases
 │   ├── scripts/probe_instagram.py   bounded live probe and offline analysis
