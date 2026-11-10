@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 from app import crud, media
 from app.config import REPO_ROOT, load_settings
 from app.errors import ApiError
+from scripts import public_pictures
 from scripts.export_public import ExportError, Selection, export_notebook, list_candidates, open_read_only, publishable, read_selection
 
 FRONTEND = REPO_ROOT / "frontend"
@@ -121,7 +122,12 @@ def describe(notebook: dict) -> list[str]:
         who = ", ".join(c["username"] and f"@{c['username']}" or c["name"] for c in credit["creators"]) if credit else "no credit"
         original = "original text public" if recipe["original"] else "no original text"
         cover = recipe["media"][0] if recipe["media"] else None
-        picture = "no picture" if cover is None else "a still from its video" if cover["kind"] == "video" else f"picture from the {cover['origin']}"
+        picture = (
+            "no picture" if cover is None
+            else "a still from its video" if cover["kind"] == "video"
+            else "your uploaded picture, without its metadata" if cover["origin"] == "upload"
+            else f"picture from the {cover['origin']}"
+        )
         lines.append(f"  {recipe['id']:>4}  {recipe['title']}  ({who}; {original}; {picture})")
     return lines
 
@@ -171,6 +177,14 @@ def check_site(site: Path, export: Path) -> None:
     present = {name for name in files if name.startswith("media/")}
     problems += [f"a picture a recipe names is missing: {name}" for name in sorted(named - present)]
     problems += [f"a picture no recipe names: {name}" for name in sorted(present - named)]
+    # No picture says where it was taken; an uploaded one carries nothing but its pixels.
+    uploads = {ref["url"] for recipe in notebook["recipes"] for item in recipe["media"] if item["origin"] == "upload" for ref in (item["file"], item["thumbnail"]) if ref}
+    for name in sorted(present & named):
+        data = (site / name).read_bytes()
+        if public_pictures.location_in(data):
+            problems.append(f"{name} carries the place it was taken (GPS)")
+        if name in uploads and (left := public_pictures.metadata_in(data)):
+            problems.append(f"{name}, an uploaded picture, carries {', '.join(left)}")
     for link in re.findall(r'(?:src|href)="([^"]+)"', (site / "index.html").read_text(encoding="utf-8")):
         if not link.startswith("./") or link[2:] not in files:
             problems.append(f"index.html links to {link}, which is not a file of the site")

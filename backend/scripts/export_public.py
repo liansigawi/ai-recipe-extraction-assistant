@@ -14,8 +14,10 @@ The selection file (yours, git-ignored like the rest of data/):
 
 Only saved recipes can be exported: never a draft, never an invented sample. For each recipe the
 export writes its content, category, credit and sources, its cooked mark and its cover picture
-(for a video: a still from it, with the link to the post; never the video). Category descriptions,
-review points, uploaded pictures (a phone photo can carry its location) and any other file stay out.
+(for a video: a still from it, with the link to the post; never the video). A cover you uploaded is
+published as a new copy made from its pixels, without its metadata (a phone photo can carry the place it was
+taken; scripts/public_pictures.py); the original file is only read. Category descriptions, review points,
+the other pictures and any other file stay out.
 For the recipes in "show_processing" it adds the imported original text and, when a backup of the
 database still holds the import's own draft from before any review, that draft: found, not rebuilt.
 A recipe in "demonstrations" also gets its recorded demonstration (the same original imported again on a
@@ -50,6 +52,7 @@ from app.config import load_settings
 from app.extraction.output import Classification
 from app.extraction.review import join_closing_remarks, names_an_alternative, refers_elsewhere, resolve_classification
 from app.schemas import ContractModel, NonEmptyStr
+from scripts.public_pictures import PictureError, sanitized_copy
 
 
 class Selection(ContractModel):
@@ -187,6 +190,7 @@ class Report:
     demonstrations: dict[int, str] = field(default_factory=dict)  # recipe id -> when and with which model it ran
     checks: dict[int, str] = field(default_factory=dict)  # recipe id -> its classification check: when, which model
     left_out: list[str] = field(default_factory=list)
+    uploads: list[str] = field(default_factory=list)  # the uploaded covers published as copies without metadata
 
 
 def open_read_only(database_path: Path) -> Engine:
@@ -303,13 +307,17 @@ def _public_recipe(
     cover = next((item for item in recipe.media if item.id == recipe.cover_id), None)
     others = len(recipe.media) - (cover is not None)
     data["media"], data["cover_id"] = [], None
-    if cover is not None and cover.origin == "upload":
-        report.left_out.append(f"{recipe.id}: its cover is an uploaded picture (not exported: a phone photo can carry its location)")
-    elif cover is not None:
-        data["media"] = [_public_media(session, media_root, cover, media_out, report)]
-        data["cover_id"] = cover.id
-        if cover.kind == "video":
-            report.left_out.append(f"{recipe.id}: the video (a still from it is shown, with the link to the post)")
+    if cover is not None:
+        try:
+            data["media"] = [_public_media(session, media_root, cover, media_out, report)]
+            data["cover_id"] = cover.id
+        except PictureError as error:  # only an upload is read as a picture; the page shows the category's drawing
+            report.left_out.append(f"{recipe.id}: its uploaded cover, as {error}")
+        else:
+            if cover.origin == "upload":
+                report.uploads.append(f"{recipe.id}: its uploaded cover, as a copy without metadata")
+            if cover.kind == "video":
+                report.left_out.append(f"{recipe.id}: the video (a still from it is shown, with the link to the post)")
     if others:
         report.left_out.append(f"{recipe.id}: {others} more picture(s) or video(s) besides the cover")
     report.recipes.append(f"{recipe.id} {recipe.title}")
@@ -381,18 +389,31 @@ def read_classification_check(path: Path, recipe: schemas.Recipe) -> Classificat
 
 
 def _public_media(session: Session, media_root: Path, item: schemas.RecipeMediaItem, media_out: Path, report: Report) -> dict:
-    """The cover, with its picture copied beside the page: the image itself, or a video's still only."""
+    """The cover, with its picture beside the page: the image itself, or a video's still only. A picture
+    from a post or a page is copied as it is (it is public there already); an uploaded one is published as a
+    copy made from its pixels, without its metadata (scripts/public_pictures.py), and only it."""
     picture = item.file if item.kind == "image" else item.thumbnail
     if picture is None:
         raise ExportError(f"Media item {item.id} has no picture to show.")
     row = session.get(models.MediaFile, picture.id)
     source = media.file_path(media_root, row)
-    name = Path(row.path).name  # "<sha256>.<ext>": its content, nothing else
-    shutil.copyfile(source, media_out / name)
-    report.files += 1
-    report.bytes += row.size_bytes
-    ref = {**picture.model_dump(mode="json"), "url": f"media/{name}"}
+    ref = picture.model_dump(mode="json")
     data = item.model_dump(mode="json")
+    if item.origin == "upload":
+        clean = sanitized_copy(source)
+        name = f"{hashlib.sha256(clean.data).hexdigest()}.{clean.extension}"  # named by the copy's content
+        (media_out / name).write_bytes(clean.data)
+        size = len(clean.data)
+        ref.update(content_type=clean.content_type, size_bytes=size)
+        if item.kind == "image":  # turned upright, perhaps smaller: the page lays it out by these
+            data.update(width=clean.width, height=clean.height)
+    else:
+        name = Path(row.path).name  # "<sha256>.<ext>": its content, nothing else
+        shutil.copyfile(source, media_out / name)
+        size = row.size_bytes
+    report.files += 1
+    report.bytes += size
+    ref["url"] = f"media/{name}"
     if item.kind == "image":
         return {**data, "file": ref}
     # The video itself stays on the post: the page shows its still and links there.
@@ -514,6 +535,9 @@ def main(argv: list[str] | None = None) -> int:
         demo = f"; a demonstration, {report.demonstrations[recipe_id]}" if recipe_id in report.demonstrations else ""
         check = f"; a classification check, {report.checks[recipe_id]}" if recipe_id in report.checks else ""
         print(f"  source comparison for {recipe_id}: original text; {kept}{demo}{check}")
+    if report.uploads:
+        print("Your uploaded pictures, published without their metadata (location, device, time):")
+        print("\n".join(f"  {line}" for line in report.uploads))
     if report.left_out:
         print("Left out:")
         print("\n".join(f"  {line}" for line in report.left_out))

@@ -13,7 +13,11 @@ from app import media, models
 from app.db import utc_now
 from app.migrate import backup_database, head_revision, upgrade_database
 from scripts.export_public import ExportError, Selection, export_notebook, find_kept_draft, main
+from scripts.public_pictures import location_in, metadata_in
 from tests.test_media import JPEG, MP4, PNG
+from tests.test_public_pictures import BLUE, RED, mostly, opened, phone_photo
+
+PHOTO = phone_photo()  # uploaded from a phone: GPS, the phone's make, XMP, a comment, a profile; stored sideways
 
 ORIGIN = {"Origin": "http://localhost:5173"}
 SOURCE = "לימונדה של קיץ\n2 לימונים\n3 כוסות מים\nסוחטים ומערבבים."
@@ -57,7 +61,8 @@ def attach(client, data_dir: Path, recipe_id: int, **fields) -> None:
 @pytest.fixture
 def notebook(client, data_dir):
     """A notebook with: a pasted text whose draft a backup kept before it was saved; a recipe with a page's
-    picture and an upload; one whose only picture is an upload; one with a post's video; a draft; the samples."""
+    picture and an upload; one whose only picture is a phone photo uploaded; one with a post's video; a draft; the
+    samples."""
     draft = client.post("/api/imports/text", json={"text": SOURCE, "use_model": False}, headers=ORIGIN).json()
     backup_database(data_dir / "recipes.db", "before-test")
     fixed = {
@@ -77,7 +82,7 @@ def notebook(client, data_dir):
     attach(client, data_dir, cake["id"], kind="image", file=JPEG, origin="website", post_url="https://example.com/cake")
     client.post(f"/api/recipes/{cake['id']}/media", content=PNG, headers=ORIGIN)
     uploaded = new_recipe(client, "עוגיות", category_id=None)
-    client.post(f"/api/recipes/{uploaded['id']}/media", content=PNG, headers=ORIGIN)
+    client.post(f"/api/recipes/{uploaded['id']}/media", content=PHOTO, headers=ORIGIN)
     reel = new_recipe(client, "טורט", sources=[{"kind": "instagram", "url": "https://www.instagram.com/p/abc/", "creators": [{"name": None, "username": "baker"}]}])
     attach(client, data_dir, reel["id"], kind="video", file=MP4, thumbnail=JPEG + b"still", origin="instagram", post_url="https://www.instagram.com/p/abc/", post_shortcode="abc", post_index=0)
     still_draft = client.post("/api/imports/text", json={"text": "עוד מתכון\nכוס קמח", "use_model": False}, headers=ORIGIN).json()
@@ -110,18 +115,39 @@ def test_only_the_chosen_saved_recipes_and_only_what_the_page_shows(notebook, da
     assert by_id[ids["lemonade"]]["original"]["text"] == SOURCE and by_id[ids["lemonade"]]["cooked"] is True
     assert all(by_id[i]["original"] is None and by_id[i]["processing"] is None for i in (ids["cake"], ids["uploaded"], ids["reel"]))
 
-    # Only the cover: the page's picture (not the upload beside it); nothing for an uploaded cover; a video's still, never the video.
+    # Only the cover: the page's picture as it is (not the upload beside it); an uploaded cover as a copy without
+    # its metadata; a video's still, never the video.
     [cover] = by_id[ids["cake"]]["media"]
     assert cover["origin"] == "website" and cover["file"]["url"] == f"media/{hashlib.sha256(JPEG).hexdigest()}.jpg"
     assert by_id[ids["cake"]]["cover_id"] == cover["id"]
-    assert by_id[ids["uploaded"]]["media"] == [] and by_id[ids["uploaded"]]["cover_id"] is None
+    [photo] = by_id[ids["uploaded"]]["media"]
+    assert photo["origin"] == "upload" and by_id[ids["uploaded"]]["cover_id"] == photo["id"]
+    published = (out / photo["file"]["url"]).read_bytes()
+    assert metadata_in(published) == [] and not location_in(published) and b"PhoneMaker" not in published
+    assert photo["file"]["url"] == f"media/{hashlib.sha256(published).hexdigest()}.jpg"
+    assert (photo["file"]["content_type"], photo["file"]["size_bytes"]) == ("image/jpeg", len(published))
+    picture = opened(published)  # upright: the blue half on top, and the size the page lays it out by
+    assert (photo["width"], photo["height"]) == picture.size == (20, 40)
+    assert mostly(picture.getpixel((10, 5)), BLUE) and mostly(picture.getpixel((10, 35)), RED)
+    stored = [p for p in media.media_root(data_dir).rglob("*") if p.is_file() and p.read_bytes() == PHOTO]
+    assert len(stored) == 1  # the original upload is still there, byte for byte
     [still] = by_id[ids["reel"]]["media"]
     assert still["status"] == "thumbnail_only" and still["file"] is None and still["post_url"] == "https://www.instagram.com/p/abc/"
     assert sorted(p.name for p in (out / "media").iterdir()) == sorted(
-        f"{hashlib.sha256(data).hexdigest()}.jpg" for data in (JPEG, JPEG + b"still")
+        [f"{hashlib.sha256(data).hexdigest()}.jpg" for data in (JPEG, JPEG + b"still")] + [Path(photo["file"]["url"]).name]
     )
     assert (out / "media" / f"{hashlib.sha256(JPEG).hexdigest()}.jpg").read_bytes() == JPEG
-    assert report.files == 2 and any("uploaded picture" in line for line in report.left_out)
+    assert report.files == 3 and report.uploads == [f"{ids['uploaded']}: its uploaded cover, as a copy without metadata"]
+    assert f"{ids['cake']}: 1 more picture(s) or video(s) besides the cover" in report.left_out  # the upload beside the page's
+
+
+def test_an_uploaded_cover_that_is_not_a_readable_picture_is_left_out_not_published_as_it_is(client, data_dir, tmp_path):
+    recipe = new_recipe(client, "עוגיות", category_id=None)
+    client.post(f"/api/recipes/{recipe['id']}/media", content=PNG, headers=ORIGIN)  # a PNG header and nothing a decoder reads
+    data, report = export(data_dir, tmp_path / "export", recipes=[recipe["id"]])
+    assert data["recipes"][0]["media"] == [] and data["recipes"][0]["cover_id"] is None
+    assert list((tmp_path / "export" / "media").iterdir()) == []
+    assert [line for line in report.left_out if "cannot be read as a picture" in line]
 
 
 def test_the_draft_a_backup_kept_is_shown_as_it_was(notebook, data_dir, tmp_path):

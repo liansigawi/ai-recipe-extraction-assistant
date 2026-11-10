@@ -14,6 +14,7 @@ from scripts import publish_public
 from scripts.export_public import ExportError
 from scripts.publish_public import PublishError, change_selection, check_site, main, publish
 from tests.test_export_public import JPEG, ORIGIN, attach, new_recipe
+from tests.test_public_pictures import phone_photo
 
 
 def done(code: int = 0, out: str = "", err: str = "") -> subprocess.CompletedProcess[str]:
@@ -164,6 +165,33 @@ def test_a_key_or_a_local_folder_in_any_file_stops_the_publication(folder, monke
         check_site(site, folder / "export")
     next((site / "media").iterdir()).unlink()
     with pytest.raises(PublishError, match="a picture a recipe names is missing"):
+        check_site(site, folder / "export")
+
+
+def test_a_picture_that_says_where_it_was_taken_stops_the_publication(client, data_dir, folder):
+    """A page's picture is published as it is: one carrying GPS (here a phone photo a site posted) is refused."""
+    tagged = new_recipe(client, "עוגת שמרים")
+    attach(client, data_dir, tagged["id"], kind="image", file=phone_photo(orientation=1), origin="website", post_url="https://example.com/yeast")
+    (folder / "selection.json").write_text(json.dumps({"recipes": [tagged["id"]]}), encoding="utf-8")
+    tools = Tools(folder)
+    with pytest.raises(PublishError, match=r"carries the place it was taken \(GPS\)"):
+        publish(folder, runner=tools, get=tools.get, out=lambda line: None)
+    assert not tools.ran("--no-install", "wrangler", "pages", "deploy")
+
+
+def test_an_uploaded_cover_is_published_clean_and_one_still_carrying_metadata_is_refused(client, data_dir, folder):
+    uploaded = new_recipe(client, "עוגיות")
+    client.post(f"/api/recipes/{uploaded['id']}/media", content=phone_photo(), headers=ORIGIN)
+    (folder / "selection.json").write_text(json.dumps({"recipes": [uploaded["id"]]}), encoding="utf-8")
+    tools = Tools(folder)
+    lines: list[str] = []
+    publish(folder, deploy_site=False, runner=tools, out=lines.append)  # the export's copy passes the check
+    assert any("עוגיות" in line and "your uploaded picture, without its metadata" in line for line in lines)
+    site = folder / "site"
+    [picture] = (site / "media").iterdir()
+    picture.write_bytes(phone_photo(orientation=1))  # as if the original had been copied instead
+    (folder / "export" / "media" / picture.name).write_bytes(picture.read_bytes())
+    with pytest.raises(PublishError, match=r"an uploaded picture, carries a location \(GPS\), EXIF"):
         check_site(site, folder / "export")
 
 
