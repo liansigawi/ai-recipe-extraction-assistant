@@ -1,4 +1,4 @@
-# Local Recipe Notebook
+# AI Recipe Extraction Assistant
 
 A personal recipe notebook that runs on your own computer. It imports recipes from a pasted text, a
 public Instagram post or a recipe website, uses a language model to turn the source into a draft,
@@ -92,8 +92,9 @@ Exact versions are pinned in `backend/uv.lock` and `frontend/package-lock.json`.
 
 ## Setup (tested on Windows 11)
 
-Run each code block from the repository folder (for example `C:\Projects\Recipes`); each one starts
-with its own `cd`.
+First get the code: `git clone` this repository, or download it as a ZIP from GitHub and unpack it. Run
+each code block below from the repository's folder (the one `git clone` created, for example
+`C:\Projects\Recipes`); each one starts with its own `cd`.
 
 1. Install uv and Node.js:
    - Windows: `winget install --id=astral-sh.uv -e` and `winget install --id=OpenJS.NodeJS.LTS -e`
