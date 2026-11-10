@@ -85,18 +85,24 @@ Public, per recipe: title, category and subcategory names (a dessert's type), a 
 servings, ingredient and step groups (a line the app derived from a step, with its label and the step's
 sentence), notes,
 sources with their credit and links, the cooked mark, the creation and last-saved times, and the cover
-picture (for a video, a still from it, with the link to the post; never the video). For the recipes in
+picture (for a video, a still from it, with the link to the post; never the video). A cover you uploaded
+yourself is published as a new copy made from its pixels alone (`backend/scripts/public_pictures.py`):
+turned upright by its orientation tag, its colours converted to sRGB if it has a colour profile, at most 2048
+pixels on its long side, and saved again with no metadata at all (no GPS location, device, time, XMP,
+comments or profile); then read back to confirm it carries nothing else. Your original file in `data/media/`
+is only read. A cover that cannot be read as a picture is left out, and the run says so. For the recipes in
 `show_processing`, also: the imported original text as it was read (a caption's hashtags, mentions and
 promotions included), where it came from, which model read it and when, and the import's own draft if a
 database backup kept it (below).
 
 Never public: the database, the descriptions written for the model's category choice, review points and
 the review decisions of the notebook's recipes (a demonstration's own are part of it),
-drafts and samples, the other recipes' original texts, any picture besides the cover, videos, uploaded
-pictures (a phone photo can carry the place it was taken; a recipe whose cover is an upload shows its
-category's drawing), `.env`, API keys, the Cloudflare login, evaluation data, screenshots and the rest of
-`data/`. Before uploading, the command checks the built site: only the expected files, every picture the
-recipes name and no other, and no API key of this computer or name of its folders in any file.
+drafts and samples, the other recipes' original texts, any picture besides the cover, videos, the
+original files of your uploads and their metadata, `.env`, API keys, the Cloudflare login, evaluation data,
+screenshots and the rest of `data/`. Before uploading, the command checks the built site: only the expected
+files, every picture the recipes name and no other, no picture that says where it was taken (EXIF or XMP
+GPS), an uploaded cover with no metadata at all, and no API key of this computer or name of its folders in
+any file.
 
 ## The comparison page: only records that exist
 
@@ -223,7 +229,8 @@ uv run python -m scripts.check_public_site https://recipe-notebook.pages.dev
 ```
 
 It uses the public address only, in a real browser: the gallery and every picture (scrolled to its end first,
-since the pictures load as they come near the screen), search and each filter,
+since the pictures load as they come near the screen), every category filter in view at desktop and
+phone widths (none hidden beyond the edge), search and each filter,
 every recipe and comparison page by its direct link and after a reload, the back button, the about page,
 the phone width, no control that changes data, a change sent to the site changing nothing, no API behind
 it, nothing loaded from other sites. One line per check; exit code 0 only when all passed.

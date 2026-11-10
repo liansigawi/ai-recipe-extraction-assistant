@@ -85,7 +85,8 @@ Exact versions are pinned in `backend/uv.lock` and `frontend/package-lock.json`.
 
 - **Backend:** fastapi 0.147.0, uvicorn 0.54.0, pydantic 2.14.1, pydantic-settings 2.16.0,
   sqlalchemy 2.1.5 (with Python's built-in SQLite 3.53.1), alembic 1.20.0, anthropic 1.15.0,
-  httpx2 2.14.0, playwright 1.64.0, beautifulsoup4 4.15.0, pytest 9.1.1.
+  httpx2 2.14.0, playwright 1.64.0, beautifulsoup4 4.15.0, pillow 13.0.0 (the public copies of uploaded
+  pictures), pytest 9.1.1.
 - **Frontend:** react 19.3.1, vite 8.3.4, typescript 7.0.2, vitest 5.0.5, @testing-library/react
   16.3.3, jsdom 30.1.3, oxlint 1.88.0.
 
