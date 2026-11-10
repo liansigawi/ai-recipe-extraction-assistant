@@ -74,6 +74,11 @@ def categories_out_of_view(page: Page) -> list[str]:
     )
 
 
+def shown_as(text: str) -> str:
+    """A text as a page shows it: HTML collapses each run of spaces to one ("ריבת  תותים" -> "ריבת תותים")."""
+    return " ".join(text.split())
+
+
 def no_sideways_scroll(page: Page) -> bool:
     return page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
 
@@ -121,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         word = max(target["title"].split(), key=len)
         page.get_by_role("searchbox").fill(word)
         names = page.locator(".recipe-card-title").all_inner_texts()
-        check(target["title"] in names and len(names) <= len(recipes), f'searching "{word}" finds its recipe', f"{len(names)} shown")
+        check(shown_as(target["title"]) in names and len(names) <= len(recipes), f'searching "{word}" finds its recipe', f"{len(names)} shown")
         page.get_by_role("searchbox").fill("אין-מתכון-כזה")
         check(cards.count() == 0 and page.get_by_text("לא נמצאו מתכונים").count() == 1, "a search with no match says so")
         page.get_by_role("searchbox").fill("")
@@ -158,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             title = page.locator("h2.recipe-title").inner_text()
             shown, broken = images_loaded(page)
             changing = [name for name in CHANGING_CONTROLS if page.get_by_role("button", name=name, exact=True).count()]
-            ok = title == recipe["title"] and not broken and not changing and page.locator("input[type=checkbox]").count() == 0
+            ok = title == shown_as(recipe["title"]) and not broken and not changing and page.locator("input[type=checkbox]").count() == 0
             check(ok, f"recipe {recipe['id']} opens by its link and after a reload, read-only, pictures loaded", f"title {title!r}, broken {broken}, controls {changing}")
         open_page(page, base)
         page.locator(".recipe-card-open").first.click()
