@@ -59,6 +59,21 @@ def images_loaded(page: Page) -> tuple[int, list[str]]:
     return len(state), [src for src, ok in state if not ok]
 
 
+def categories_out_of_view(page: Page) -> list[str]:
+    """The category filters a visitor cannot see whole without scrolling: any chip that is not entirely
+    inside both the screen and its own row's visible box (a row that scrolls or clips would hide it)."""
+    return page.evaluate(
+        """() => {
+            const width = document.documentElement.clientWidth;
+            return [...document.querySelectorAll('.category-filter label.filter-chip')].filter((chip) => {
+                const r = chip.getBoundingClientRect();
+                const row = chip.parentElement.getBoundingClientRect();
+                return r.width === 0 || r.left < -0.5 || r.right > width + 0.5 || r.left < row.left - 0.5 || r.right > row.right + 0.5;
+            }).map((chip) => chip.innerText.trim());
+        }"""
+    )
+
+
 def no_sideways_scroll(page: Page) -> bool:
     return page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
 
@@ -98,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
         check(not broken, f"the gallery's {shown} pictures load", ", ".join(broken))
         present = [name for name in CHANGING_CONTROLS if page.get_by_role("button", name=name, exact=True).count()]
         check(not present and page.locator("button.cooked-badge").count() == 0, "the gallery has no control that changes data", ", ".join(present))
+        hidden = categories_out_of_view(page)
+        check(not hidden, f"every category filter is in view at {DESKTOP['width']} px, none beyond the edge", ", ".join(hidden))
 
         # Search, then the filters.
         target = recipes[0]
@@ -180,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
         check(not errors, "no script errors", "; ".join(errors))
 
         phone = browser.new_page(viewport=PHONE)
+        open_page(phone, base)
+        hidden = categories_out_of_view(phone)
+        check(not hidden, f"every category filter is in view at a phone's width ({PHONE['width']} px)", ", ".join(hidden))
         addresses = [base, f"{base}#/about"] + [f"{base}#/recipes/{r['id']}" for r in recipes] + [f"{base}#/recipes/{r['id']}/source" for r in compared]
         wide = []
         for address in addresses:

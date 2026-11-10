@@ -1551,7 +1551,7 @@ h4.category-name {
   flex: 1 1 auto;
 }
 
-.chip-scroll,
+.chip-row,
 .status-filter,
 .subcategory-filter {
   display: flex;
@@ -1559,11 +1559,11 @@ h4.category-name {
   align-items: center;
 }
 
-/* Categories in one row that scrolls sideways on a narrow screen (the page itself never does). */
-.chip-scroll {
-  overflow-x: auto;
+/* Every category in view: the chips continue on another row when they do not fit, in the page's
+   right-to-left order. Nothing scrolls sideways, so no category can sit unseen beyond the edge. */
+.chip-row {
+  flex-wrap: wrap;
   padding-block: 0.2rem;
-  scrollbar-width: none;
 }
 
 .subcategory-filter {

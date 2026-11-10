@@ -70,7 +70,7 @@ export default function RecipeFilters({ filters, onChange, categories, shown, to
       <div className="filter-rows">
         <fieldset className="category-filter">
           <legend className="visually-hidden">קטגוריה</legend>
-          <div className="chip-scroll">
+          <div className="chip-row">
             <Chip name={`${id}-category`} checked={filters.category.kind === 'all'} onPick={() => setCategory({ kind: 'all' })}>
               הכול
             </Chip>
