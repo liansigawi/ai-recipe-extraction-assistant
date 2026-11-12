@@ -87,7 +87,10 @@ describe('importing', () => {
 
   it('explains each import failure in Hebrew', () => {
     const message = (code: string) => errorMessage(new ApiError(502, code, 'detail'))
-    expect(message('extraction_not_configured')).toMatch(/README/)
+    // Where to set the key, that only the Claude API needs one, and the local model as the other option.
+    expect(message('extraction_not_configured')).toMatch(/docs\/setup\.md, בסעיף "Connect the Claude API"/)
+    expect(message('extraction_not_configured')).toMatch(/נדרש רק לקריאה עם Claude API/)
+    expect(message('extraction_not_configured')).toMatch(/Ollama\) לא צריך מפתח/)
     expect(message('extraction_auth_failed')).toMatch(/ANTHROPIC_API_KEY/)
     expect(message('extraction_busy')).toMatch(/עמוס/)
     expect(message('extraction_invalid_output')).toBe('המודל לא הצליח לקרוא את המתכון הפעם (detail). נסו שוב.')

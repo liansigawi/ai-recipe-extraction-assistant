@@ -42,7 +42,9 @@ def make_extractor(settings: Settings) -> Extractor:
         raise ApiError(
             503,
             "extraction_not_configured",
-            "No Anthropic API key is configured on the backend. See the README, section 'Connect the Claude API'.",
+            "No Anthropic API key is configured on the backend. A key is needed only for the Claude API: see "
+            "docs/setup.md, section 'Connect the Claude API'. The local model (Ollama) needs no key: set "
+            "RECIPES_EXTRACTOR=ollama, as in docs/setup.md, section 'Run extraction on this computer (Ollama)'.",
         )
     return ClaudeExtractor(
         api_key=settings.anthropic_api_key.get_secret_value(),

@@ -174,7 +174,9 @@ def main() -> int:
     if not info.configured:
         print(
             {
-                "no_api_key": "No ANTHROPIC_API_KEY is configured. See the README, section 'Connect the Claude API'.",
+                "no_api_key": "No ANTHROPIC_API_KEY is configured. It is needed only for the Claude API: see "
+                "docs/setup.md, section 'Connect the Claude API'. The local model needs none: --extractor ollama, "
+                "or RECIPES_EXTRACTOR=ollama (docs/setup.md, section 'Run extraction on this computer (Ollama)').",
                 "ollama_unreachable": f"Ollama is not running at {settings.ollama_url}. Start the Ollama app.",
                 "ollama_model_missing": f"Ollama does not have {info.model}. Run: ollama pull {info.model}",
             }.get(info.problem or "", "The model is not ready.")

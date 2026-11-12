@@ -69,7 +69,7 @@ def run(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> sub
 def tool(name: str) -> str:
     found = shutil.which(name)
     if found is None:
-        raise PublishError(f"{name} was not found. Install Node.js (README, Requirements) and run npm install in frontend/.")
+        raise PublishError(f"{name} was not found. Install Node.js (docs/setup.md, section 'Requirements') and run npm install in frontend/.")
     return found
 
 

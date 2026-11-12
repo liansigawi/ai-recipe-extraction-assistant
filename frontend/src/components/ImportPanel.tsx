@@ -309,7 +309,7 @@ export default function ImportPanel({ onImported, onCancel, onOpenRecipe, initia
               </>
             )}
             {info.problem === 'no_api_key' &&
-              'לא הוגדר מפתח ל-Claude API בשרת. ההוראות ב-README, בסעיף "Connect the Claude API".'}{' '}
+              'לא הוגדר מפתח ל-Claude API בשרת. מפתח נדרש רק לקריאה עם Claude API: ההוראות ב-docs/setup.md, בסעיף "Connect the Claude API". המודל המקומי (Ollama) לא צריך מפתח: ההוראות באותו קובץ, בסעיף "Run extraction on this computer (Ollama)".'}{' '}
             בינתיים אפשר לשמור את הטקסט בלי עיבוד ולמלא את המתכון בעצמכם.
           </p>
           {info.local && (

@@ -76,7 +76,7 @@ export function errorMessage(error: unknown): string {
       return 'השרת דחה את השינוי כי הדף לא נפתח מהכתובת הצפויה. פתחו את המחברת בכתובת http://localhost:5173'
     // Importing (backend/app/extraction/: claude.py for the Claude API, ollama.py for a local model).
     case 'extraction_not_configured':
-      return 'לא הוגדר מפתח ל-Claude API בשרת. ההוראות ב-README, בסעיף "Connect the Claude API".'
+      return 'לא הוגדר מפתח ל-Claude API בשרת. מפתח נדרש רק לקריאה עם Claude API: ההוראות ב-docs/setup.md, בסעיף "Connect the Claude API". המודל המקומי (Ollama) לא צריך מפתח: ההוראות באותו קובץ, בסעיף "Run extraction on this computer (Ollama)".'
     case 'extraction_auth_failed':
       return 'Claude API לא קיבל את המפתח. בדקו את ANTHROPIC_API_KEY בקובץ .env ונסו שוב.'
     case 'extraction_busy':

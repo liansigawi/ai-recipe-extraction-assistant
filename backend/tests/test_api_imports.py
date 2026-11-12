@@ -210,7 +210,10 @@ def test_without_an_api_key_the_import_explains_how_to_set_one(client):
     response = client.post("/api/imports/text", json={"text": SOURCE})
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "extraction_not_configured"
-    assert "README" in response.json()["error"]["message"]
+    message = response.json()["error"]["message"]
+    # Where to set the key, that only the Claude API needs one, and the local model as the other option.
+    assert "docs/setup.md" in message and "'Connect the Claude API'" in message
+    assert "only for the Claude API" in message and "RECIPES_EXTRACTOR=ollama" in message
 
 
 def test_without_the_model_the_text_is_saved_as_a_draft_to_fill_in(client):
