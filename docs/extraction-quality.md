@@ -132,7 +132,7 @@ uv run python -m evals.run_extraction --extractor ollama --case 38-chicken-soup-
 
 ### Claude (`claude-opus-5-5`)
 
-Not run yet: it needs an Anthropic API key on this computer (README, "Connect the Claude API").
+Not run yet: it needs an Anthropic API key on this computer ([setup.md, "Connect the Claude API"](setup.md#connect-the-claude-api)).
 Reference mode has not been tried with the Claude API at all (see the last section).
 
 ### 2026-11-09: the new category "חטיפים ונשנושים"

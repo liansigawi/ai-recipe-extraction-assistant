@@ -33,8 +33,9 @@ everything that needs trust or secrets: fetching sources, calling the model, val
 and saving. The Anthropic API key lives only in the backend's settings (`.env` or the environment).
 
 **Local means local.** Both servers listen on this computer only. Data stays in `data/` (or
-`RECIPES_DATA_DIR`). The exception, from milestone 4: content you submit for AI extraction is sent to
-Anthropic. The README says so now, and the import screen will say so too.
+`RECIPES_DATA_DIR`). The exception, from milestone 4: with the Claude API, content you submit for AI
+extraction is sent to Anthropic (with the local model, nothing is). [setup.md](setup.md#privacy-what-stays-on-this-computer)
+says so, and the import screen says which model is in use.
 
 **One origin, and a host check.** In development the browser only talks to the Vite server, which
 forwards `/api/...` to FastAPI (`frontend/vite.config.ts`). The page and the API therefore share one
@@ -248,6 +249,62 @@ default action) keeps `status: "draft"` and the open issues. A draft may stay un
 `not_extracted` issue and the first line as a stand-in title, for the person to fill in. It works
 with no API key.
 
+## How the model reads a recipe
+
+A small model retyping Hebrew sometimes swaps a word for a similar-looking one: Qwen3 8B turned
+"מג׳הול" into "מג׳ hollow" and "שוט" into "שט". So in reference mode (the default,
+`RECIPES_EXTRACTION_MODE=references`) the model does not retype the recipe at all:
+
+1. `segments.py` cuts the text into **numbered passages**: each line, and inside a line each sentence,
+   and each item of a list after a label ("מה צריך: כוס עדשים, כוס אורז, …"). The same text always gives
+   the same passages.
+2. The model sees the text with the numbers (`[4] חצי תמר מג׳הול`) and answers with **a role for every
+   passage, in order**: title, ingredient heading, ingredient (also what is only for a topping, a garnish
+   or serving), step heading, step, "continues" (the rest of the passage before it), tip, yield or time
+   (kept as a note), or not part of the recipe (introductions, calls to action, hashtags). The answer's
+   schema lists every passage, so none can be skipped.
+3. The backend **copies each ingredient, step, heading and tip from the text**, character for character,
+   in the text's order. Only bullets, step numbers and emoji at the start of a line are left out.
+4. `quantity.py` **reads each ingredient's quantity from its copied line**
+   ([quantity-conventions.md](quantity-conventions.md)): always a piece of the line, never a converted or
+   invented amount, or nothing when the line has none.
+
+What the model still decides, and how the backend holds it to the text (besides the checks above):
+- **The title**: a title the model says is written must start a line of the text; if it retyped it
+  wrongly but labeled the title line, that line's own words are used. A title line that is only a framing
+  label ("ארוחת בוקר של שישי:") keeps the rest of its line, and an introduction that only mentions the dish
+  is not a title. When no line names the dish, the model composes its name from the text's words, without
+  the occasion or hype words; a composed title is always flagged for review, with whether all its words
+  are in the text.
+- **Whether the text is a recipe at all**: with the local model, decided in the first request together
+  with the roles, **without the categories in view**. A recipe that fits no category is imported
+  unclassified (with the categories in the same request, a drink caption was called "not a recipe" in 8
+  of 12 tries).
+- **The category**: only an existing one, chosen by its description (a category's name can be a personal
+  label; its description says what belongs in it). The starter descriptions are in
+  `backend/app/sample_data.py`; the person edits them in "קטגוריות". With the local model the category is
+  asked in a second, short request about the finished draft, for the classification alone (asking it to
+  describe the dish first did worse: [extraction-quality.md](extraction-quality.md), 2026-11-05); the
+  Claude API is still asked for that description. A dessert type is chosen only when one clearly fits,
+  and the model never sets the healthy style. A subcategory that is not its category's own is dropped
+  and the category kept.
+- **Roles corrected by the surrounding structure** (besides the ingredient-list rule above): a passage
+  that only **introduces** what follows (a question alone on its line before the ingredients, a question
+  or sentence labeled a heading before a list) is not part of the recipe; another sentence labeled a
+  heading becomes what it heads ("מחממים תנור מראש." is a step). A labeled note's line is one note:
+  "*אופציה טבעונית: כף פשתן טחון+3 כפות מים…" stays one note, and the alternative never becomes another
+  ingredient; after a plain "טיפ:" each sentence is its own note. A purely social line ("תהנו ❤️",
+  "בתיאבון!", "Enjoy!") is not a note unless it also says something useful.
+- **Oil a step fries or greases with** ("מחממים מעט שמן במחבת") when the list has no oil for it (since
+  2026-11-03, `derived.py`): the app adds a line in the step's own words ("מעט שמן לטיגון", "מעט" only if
+  the step says it, no other amount), marked "מופיע בהוראות ההכנה" with its sentence. Oil a step measures,
+  mentions as optional, offers as one choice or as a spray, or puts into a batter, dough or sauce keeps the
+  review point instead. Saved recipes can get the same from a reviewed batch
+  ([maintenance.md](maintenance.md)).
+
+Anything the backend cannot place is flagged, never guessed: a passage without a role, or one that
+"continues" nothing, becomes a point that quotes it. The original text is saved unchanged.
+
 ## Import flow (milestone 5: an Instagram link)
 
 ```text
@@ -442,35 +499,69 @@ redirect; a redirect would send the browser past the Vite proxy.
 ```text
 .
 ├── README.md, .gitignore, .gitattributes, .env.example
-├── docs/                     brief, architecture (this file), findings
-├── backend/                  Python: uv project
-│   ├── pyproject.toml, uv.lock, .python-version
+├── publish-notebook.cmd             export, build, check and publish the public copy (public-notebook.md)
+├── maintain-recipes.cmd             brings saved recipes up to improved import rules, after a backup (maintenance.md)
+├── docs/
+│   ├── setup.md                     install, run, choose the model, settings and data, troubleshooting
+│   ├── user-guide.md                the notebook page and the three imports
+│   ├── development.md               tests, checks and the database
+│   ├── architecture.md              this file: plan, recipe contract, import flows, API, decisions
+│   ├── brief.md                     original requirements
+│   ├── instagram-feasibility.md     milestone 1 findings, and the Instagram probe
+│   ├── website-import.md            recipe web pages: what was tried, what is not supported
+│   ├── quantity-conventions.md      how quantities are read from a line
+│   ├── extraction-quality.md        the model evaluation: method, cases and dated results
+│   ├── public-notebook.md           the public, read-only copy: what becomes public, publishing, checks
+│   └── maintenance.md               bringing saved recipes up to improved import rules
+├── backend/                         Python: uv project
+│   ├── pyproject.toml, uv.lock, .python-version, alembic.ini
 │   ├── app/
-│   │   ├── main.py           FastAPI app: health check, host check, error handlers, routers
-│   │   ├── config.py         settings from the environment and .env (pydantic-settings)
-│   │   ├── errors.py         the single error format
-│   │   ├── schemas.py        the recipe contract (Pydantic)
-│   │   ├── db.py, models.py  SQLAlchemy: engine and sessions; the tables
-│   │   ├── migrate.py        upgrades the database at start-up, after a backup
-│   │   ├── crud.py           recipe reads and writes; the category check
-│   │   ├── media.py          pictures and videos: bounded downloads, uploads, content-addressed files, cleanup
-│   │   ├── seed.py           fills a new database once
-│   │   ├── sample_data.py    the starter categories and the four invented sample recipes
-│   │   ├── api/              recipes.py, categories.py, imports.py, media.py: the routes
-│   │   ├── extraction/       output.py (answer schema), prompt.py, claude.py / ollama.py (the model call),
-│   │   │                     choose.py (which one), segments.py (numbered passages), review.py (checks),
-│   │   │                     quantity.py (quantities), ingredient_words.py (ingredients only in the steps),
-│   │   │                     derived.py (the oil a step fries or greases with, as a derived line)
-│   │   └── importers/        instagram.py (milestone 1); website.py, screenshots.py (milestone 5)
-│   ├── migrations/           Alembic: env.py, versions/0001_milestone_3.py … 0010_cooked.py
-│   ├── scripts/              probe_instagram.py: live checks, run by hand
-│   ├── tests/                pytest: offline, fixtures and in-process API calls only; never calls Claude
-│   └── evals/                the extraction quality check, run by hand; cases/ (invented texts), compare.py
-├── frontend/                 React + TypeScript + Vite
-│   └── src/                  main.tsx, App.tsx, route.ts, types.ts, api.ts, editorForm.ts, recipeFilters.ts,
-│                             importLinks.ts, categoryLook.ts, credit.ts, media.ts, components/, test/
-├── data/                     git-ignored: recipes.db, media/, instagram-probe/
-└── .github/workflows/        (milestone 7) CI: deterministic checks only
+│   │   ├── main.py                  the FastAPI app: startup, host and origin checks, error handling, routers
+│   │   ├── config.py                settings from the environment and .env (pydantic-settings)
+│   │   ├── errors.py                the single error format for API responses
+│   │   ├── schemas.py               the recipe data contract (Pydantic models)
+│   │   ├── db.py, models.py         SQLAlchemy: engine and sessions; the tables
+│   │   ├── migrate.py               upgrades the database at start-up, after a backup
+│   │   ├── crud.py                  reading and writing recipes; the category check
+│   │   ├── media.py                 pictures and videos: bounded downloads, uploads, the files under data/media/
+│   │   ├── seed.py, sample_data.py  fills a new database once: the starter categories and four invented samples
+│   │   ├── api/                     recipes.py, categories.py, imports.py, media.py: the routes;
+│   │   │                            shared_runs.py (the same import sent twice shares one run)
+│   │   ├── extraction/              segments.py (numbered passages), output.py (answer schema), prompt.py,
+│   │   │                            claude.py / ollama.py (the model call), choose.py (which one), review.py
+│   │   │                            (checks), quantity.py (quantities), ingredient_words.py (ingredients only
+│   │   │                            in the steps), derived.py (oil a step fries or greases with), structured.py
+│   │   │                            (a draft from a page's own recipe data)
+│   │   └── importers/               instagram.py (reading a post), website.py (reading a recipe page)
+│   ├── migrations/                  Alembic: versions/0001 (milestone 3) … 0015 (review decisions kept with a recipe)
+│   ├── scripts/                     probe_instagram.py (live Instagram checks, by hand), maintain_recipes.py,
+│   │                                export_public.py, public_pictures.py, publish_public.py, check_public_site.py
+│   ├── evals/                       the model evaluation, run by hand: run_extraction.py, checks.py, scoring.py,
+│   │                                compare.py, rescore.py, rebuild.py; cases/ (invented texts)
+│   └── tests/                       pytest: offline, in-process API calls; never calls a model or the internet
+├── frontend/                        React + TypeScript + Vite
+│   ├── index.html                   the page shell: lang="he" dir="rtl"
+│   ├── package.json, package-lock.json, vite.config.ts, tsconfig*.json, .oxlintrc.json
+│   └── src/
+│       ├── main.tsx, App.tsx        start React; what is shown; loading, saving and deleting
+│       ├── api.ts                   every call to the backend, and its error messages
+│       ├── types.ts, labels.ts      the recipe contract in TypeScript; display names
+│       ├── editorForm.ts            the editor's form state, checks and conversions (no React)
+│       ├── reviewPoints.ts          the review screen's decisions on a draft's points (no React)
+│       ├── recipeFilters.ts         search and filters for the gallery, "already cooked" and its counts
+│       ├── route.ts                 the page's place in the address (#/recipes/12): back button and reload
+│       ├── importLinks.ts           which importer a link goes to, and what to say otherwise
+│       ├── categoryLook.ts          each category's drawing and color, and its label
+│       ├── credit.ts, media.ts      the creator credit; which picture a recipe shows, a fetch's report
+│       ├── useNarrowScreen.ts       phone-sized or not
+│       ├── publicNotebook.ts, processing.ts  the public, read-only copy, and its source comparison
+│       ├── index.css                styles (right-to-left aware)
+│       ├── components/              the gallery, cards, filters, recipe view, editor, import and review screens,
+│       │                            categories, media; for the public copy SourceComparison and AboutPage
+│       ├── test/                    test setup, the fake API, sample recipes as test data
+│       └── *.test.ts(x)             Vitest + Testing Library tests
+└── data/                            git-ignored: recipes.db and its backups, media/, instagram-probe/, evals/,
+                                     public-notebook/
 ```
 
 ## Milestones
@@ -690,7 +781,7 @@ redirect; a redirect would send the browser past the Vite proxy.
     be changed. Stories, highlights and share links (`instagram.com/share/...`) are not supported.
   - Changing a recipe's Instagram source does not remove media fetched from the earlier post; "הסרה
     מהמתכון" removes items one by one. A fetch cannot be cancelled.
-  - Back up `media/` together with `recipes.db` (README, "Settings and where data lives").
+  - Back up `media/` together with `recipes.db` ([setup.md](setup.md#settings-and-where-your-data-lives)).
 
 ## Notes for upcoming milestones
 
